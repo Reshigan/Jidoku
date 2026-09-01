@@ -538,15 +538,23 @@ label { display: grid; gap: 6px; }
 .verbatim.calm { border-left-color: var(--blue-lift); color: var(--ink-mut); }
 
 /* ---------- skeleton: the shape of the thing, never a fake number ---------- */
+/* The sheen is a pseudo-element sliding on transform, not background-position on the box: the old
+   form repainted every skeleton row every frame, forever, and a skeleton is on screen precisely when
+   the machine is already busy. The bar itself is flat paint; only the overlay moves, on the compositor. */
 .skeleton {
   height: 13px;
   border-radius: 6px;
-  background: linear-gradient(90deg, var(--floor2) 25%, var(--floor3) 50%, var(--floor2) 75%);
-  background-size: 240% 100%;
+  background: var(--floor2);
+  position: relative;
+  overflow: hidden;
+}
+.skeleton::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent 25%, var(--floor3) 50%, transparent 75%);
   animation: shimmer 1.3s linear infinite;
 }
 .skeleton.tall { height: 62px; }
-@keyframes shimmer { to { background-position: -240% 0; } }
+@keyframes shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
 
 /* ---------- empty state: an invitation, not an apology ---------- */
 .empty {
@@ -835,7 +843,13 @@ footer { text-transform: none; letter-spacing: .16em; }
 /* the meter — a ratio stated flatly, bad ones included */
 .meter { display: flex; align-items: center; gap: 8px; }
 .meter-track { flex: 1; height: 6px; background: #1C222C; border-radius: 3px; overflow: hidden; min-width: 60px; }
-.meter-fill { height: 100%; border-radius: 3px; transition: width .3s ease; }
+/* scaleX, not width: width is a layout property and animating it relayouts the row on every frame.
+   Transform is composited, and the bar is a solid block so the scale is invisible as a distortion. */
+.meter-fill {
+  height: 100%; width: 100%; border-radius: 3px;
+  transform-origin: left; transform: scaleX(var(--pct, 0));
+  transition: transform .3s var(--ease);
+}
 .meter-fill.tone-run  { background: #3FB950; }
 .meter-fill.tone-call { background: #E3A008; }
 .meter-fill.tone-stop { background: #E5484D; }

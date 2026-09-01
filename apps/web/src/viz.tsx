@@ -8,7 +8,7 @@
  *
  * Nothing here fetches, derives or decides. They render what they are handed.
  */
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 /* ---------------- the spine: a vertical chain of linked events ---------------- */
 
@@ -90,7 +90,7 @@ export function Meter({ value, of, tone = "run", label }: {
   return (
     <div className="meter" title={label ? `${label}: ${value} of ${of}` : `${value} of ${of}`}>
       <div className="meter-track">
-        <div className={`meter-fill tone-${tone}`} style={{ width: `${pct}%` }} />
+        <div className={`meter-fill tone-${tone}`} style={{ "--pct": pct / 100 } as CSSProperties} />
       </div>
       <span className="meter-num mono">{value}<span className="dim">/{of}</span></span>
     </div>
