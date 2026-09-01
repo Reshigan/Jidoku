@@ -45,7 +45,9 @@ jobs:
         with: { python-version: "3.12" }
       - uses: actions/setup-node@v4
         with: { node-version: "22", cache: npm, cache-dependency-path: apps/web/package-lock.json }
-      - run: pip install -e packages/jidoka-core -e packages/jidoka-adapters -e packages/jidoka-os -e services/api uvicorn
+      # The same install as the python job: services/api depends on jidoka-compiler, so a shorter
+      # list here fails at pip, not at a test, and reads like an unrelated breakage.
+      - run: pip install -e packages/jidoka-core -e packages/jidoka-adapters -e packages/jidoka-os -e packages/jidoka-compiler -e services/api uvicorn
       - run: npm ci
         working-directory: apps/web
       - run: npx playwright install --with-deps chromium
