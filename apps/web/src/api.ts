@@ -422,6 +422,21 @@ const api2 = {
     call<{ as_of: string; claims: Claim[] }>(
       `/engagements/${eid}/memory/as-of?when=${encodeURIComponent(when)}`,
     ),
+  /** Bind a reader with no write half. The systems most worth reading — legacy, twin — are the
+      ones invariant 3 forbids a write credential on, so reading them needs a binding that has
+      none rather than a relaxed check. */
+  bindReader: (eid: string, system_id: string, kind = "mock", base_url = "", secret_env = "") =>
+    call<{ system_id: string; kind: string; product: string }>(
+      `/engagements/${eid}/execution/connector/reader`,
+      { method: "POST", body: JSON.stringify({ system_id, kind, base_url, secret_env }) },
+    ),
+  /** Learn a system from its own metadata (ADR-0012). Read-only: the adapter's extract() is the
+      only method this path can reach. Nothing is promoted — `offered` is a queue for a person. */
+  harvest: (eid: string, system_id: string) =>
+    call<{ system_id: string; formed: number; offered: Claim[]; claims: Claim[] }>(
+      `/engagements/${eid}/memory/harvest`,
+      { method: "POST", body: JSON.stringify({ system_id }) },
+    ),
   /** A claim without a source is refused by the domain, so the console always sends one. */
   formClaim: (eid: string, body: { subject: string; text: string; source_ref: string; evidence: unknown }) =>
     call<Claim>(`/engagements/${eid}/memory`, { method: "POST", body: JSON.stringify(body) }),

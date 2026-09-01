@@ -26,11 +26,15 @@ class Connector:
     tenant and a write sent to another is the worst failure this platform could have.
     """
 
-    def __init__(self, kind: str, fetch, apply_fn, describe: str):
+    def __init__(self, kind: str, fetch, apply_fn, describe: str, metadata_xml=None):
         self.kind = kind
         self.fetch = fetch          # callable(system, entity) -> rows, for Adapter(fetch=...)
         self.apply = apply_fn       # callable(payload) -> outcome, for Executor(apply_fn=...)
         self.describe = describe
+        # callable() -> the service definition document, for a metadata harvest (ADR-0012). It
+        # rides the same binding as the reader on purpose: reading a system's structure is
+        # reading the system, and it must not be reachable without the authorisation to do so.
+        self.metadata_xml = metadata_xml
 
     def __repr__(self) -> str:  # never let a client object or credential reach a log line
         return f"<Connector {self.kind} {self.describe}>"
@@ -82,7 +86,10 @@ def _mock(system_id: str) -> Connector:
         return {"status": "OK", "total_operations": len(ops),
                 "live_state": [dict(r) for r in sap.collections.get(entity, [])]}
 
-    c = Connector("mock", fetch, apply_fn, system_id)
+    from jidoka_adapters.mocksap import fixtures
+
+    c = Connector("mock", fetch, apply_fn, system_id,
+                  metadata_xml=lambda: fixtures.METADATA_XML)
     c.mock = sap          # inspectable from tests; nothing in the request path reads it
     return c
 
@@ -108,6 +115,16 @@ def _live(system_id: str, product: str, base_url: str, secret_env: str) -> Conne
         client = SFODataClient(base_url, system_id, os.environ[need[0]], os.environ[need[1]])
         fetch = client.fetcher()
 
+        def metadata_xml():
+            """The raw EDMX. The client's own metadata() returns SchemaTwin's shape; a harvest
+            needs the document itself, so this rides the same authenticated request rather than
+            adding a second way to reach a customer's tenant."""
+            status, _h, raw = client.request(
+                "GET", f"{client.base_url}/odata/v2/$metadata", {"Accept": "application/xml"})
+            if status != 200:
+                raise ConnectorError(f"{system_id}: $metadata fetch failed with HTTP {status}.")
+            return raw
+
         def apply_fn(payload):
             # ponytail: SF's $batch rides the raw authenticated request; the adapter already
             # built the operations. No retry layer — a failed write is a ledger event, not a
@@ -129,6 +146,16 @@ def _live(system_id: str, product: str, base_url: str, secret_env: str) -> Conne
                                client_secret=os.environ[need[1]], token_url=os.environ[need[2]])
         fetch = client.fetcher(lambda e: SERVICES.get(e, e))
 
+        def metadata_xml(service: str = "API_COSTCENTER_SRV"):
+            """S/4 publishes one $metadata per service, so a harvest names the service it wants.
+            Defaulting to one rather than walking all of SERVICES keeps a harvest a bounded read
+            against a customer's system; the caller asks again for another service."""
+            status, _h, raw = client.request(
+                "GET", client.service_url(service, "$metadata"), {"Accept": "application/xml"})
+            if status != 200:
+                raise ConnectorError(f"{system_id}: $metadata fetch failed with HTTP {status}.")
+            return raw
+
         def apply_fn(payload):
             service = payload.get("service") or SERVICES.get(payload.get("entity_set", ""), "")
             if not service:
@@ -137,7 +164,7 @@ def _live(system_id: str, product: str, base_url: str, secret_env: str) -> Conne
                     f"Refusing to guess a service URL.")
             return client.batch(service, payload["operations"], dry_run=False)
 
-    return Connector("live", fetch, apply_fn, f"{product} @ {system_id}")
+    return Connector("live", fetch, apply_fn, f"{product} @ {system_id}", metadata_xml=metadata_xml)
 
 
 def build(kind: str, system_id: str, product: str, registry: SystemRegistry,
@@ -158,3 +185,35 @@ def build(kind: str, system_id: str, product: str, registry: SystemRegistry,
                 "prefix holding its credential.")
         return _live(system_id, product, base_url, secret_env)
     raise ConnectorError(f"Unknown connector kind {kind!r} — known kinds are 'mock' and 'live'.")
+
+
+def build_reader(kind: str, system_id: str, product: str, registry: SystemRegistry,
+                 base_url: str = "", secret_env: str = "") -> Connector:
+    """A binding that can read a system and cannot write to it.
+
+    Harvesting a legacy system's structure is the point of harvesting at all (ADR-0012), and a
+    SOURCE_LEGACY system can never be writable — so `build` refuses it, correctly. The answer is
+    not to relax that check but to bind something with no write half: `apply` here does not
+    dispatch, it refuses, so invariant 3 holds by the shape of the object rather than by a caller
+    remembering not to call it.
+
+    registry.get() still runs: an unregistered system has no binding of any kind.
+    """
+    registry.get(system_id)
+    if kind == "mock":
+        c = _mock(system_id)
+    elif kind == "live":
+        if not base_url or not secret_env:
+            raise ConnectorError(
+                "A live reader needs a base_url and the name of the environment variable "
+                "prefix holding its credential.")
+        c = _live(system_id, product, base_url, secret_env)
+    else:
+        raise ConnectorError(f"Unknown connector kind {kind!r} — known kinds are 'mock' and 'live'.")
+
+    def refuse(payload):
+        raise ConnectorError(f"{system_id} is bound read-only — this binding has no write path.")
+
+    c.apply = refuse
+    c.kind = f"{c.kind}-read"
+    return c

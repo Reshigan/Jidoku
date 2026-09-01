@@ -28,6 +28,8 @@ export function MemoryView(props: {
   busy: string | null;
   onAct: (claim: Claim, action: ClaimAction) => void;
   onForm: () => void;
+  /** Read a registered system's own metadata and form claims from it. */
+  onHarvest: () => void;
   onAsOf: (when: string) => void;
   onClearAsOf: () => void;
 }) {
@@ -54,9 +56,16 @@ export function MemoryView(props: {
                 : "Every belief here is verified"}
           </h1>
         </div>
-        <button className="btn" onClick={props.onForm} disabled={!props.writable}>
-          Record a belief
-        </button>
+        <div className="row">
+          {/* A system's own metadata is a primary source, so learning from one sits beside
+              recording a belief rather than under a settings menu (ADR-0012). */}
+          <button className="btn" onClick={props.onHarvest} disabled={!props.writable}>
+            Learn from a system…
+          </button>
+          <button className="btn" onClick={props.onForm} disabled={!props.writable}>
+            Record a belief
+          </button>
+        </div>
       </div>
 
       {/* The screen's constants in one dense strip, so the counts are read at a glance rather
@@ -95,7 +104,7 @@ export function MemoryView(props: {
       {total === 0 && m.system.length === 0 ? (
         <Empty
           title="Nothing is remembered yet"
-          body="JIDOKA stores claims, not notes. A claim carries the thing it was read from and the hash of that thing at the time, which is what lets it go stale by itself rather than quietly drifting. Record a belief and it arrives unchecked, with its source attached — never as a bare sentence." />
+          body="JIDOKA stores claims, not notes. A claim carries the thing it was read from and the hash of that thing at the time, which is what lets it go stale by itself rather than quietly drifting. Record a belief and it arrives unchecked, with its source attached — never as a bare sentence. Or point it at a registered system: its own metadata says what its configuration may be, and that is a source an auditor can follow." />
       ) : (
         /* data-fill scoped through .page > in the sheet: app.css pins .board.fill to the top,
            which leaves this board ending mid-glass. The two panels are the screen. */

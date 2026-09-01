@@ -415,6 +415,7 @@ export default function App() {
                             writable={writable}
                             canPromote={can("approve") && !offline && !stopped}
                             onForm={() => setDialog({ kind: "formClaim" })}
+                            onHarvest={() => setDialog({ kind: "harvest" })}
                             onClearAsOf={() => setAsOf(null)}
                             onAsOf={async (when) => {
                               const out = await guard("That moment could not be read back",
@@ -458,6 +459,7 @@ export default function App() {
 
       {dialog && (
         <Dialogs kind={dialog.kind} eid={eid ?? ""} dp={dialog.dp} claim={dialog.claim} halt={halt} who={who}
+                 systems={d.landscape?.systems ?? []} connectors={connectors}
                  onClose={() => setDialog(null)} guard={guard}
                  onDone={async (created) => {
                    setDialog(null);
@@ -544,6 +546,9 @@ function EvidenceLoader(props: {
 /* ---------------- every write the platform accepts ---------------- */
 function Dialogs(props: {
   kind: string; eid: string; who: string; dp?: DecisionPoint; claim?: Claim; halt?: LedgerEntry | null;
+  /** Registered systems and their bindings — a harvest needs both: a system to read, and
+      something bound to it that can read. */
+  systems?: Landscape["systems"]; connectors?: Connector[];
   onClose: () => void; onDone: (created?: string) => void;
   guard: <T,>(t: string, fn: () => Promise<T>) => Promise<T | null>;
 }) {
@@ -770,6 +775,69 @@ function Dialogs(props: {
       );
     }
     /* ---- memory (ADR-0010) ---- */
+
+    case "harvest": {
+      const systems = props.systems ?? [];
+      const bound = new Set((props.connectors ?? []).map((x) => x.system_id));
+      const picked = systems.find((x) => x.system_id === a);
+      return (
+        <Modal title="Learn from a system" onClose={props.onClose}>
+          <p className="mut">
+            A system's own metadata says what its configuration may be: which fields exist, how
+            long they are, and which values each one permits. That is a primary source — the read
+            is repeatable, so every belief formed here can go stale on its own.
+          </p>
+          <label className="field">
+            <span className="eyebrow">System<span className="req"> required</span></span>
+            <select value={a} onChange={(ev) => setA(ev.target.value)}>
+              <option value="">Choose a registered system…</option>
+              {systems.map((x) => (
+                <option key={x.system_id} value={x.system_id}>
+                  {x.system_id} — {x.product}, {x.role}
+                </option>
+              ))}
+            </select>
+            {systems.length === 0 && (
+              <span className="mut" style={{ fontSize: 12 }}>
+                No system is registered on this engagement yet. Register one on Landscape first.
+              </span>
+            )}
+          </label>
+          {picked && !bound.has(picked.system_id) && (
+            /* The systems most worth reading are the ones that may never be written to, so the
+               offer here is a reader — a binding with no write half — not a connector. */
+            <div className="verbatim calm">
+              {picked.system_id} has nothing bound to it. Binding a reader gives JIDOKA a way to
+              read its structure and no way at all to write to it.
+              <div className="row" style={{ marginTop: 10 }}>
+                <button className="btn sm"
+                        onClick={async () => {
+                          const ok = await guard("The reader could not be bound",
+                            () => platform.bindReader(eid, picked.system_id));
+                          if (ok) setCheck(`Reader bound to ${picked.system_id}.`);
+                        }}>
+                  Bind a read-only connector
+                </button>
+              </div>
+            </div>
+          )}
+          {check && <div className="verbatim calm">{check}</div>}
+          <p className="mut" style={{ fontSize: 12 }}>
+            Nothing crosses into shared knowledge here. What the system says about its own shape is
+            offered to a named person afterwards; what this tenant actually configured stays in this
+            engagement and is never offered at all.
+          </p>
+          <div className="row" style={{ marginTop: 14 }}>
+            <button className="btn primary" disabled={!a || !bound.has(a)}
+                    title={a && !bound.has(a) ? "Bind a reader to this system first." : undefined}
+                    onClick={run("The system could not be read", () => platform.harvest(eid, a))}>
+              Read it
+            </button>
+            <button className="btn ghost" onClick={props.onClose}>Cancel</button>
+          </div>
+        </Modal>
+      );
+    }
 
     case "formClaim":
       return (

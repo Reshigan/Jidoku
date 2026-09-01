@@ -155,3 +155,120 @@ def test_a_source_nobody_can_read_is_not_reported_as_drift():
         "subject": "payroll", "text": "monthly", "source_ref": "design:PY-02",
         "evidence": {"doc": "PY-02"}}).json()["id"]
     assert c.post(f"/engagements/{eid}/memory/{cid}/recheck").status_code == 409
+
+
+# --- harvest: learning a system from its own metadata (ADR-0012) --------------------------------
+
+def _hdr(sub="b", *roles):
+    from jidoka_api.auth import issue_token
+    return {"Authorization": f"Bearer {issue_token(sub, roles or ('builder',))}"}
+
+
+def _harvestable(eid, system_id="LEGACY-1", role="SOURCE_LEGACY"):
+    """A registered system with a read-only binding. SOURCE_LEGACY on purpose: the system most
+    worth reading is the one that may never be written to."""
+    c.post(f"/engagements/{eid}/systems", json={
+        "system_id": system_id, "product": "SuccessFactors", "role": role,
+        "environment": "PROD", "connectivity": {}})
+    r = c.post(f"/engagements/{eid}/execution/connector/reader",
+               json={"system_id": system_id, "kind": "mock"}, headers=_hdr())
+    assert r.status_code == 200, r.text
+    return system_id
+
+
+def test_a_legacy_system_can_be_read_without_ever_being_writable():
+    """The bind that a harvest needs, on a system invariant 3 forbids a write connector for."""
+    eid = _eng()
+    sid = _harvestable(eid)
+    # The ordinary write binding is still refused for the same system.
+    assert c.post(f"/engagements/{eid}/execution/connector",
+                  json={"system_id": sid, "kind": "mock"}, headers=_hdr()).status_code in (403, 404)
+
+
+def test_harvest_forms_grounded_claims_from_the_service_definition():
+    eid = _eng()
+    sid = _harvestable(eid)
+    r = c.post(f"/engagements/{eid}/memory/harvest", json={"system_id": sid}, headers=_hdr())
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["formed"] > 0
+    assert all(cl["source_ref"].startswith(f"harvest:{sid}:") for cl in body["claims"])
+    # And they land in this engagement's memory, readable through the ordinary listing.
+    got = c.get(f"/engagements/{eid}/memory").json()
+    assert len(got["project"]) == body["formed"]
+
+
+def test_a_harvested_domain_carries_the_permitted_values():
+    eid = _eng()
+    sid = _harvestable(eid)
+    claims = c.post(f"/engagements/{eid}/memory/harvest",
+                    json={"system_id": sid}, headers=_hdr()).json()["claims"]
+    said = [cl["text"] for cl in claims if cl["text"].startswith("Domain ")]
+    assert any("permits exactly" in t for t in said)
+
+
+def test_harvest_refuses_a_system_with_no_binding():
+    eid = _eng()
+    c.post(f"/engagements/{eid}/systems", json={
+        "system_id": "UNBOUND", "product": "SuccessFactors", "role": "SOURCE_LEGACY",
+        "environment": "PROD", "connectivity": {}})
+    r = c.post(f"/engagements/{eid}/memory/harvest", json={"system_id": "UNBOUND"}, headers=_hdr())
+    assert r.status_code == 409
+
+
+def test_harvest_refuses_an_unregistered_system():
+    eid = _eng()
+    r = c.post(f"/engagements/{eid}/memory/harvest", json={"system_id": "GHOST"}, headers=_hdr())
+    assert r.status_code == 404
+
+
+def test_a_harvested_claim_rechecks_against_the_same_system():
+    """The round trip that makes staleness a comparison rather than an opinion."""
+    eid = _eng()
+    sid = _harvestable(eid)
+    claims = c.post(f"/engagements/{eid}/memory/harvest",
+                    json={"system_id": sid}, headers=_hdr()).json()["claims"]
+    field = next(cl for cl in claims if cl["source_ref"].endswith(":fields"))
+    r = c.post(f"/engagements/{eid}/memory/{field['id']}/recheck")
+    assert r.status_code == 200 and r.json()["status"] == "TRUSTED"
+
+
+def test_a_tier_fact_rechecks_against_the_tier_map_not_the_service_definition():
+    """Tier claims have different ground; resolving them through $metadata would read as drift."""
+    eid = _eng()
+    sid = _harvestable(eid)
+    claims = c.post(f"/engagements/{eid}/memory/harvest",
+                    json={"system_id": sid}, headers=_hdr()).json()["claims"]
+    tier = next(cl for cl in claims if cl["source_ref"].endswith(":tiers"))
+    assert c.post(f"/engagements/{eid}/memory/{tier['id']}/recheck").json()["status"] == "TRUSTED"
+
+
+def test_a_harvest_never_promotes_by_itself():
+    """`offered` is a queue for a named human, not an act. System memory stays untouched."""
+    eid = _eng()
+    sid = _harvestable(eid)
+    before = len(memory_router.SYSTEM_MEMORY.current())
+    body = c.post(f"/engagements/{eid}/memory/harvest",
+                  json={"system_id": sid}, headers=_hdr()).json()
+    assert body["offered"] and len(body["offered"]) < body["formed"]   # settings never offered
+    assert len(memory_router.SYSTEM_MEMORY.current()) == before
+
+
+def test_the_harvest_is_ledgered_like_any_other_belief_write():
+    eid = _eng()
+    sid = _harvestable(eid)
+    c.post(f"/engagements/{eid}/memory/harvest", json={"system_id": sid}, headers=_hdr())
+    led = c.get(f"/engagements/{eid}/ledger").json()
+    assert any(x["action"] == "READER_BOUND" for x in led["entries"])
+    assert any(x["action"] == "BELIEF" for x in led["entries"])
+    assert led["verified"] is True
+
+
+def test_harvests_of_two_engagements_do_not_mix():
+    a, b = _eng("Harvest A"), _eng("Harvest B")
+    _harvestable(a, "SYS-A")
+    _harvestable(b, "SYS-B")
+    c.post(f"/engagements/{a}/memory/harvest", json={"system_id": "SYS-A"}, headers=_hdr())
+    refs = {cl["source_ref"].split(":")[1] for cl in c.get(f"/engagements/{a}/memory").json()["project"]}
+    assert refs == {"SYS-A"}
+    assert c.get(f"/engagements/{b}/memory").json()["project"] == []

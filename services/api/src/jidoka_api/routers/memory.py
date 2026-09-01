@@ -5,7 +5,9 @@ engagements: cross-project reach is absent from the API rather than filtered out
 """
 from fastapi import APIRouter, Depends, HTTPException
 from jidoka_knowledge import (Claim, SystemStore, evidence_hash, recheck, resolve, supersede,
-                              promote, PromotionRefused, Unresolvable, STALE, TRUSTED, UNVERIFIED)
+                              promote, PromotionRefused, Unresolvable, STALE, TRUSTED, UNVERIFIED,
+                              harvest, from_tier_map, promotable, row_of,
+                              STRUCTURE_SOURCES, SETTING_SOURCES)
 from pydantic import BaseModel
 
 from ..auth import Identity, require
@@ -88,7 +90,67 @@ def _sources(e) -> dict:
                 return {"object": r.object, "system_binding": r.system_binding,
                         "intent": r.intent, "tier": r.tier}
         return None
-    return {"ir": read_ir}
+
+    def read_harvest(ref: str):
+        """harvest:<system_id>:<entity> — re-read through the same binding the claim was formed on.
+
+        Re-reading through the same adapter is what makes staleness a comparison rather than a
+        fresh opinion. The claim's hash is over one row, so the entity read is narrowed back to
+        the row it came from; a row that is no longer there reads as gone, which is STALE.
+        """
+        _, system_id, entity = ref.split(":", 2)
+        binding = e.connectors.get(system_id)
+        if binding is None:
+            raise Unresolvable(
+                f"{system_id} has no binding on this engagement — nothing can read it back.")
+        try:
+            rec = e.registry.get(system_id)
+        except Exception as ex:
+            raise Unresolvable(str(ex))
+        rows = _harvest_rows(_adapter(rec, binding), rec, binding, entity)
+        return rows
+
+    return {"ir": read_ir, "harvest": read_harvest}
+
+
+def _adapter(rec, binding):
+    """The product's adapter, reading through this binding. Unknown product is a refusal."""
+    from jidoka_adapters import ADAPTERS
+    if rec.product not in ADAPTERS:
+        raise HTTPException(422, f"No adapter registered for product {rec.product!r}. "
+                                 f"Known products: {sorted(ADAPTERS)}.")
+    return ADAPTERS[rec.product](fetch=binding.fetch)
+
+
+def _harvest_rows(adapter, rec, binding, entity: str):
+    """Rows for one metadata entity, read from the system's own service definition.
+
+    The service definition is the source (ADR-0012), so it is parsed here rather than served from
+    the connector's data collections — those hold rows a tenant put in, not the shape they may
+    take. A binding with no metadata reader has nothing structural to offer and says so.
+    """
+    from jidoka_knowledge import metadata as md
+    if entity == "tiers":
+        # A tier declaration is the adapter's own binding statement about the product, not
+        # anything the service definition publishes. Its ground is the tier_map, so that is what
+        # a re-check has to compare against.
+        return [{"object": o, "tier": t} for o, t in sorted((adapter.tier_map() or {}).items())]
+    if binding.metadata_xml is None:
+        raise Unresolvable(f"{rec.system_id}'s binding cannot read a service definition.")
+    # The service definition names its value sets; the value-set collection says what is in them.
+    # Without the second read a domain claim can only say "constrained", which is the fact the
+    # consultant already knew. With it, the claim carries the permitted values themselves.
+    try:
+        picklists = binding.fetch(rec, "PicklistV2")
+    except Exception:
+        # ponytail: every connector raises its own error type and the right answer to all of them
+        # is the same — form the structural claims without the values rather than none at all.
+        picklists = None
+    fetch = md.read(binding.metadata_xml(), picklists=picklists)
+    try:
+        return fetch(rec, entity)
+    except KeyError:
+        return []
 
 
 @router.post("/{claim_id}/recheck")
@@ -106,9 +168,62 @@ def recheck_claim(eid: str, claim_id: str, identity: Identity = Depends(require(
         evidence = resolve(claim, _sources(e))
     except Unresolvable as ex:
         raise HTTPException(409, str(ex))
+    if claim.source_ref.startswith("harvest:"):
+        # A harvest resolver reads an entity; the claim was formed from one row inside it. Match
+        # by hash rather than by key so no product's key fields have to be known here — and a row
+        # that changed is correctly not found, which is the same answer as gone.
+        evidence = row_of(claim, evidence)
     status = recheck(claim, evidence)
     e.persist_memory()          # the badge is part of the belief, not a view over it
     return {"status": status, "claim": _claim_out(claim)}
+
+
+class HarvestIn(BaseModel):
+    system_id: str
+
+
+@router.post("/harvest")
+def harvest_system(eid: str, body: HarvestIn, identity: Identity = Depends(require("write_ir"))):
+    """Learn a registered system from its own metadata (ADR-0012).
+
+    Read-only by construction: the adapter's extract() is the only method this path can reach, and
+    a read-only binding has no write half at all. Nothing is promoted here — `offered` is the queue
+    a named human takes through the scrubber gate, which is the whole point of it being separate.
+    """
+    e = get_or_404(eid)
+    try:
+        rec = e.registry.get(body.system_id)
+    except Exception as ex:
+        raise HTTPException(404, str(ex))
+    binding = e.connectors.get(body.system_id)
+    if binding is None:
+        raise HTTPException(409, f"{body.system_id} has no binding on this engagement. "
+                                 f"Bind a connector before harvesting it.")
+    adapter = _adapter(rec, binding)
+
+    class _Reader:
+        """The adapter's fetch slot, backed by the system's service definition rather than by its
+        data collections. Structure is what a harvest is for."""
+        def __init__(self, inner):
+            self._inner = inner
+        def extract(self, system, entity):
+            return _harvest_rows(self._inner, rec, binding, entity)
+        def tier_map(self):
+            return self._inner.tier_map()
+
+    try:
+        # tiers is excluded here and formed by from_tier_map instead: both would say the same
+        # thing, and the same fact believed twice is two things to keep in step.
+        sources = tuple(s for s in STRUCTURE_SOURCES + SETTING_SOURCES if s != "tiers")
+        formed = harvest(_Reader(adapter), rec, e.memory, identity.subject, sources=sources)
+        formed += from_tier_map(adapter, rec, e.memory, identity.subject)
+    except Unresolvable as ex:
+        raise HTTPException(409, str(ex))
+    e.persist_memory()
+    offered = promotable(formed)
+    return {"system_id": body.system_id, "formed": len(formed),
+            "offered": [_claim_out(c) for c in offered],
+            "claims": [_claim_out(c) for c in formed]}
 
 
 class CorrectIn(BaseModel):

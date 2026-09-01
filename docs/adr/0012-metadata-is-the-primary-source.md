@@ -75,3 +75,30 @@ DP-K01's question, and remains unbuilt.
 real `$metadata` document. Notably: no write path is ever called; a credentialled SOURCE_LEGACY
 system is refused; a changed service definition marks exactly the affected claim STALE and keeps
 it; an unregistered system is Unresolvable rather than STALE; two engagements' harvests do not mix.
+
+## Amendment — reading a system that may never be written to (invariant 3)
+
+The systems most worth harvesting are the ones invariant 3 forbids a write credential on:
+SOURCE_LEGACY and TWIN. `build()` calls `registry.assert_writable()` and so refuses to bind them,
+which is correct and stays. Relaxing that check to allow a harvest would put a write path exactly
+where the registry says none may exist.
+
+`build_reader()` binds something with no write half instead. Its `apply` does not dispatch — it
+raises — and its `kind` is suffixed `-read`, so the invariant holds by the shape of the object
+rather than by a caller remembering not to write through it. `registry.get()` still runs: an
+unregistered system gets no binding of any kind. `POST /engagements/{eid}/execution/connector/reader`
+is the only way to create one, requires the `register_system` capability, and ledgers `READER_BOUND`.
+
+`POST /engagements/{eid}/memory/harvest` reads through that binding and through the adapter's
+`extract()` only. It returns `formed` (everything written to project memory) and `offered`
+(what `promotable()` says a person may take through the scrubber gate) separately — nothing is
+promoted by the harvest itself.
+
+Structure is read from the system's own service definition, never from the connector's data
+collections: those hold rows a tenant put in, not the shape they may take. Two consequences worth
+naming — a domain's permitted values need a second read of the value-set collection, and a tier
+fact is the adapter's own binding statement rather than anything `$metadata` publishes, so
+`harvest:<system>:tiers` re-checks against `tier_map()` and `from_tier_map` is its only author.
+
+`services/api/tests/test_memory_api.py` pins this: the ordinary write bind still fails for the same
+SOURCE_LEGACY system that the reader binds successfully.

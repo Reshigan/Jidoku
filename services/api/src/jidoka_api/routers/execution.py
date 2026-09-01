@@ -13,7 +13,7 @@ from jidoka_core.registry import RegistryError, WriteLockViolation
 from pydantic import BaseModel
 
 from ..auth import Identity, require
-from ..connectors import ConnectorError, build as build_connector
+from ..connectors import ConnectorError, build as build_connector, build_reader
 from .engagements import get_or_404
 
 router = APIRouter(prefix="/engagements/{eid}/execution", tags=["execution"])
@@ -322,6 +322,35 @@ def bind_connector(eid: str, body: Bind, identity: Identity = Depends(require("r
                     f"{body.system_id} bound to a {body.kind} connector for {product}",
                     system=body.system_id, kind=body.kind)
     return {"system_id": body.system_id, "kind": connector.kind, "product": product}
+
+
+@router.post("/connector/reader")
+def bind_reader(eid: str, body: Bind, identity: Identity = Depends(require("register_system"))):
+    """Give a system a reader with no writer.
+
+    A harvest reads a system's structure, and the systems most worth reading — SOURCE_LEGACY,
+    TWIN — are exactly the ones that may never hold a write credential (invariant 3). `build`
+    refuses them, correctly. This binds something with no write half instead, so the invariant
+    holds by the shape of the binding rather than by anyone remembering not to write through it.
+
+    The product comes off the registry record, not off IR: a legacy system is worth reading
+    before any intent binds to it, and often that is the only time it is read at all.
+    """
+    e = get_or_404(eid)
+    try:
+        rec = e.registry.get(body.system_id)
+    except RegistryError as ex:
+        raise HTTPException(404, str(ex))
+    try:
+        connector = build_reader(body.kind, body.system_id, rec.product, e.registry,
+                                 body.base_url, body.secret_env)
+    except ConnectorError as ex:
+        raise HTTPException(422, str(ex))
+    e.connectors[body.system_id] = connector
+    e.ledger.append("EXECUTION", "READER_BOUND", identity.subject,
+                    f"{body.system_id} bound read-only for {rec.product}",
+                    system=body.system_id, kind=connector.kind)
+    return {"system_id": body.system_id, "kind": connector.kind, "product": rec.product}
 
 
 @router.get("/connector")

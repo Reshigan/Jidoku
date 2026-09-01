@@ -6,9 +6,11 @@ from .claim import Claim, evidence_hash, TRUSTED, STALE, UNVERIFIED
 from .store import ProjectStore, SystemStore
 from .staleness import recheck, recheck_live, resolve, sweep, supersede, Unresolvable
 from .scrubber import promote, screen, PromotionRefused
-from .harvest import harvest, from_tier_map, promotable, resolver, row_of, describe, HarvestRefused
+from .harvest import (harvest, from_tier_map, promotable, resolver, row_of, describe,
+                      HarvestRefused, STRUCTURE_SOURCES, SETTING_SOURCES)
 
 __all__ = ["Claim", "evidence_hash", "TRUSTED", "STALE", "UNVERIFIED",
            "ProjectStore", "SystemStore", "recheck", "recheck_live", "sweep",
            "supersede", "promote", "screen", "PromotionRefused", "resolve", "Unresolvable",
-           "harvest", "from_tier_map", "promotable", "resolver", "row_of", "describe", "HarvestRefused"]
+           "harvest", "from_tier_map", "promotable", "resolver", "row_of", "describe", "HarvestRefused",
+           "STRUCTURE_SOURCES", "SETTING_SOURCES"]
