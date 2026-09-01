@@ -57,6 +57,9 @@ export const CLAIM_BADGE: Record<string, string> = {
   UNVERIFIED: "Not yet checked",
 };
 
+/** Same contract as statusName: a status with no badge degrades to a sentence, never to the enum. */
+export const claimBadge = (s: string) => CLAIM_BADGE[s] ?? sentence(s);
+
 /** What the badge actually means, said as the consequence rather than the state. */
 export const CLAIM_WORDS: Record<string, string> = {
   TRUSTED: "Re-checked against its source, and the source still says this.",
@@ -198,3 +201,25 @@ function sentence(s: string) {
   const w = s.replace(/_/g, " ").toLowerCase();
   return w.charAt(0).toUpperCase() + w.slice(1);
 }
+
+/* The short name for a result, for the pill. STATUS_WORDS is the sentence beneath it; this is the
+   two words that go in the badge. BRAND: never name internals in the UI — DRY_RUN is a value in a
+   database column, not something a person on a shop floor says. The fallback title-cases rather
+   than passing the raw enum through, so a status the server adds tomorrow degrades to "Rolled back"
+   instead of shouting ROLLED_BACK at the operator. */
+export const STATUS_NAME: Record<string, string> = {
+  DRY_RUN: "Rehearsed",
+  HANDED_OFF: "Handed to a person",
+  IN_TRANSPORT: "Not yet in production",
+  VERIFIED: "Verified",
+  APPLIED: "Written",
+  PARTIAL: "Partly landed",
+  DRIFTED: "Drifted",
+  FAILED: "Failed",
+  ROLLED_BACK: "Rolled back",
+  REFUSED: "Refused",
+};
+
+/* Falls back to `sentence`, which roleLabel already uses for the same purpose — one rule for what
+   an untranslated enum looks like, so two screens cannot disagree about it. */
+export const statusName = (s: string) => STATUS_NAME[s] ?? sentence(s);

@@ -16,7 +16,7 @@ import type { ArmedTarget, Connector, ExecutionResult, Plan, StepTransport } fro
 import { Empty, Pill, Section, Skeleton } from "./ui";
 import { Facts, Track } from "./viz";
 import type { TrackStop } from "./viz";
-import { STATUS_LAMP, STATUS_WORDS, isAbap, stepWords } from "./viewkit";
+import { STATUS_LAMP, STATUS_WORDS, isAbap, statusName, stepWords } from "./viewkit";
 import "./views_config.css";
 
 export function ConfigureView(props: {
@@ -78,13 +78,22 @@ export function ConfigureView(props: {
       id: "armed",
       label: "Target armed by an approver",
       sub: armedIds.size ? `${armedIds.size} armed` : "None armed",
-      state: armedIds.size ? "current" : "todo",
+      /* A gate that is satisfied is done, not in progress. This sat on "current" forever once
+         anything was armed, so the rail read as amber-mid-flight on a screen that had in fact
+         finished the step — and amber on this screen is the colour of "a person still has to act". */
+      state: armedIds.size ? "done" : "todo",
     },
     {
       id: "write",
       label: "Live write possible",
       sub: liveReachable ? "Yes — on the armed, snapshotted steps" : "No — the platform will rehearse",
-      state: liveReachable ? "blocked" : "todo",
+      /* Not "blocked". Red is stop and stop means failure; a reachable live write is this run of
+         gates succeeding, and painting success red spends the one colour the operator must be able
+         to trust as an alarm. Rehearsal-only is the ordinary resting state of this screen, so it is
+         todo — the gate simply has not opened — and an open gate is done. The weight of "a real
+         write is now possible" is carried by the panel's own lamp and by the armed pills, which is
+         where a consequence belongs; the rail's job is only to say how far along the run we are. */
+      state: liveReachable ? "done" : "todo",
     },
   ];
 
@@ -95,7 +104,9 @@ export function ConfigureView(props: {
           <div className="eyebrow">Configure</div>
           <h1>Write the configuration</h1>
         </div>
-        <Pill lamp={live ? "stop" : "run"}>
+        {/* Not run/green for the safe case. Rehearsal is the resting state of this screen, and a
+            green lamp on "nothing is armed" spends the run colour on the absence of an event. */}
+        <Pill lamp={live ? "stop" : undefined}>
           {live ? `${live} step${live === 1 ? "" : "s"} armed for live` : "Dry run"}
         </Pill>
       </div>
@@ -113,15 +124,15 @@ export function ConfigureView(props: {
 
       <Section title="What a live write has to clear"
                note="Every gate below has to hold before anything is written for real"
-               lamp={liveReachable ? "stop" : "run"}
-               status={liveReachable ? "Reachable" : "Rehearsal only"}>
+               lamp={liveReachable ? "stop" : undefined}
+               status={liveReachable ? "A real write is possible" : "Rehearsal only"}>
         <Track stops={gates} note="Gates on a live write" />
       </Section>
 
       <Section title="Armed targets"
                note="A live write needs an approver to arm the target first — and the person who arms it may not be the one who runs it"
-               lamp={armedIds.size ? "stop" : "run"}
-               status={armedIds.size ? "LIVE" : "SAFE"}>
+               lamp={armedIds.size ? "stop" : undefined}
+               status={armedIds.size ? "Writes are real" : "Rehearsal only"}>
         <div className="cfg-targets">
           {systems.map((sid) => {
             const a = props.armed.find((x) => x.system_id === sid);
@@ -170,7 +181,7 @@ export function ConfigureView(props: {
                       {a ? "Disarm" : "Arm for live"}
                     </button>
                   ) : (
-                    <Pill lamp={a ? "stop" : "run"}>{a ? "Armed" : "Safe"}</Pill>
+                    <Pill lamp={a ? "stop" : undefined}>{a ? "Armed for live" : "Rehearsal only"}</Pill>
                   )}
                 </div>
               </div>
@@ -181,7 +192,7 @@ export function ConfigureView(props: {
 
       <Section title="Steps"
                note="Tier A is written by the platform. Tier B and C produce something for a person to carry out."
-               lamp="run" status={`${props.plan.steps.length} STEPS`}
+               status={`${props.plan.steps.length} step${props.plan.steps.length === 1 ? "" : "s"}`}
                className="grow scrolls">
         <div className="tblwrap">
           <table className="tbl">
@@ -211,7 +222,7 @@ export function ConfigureView(props: {
                     <td>
                       {res ? (
                         <>
-                          <Pill lamp={STATUS_LAMP[res.status] ?? "call"}>{res.status}</Pill>
+                          <Pill lamp={STATUS_LAMP[res.status] ?? "call"}>{statusName(res.status)}</Pill>
                           <div className="mut" style={{ fontSize: 12.5, marginTop: 4 }}>
                             {STATUS_WORDS[res.status] ?? res.detail}
                           </div>

@@ -10,7 +10,7 @@
  */
 import { useState } from "react";
 import type { Claim, MemoryView } from "./api";
-import { CLAIM_BADGE, CLAIM_LAMP, CLAIM_WORDS, fmt } from "./viewkit";
+import { CLAIM_LAMP, CLAIM_WORDS, fmt, claimBadge } from "./viewkit";
 import { Empty, Pill, Section, Skeleton } from "./ui";
 import { Chain, Facts, Meter } from "./viz";
 import type { ChainNode } from "./viz";
@@ -196,7 +196,7 @@ function claimNode(c: Claim, props: {
     title: (
       <>
         <span className="mem-subject mono">{c.subject}</span>
-        <Pill lamp={lamp === "idle" ? undefined : lamp}>{CLAIM_BADGE[c.status] ?? c.status}</Pill>
+        <Pill lamp={lamp === "idle" ? undefined : lamp}>{claimBadge(c.status)}</Pill>
       </>
     ),
     meta: <span className="mono dim">{fmt(c.valid_from)}</span>,

@@ -15,8 +15,12 @@
   padding: 12px 14px;
   border-left: 3px solid var(--line);
 }
+/* Armed is red because a live write is genuinely the dangerous state and the rail should say so.
+   Unarmed is NOT green: green is run, and a system nobody has armed is not running well, it is
+   simply idle. Painting every resting target green spends the run lamp on the absence of an event,
+   and a lamp that is lit when nothing is happening stops meaning anything when something is. */
 .cfg-target[data-armed="true"] { border-left-color: var(--stop); }
-.cfg-target[data-armed="false"] { border-left-color: var(--run); }
+.cfg-target[data-armed="false"] { border-left-color: var(--line); }
 .cfg-sys { font-family: var(--display); font-size: 16px; letter-spacing: .02em; }
 .cfg-say { font-size: 12.5px; color: var(--ink-mut); }
 .cfg-gate { display: flex; flex-direction: column; gap: 3px; }
