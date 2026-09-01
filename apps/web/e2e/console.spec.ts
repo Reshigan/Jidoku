@@ -252,3 +252,32 @@ test("every lamp on the rail is reachable on a phone, and nothing pushes the pag
     expect(slop, `${await tab.getAttribute("title")} overflows`).toBeLessThanOrEqual(1);
   }
 });
+
+/* A tablist that is ten tab stops is a rail a keyboard user learns to skip. One stop, arrows to
+   move — and the focus has to follow, or it falls to the body on the first press. */
+test("the rail is one tab stop and arrows walk it", async ({ page }) => {
+  await signIn(page, "a.builder", ["approver", "auditor"]);
+  const first = page.getByRole("tab").first();
+  await first.focus();
+  await expect(first).toHaveAttribute("aria-selected", "true");
+
+  await page.keyboard.press("ArrowDown");
+  const second = page.getByRole("tab").nth(1);
+  await expect(second).toBeFocused();
+  await expect(second).toHaveAttribute("aria-selected", "true");
+  await expect(first).toHaveAttribute("tabindex", "-1");
+
+  await page.keyboard.press("End");
+  await expect(page.getByRole("tab").last()).toBeFocused();
+  await page.keyboard.press("ArrowRight"); // wraps
+  await expect(page.getByRole("tab").first()).toBeFocused();
+});
+
+/* outline:none on the inputs cancelled the one ring the app has, on the controls where being lost
+   costs the most. */
+test("a focused input still shows a focus ring", async ({ page }) => {
+  await signIn(page, "a.builder", ["approver", "auditor"]);
+  const box = page.locator("header select").first();
+  await box.focus();
+  expect(await box.evaluate((el) => getComputedStyle(el).outlineStyle)).not.toBe("none");
+});

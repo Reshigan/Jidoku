@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, type KeyboardEvent as ReactKeyEvent, type ReactNode } from "react";
 import type { Lamp, Lane } from "./derive";
 
 /** Accessible modal: focus moves in, Escape closes, background is inert to the reader. */
@@ -81,20 +81,44 @@ export function AndonRail(props: {
   stopped: boolean;
   onCord: () => void;
 }) {
+  /* The tabs keyboard contract, which the roving tabIndex above is half of: arrows walk the rail and
+     wrap, Home and End jump to its ends. Moving selects, because each lamp is a whole screen and
+     there is nothing to preview — the same thing a click does. */
+  const onRailKey = (e: ReactKeyEvent) => {
+    const at = VIEWS.indexOf(props.view);
+    const to =
+      e.key === "ArrowDown" || e.key === "ArrowRight" ? (at + 1) % VIEWS.length
+      : e.key === "ArrowUp" || e.key === "ArrowLeft" ? (at - 1 + VIEWS.length) % VIEWS.length
+      : e.key === "Home" ? 0
+      : e.key === "End" ? VIEWS.length - 1
+      : -1;
+    if (to < 0) return;
+    e.preventDefault();
+    props.onView(VIEWS[to]);
+    // The old tab is now tabIndex -1, so focus would fall to the body if it were not moved.
+    (e.currentTarget.children[to] as HTMLElement | undefined)?.focus();
+  };
+
   return (
     <nav className="rail" aria-label="Andon rail — build phases and the stop cord">
       <Mark />
-      <div className="rail-lamps" role="tablist" aria-label="Views">
+      <div className="rail-lamps" role="tablist" aria-label="Views" onKeyDown={onRailKey}>
         {VIEWS.map((v, i) => (
           <button
             key={v}
             className="lamp"
             role="tab"
+            /* A tablist is one tab stop, not ten: Tab reaches the rail, arrows move along it. Ten
+               stops between the rail and the page is how a keyboard user learns to skip the rail. */
+            tabIndex={props.view === v ? 0 : -1}
             aria-current={props.view === v}
             aria-selected={props.view === v}
             data-lamp={laneLampFor(props, v)}
             onClick={() => props.onView(v)}
-            title={`${v} — press ${i + 1}`}
+            /* At the mobile breakpoint the label is clipped away, so the name has to be on the
+               button itself — title is a tooltip, and a tooltip is not a name. */
+            aria-label={`${v} — press ${(i + 1) % 10}`}
+            title={`${v} — press ${(i + 1) % 10}`}
           >
             <span className="glass" />
             <span className="lamp-label">{v}</span>

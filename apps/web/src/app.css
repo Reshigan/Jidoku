@@ -249,7 +249,10 @@ select, input[type="text"], input[type="search"], textarea {
   transition: border-color .16s var(--ease);
 }
 select:hover, input:hover, textarea:hover { border-color: var(--floor4); }
-select:focus, input:focus, textarea:focus { border-color: var(--blue-lift); outline: none; }
+/* The border lifts on any focus, mouse or keyboard; the ring is the keyboard's own and must not be
+   cancelled here — a 1px hue shift is not an indicator, and these are the controls where knowing
+   where you are matters most. */
+select:focus, input:focus, textarea:focus { border-color: var(--blue-lift); }
 textarea { resize: vertical; line-height: 1.5; }
 label { display: grid; gap: 6px; }
 
@@ -396,6 +399,24 @@ label { display: grid; gap: 6px; }
 .station:hover { background: #171d26; }
 .station .key { font-family: var(--mono); font-size: 11px; color: var(--ink-mut); }
 .station .title { font-family: var(--display); font-size: 14px; font-weight: 600; }
+
+/* Flex and grid children default to min-width:auto — "never shrink below my content" — so one long
+   client name, DP question, system id or German label pushed the whole page sideways and took the
+   rail with it: 3553px of horizontal slop on every screen, measured. Every container in this console
+   holds server data of arbitrary length, so enumerating the ones that happen to break today is a
+   list that goes stale on the next screen. The floor goes on all of them, and the text is allowed to
+   break rather than to push.
+
+   Two deliberate exemptions: .wordmark is the brand string, fixed by us, and .meter-num is "3 / 7",
+   which must not wrap between the number and its total. */
+.main :where([class]) > *, .topbar > *, .topbar :where([class]) > * { min-width: 0; }
+/* Only where a long word would push: block text and cells. Not on every span — the ledger's mono
+   hashes are already truncated with the full value in a title, and letting them break mid-hash
+   shortened every row and left 310px of void under the panel. */
+.main :where(p, h1, h2, h3, li, dd, dt), .main .mut, .main .say, .main .title,
+.topbar :where(p, h1, h2) { overflow-wrap: anywhere; }
+/* The brand string is ours and fixed; "3 / 7" must not wrap between the number and its total. */
+.wordmark, .wordmark > *, .meter-num { overflow-wrap: normal; }
 
 /* ---------- tables ---------- */
 .tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }

@@ -111,17 +111,26 @@ export class ApiError extends Error {
   }
 }
 
+/* A fetch with no timeout does not fail, it hangs — and a console that hangs looks to an operator
+   exactly like one that is thinking. Thirty seconds is longer than any call here legitimately takes.
+   ponytail: one constant, per-call overrides when a call proves it needs one. */
+const TIMEOUT_MS = 30_000;
+
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
     res = await fetch(path, {
       ...init,
+      signal: AbortSignal.timeout(TIMEOUT_MS),
       headers: {
         ...(init?.body ? { "content-type": "application/json" } : {}),
         ...authHeader(),
       },
     });
-  } catch {
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "TimeoutError") {
+      throw new ApiError(0, "The platform did not answer within 30 seconds. Showing the last verified state.");
+    }
     throw new ApiError(0, "The platform is unreachable. Showing the last verified state.");
   }
   const text = await res.text();

@@ -1,6 +1,6 @@
 /* The console shell. Loads everything the platform exposes, refuses nothing locally:
    a refusal shown here is always the server's own words, quoted verbatim. */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiError, platform, setSession, getSession,
   type Claim, type DecisionPoint, type EngagementDetail, type EngagementSummary, type Evidence,
@@ -65,8 +65,14 @@ export default function App() {
       roles.includes("builder") || roles.includes("approver"));
   const writable = can("write") && !offline;
 
+  /* Every write goes through here, so the double-click guard goes here too rather than onto each of
+     the twenty buttons that would each forget it. Approve fired ten times is ten ledger entries. */
+  const inFlight = useRef(false);
+
   /* One place turns an ApiError into a visible refusal, so no view ever invents a message. */
   const guard = useCallback(async <T,>(title: string, fn: () => Promise<T>): Promise<T | null> => {
+    if (inFlight.current) return null;
+    inFlight.current = true;
     try {
       const out = await fn();
       setOffline(false);
@@ -74,8 +80,17 @@ export default function App() {
     } catch (err) {
       const e = err as ApiError;
       if (e.status === 0) { setOffline(true); return null; }
+      /* A token that expired while the screen was open is not a refusal to explain — it is a session
+         that ended. Showing "Not authenticated" in a dialog leaves the operator clicking a dead
+         console; returning them to sign-in is the only honest thing the screen can do. */
+      if (e.status === 401) {
+        setSession(null); setRoles([]); setWho("");
+        return null;
+      }
       setRefusal({ title, text: e.detail || e.message });
       return null;
+    } finally {
+      inFlight.current = false;
     }
   }, []);
 
