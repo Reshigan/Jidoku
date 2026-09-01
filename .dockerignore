@@ -1,0 +1,15 @@
+# The build context is the repo root, so everything not needed to run the kernel is bandwidth and
+# an attack surface. node_modules alone is larger than the image.
+.git
+.venv
+node_modules
+**/node_modules
+**/__pycache__
+**/*.pyc
+**/dist
+apps/web
+*.zip
+*.db
+.env
+.env.*
+!.env.example

@@ -11,15 +11,38 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The kernel first. The edge is a front door; publishing it against an origin that has not
+  # restarted yet points every API call at the previous build for the length of the deploy.
+  kernel:
+    runs-on: ubuntu-latest
+    environment: production
+    # Same reasoning as the edge job below: skipped, not failed, until the host is configured.
+    # FLY_API_TOKEN is a secret and secrets cannot be read in an `if`, so this keys off the same
+    # variable — if KERNEL_URL is set, a kernel is expected to exist at it.
+    if: ${{ vars.KERNEL_URL != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Publish the governance kernel
+        # From the repo root: the Dockerfile copies six sibling packages above services/api.
+        # The health check in fly.toml reads the store, so a machine that cannot see its volume
+        # never takes traffic and the release rolls back on its own.
+        run: flyctl deploy --config deploy/fly/fly.toml --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
   deploy:
     runs-on: ubuntu-latest
     environment: production
+    needs: kernel
+    # `always()` so the first publish — console only, no kernel yet, via workflow_dispatch — still
+    # runs when the kernel job was skipped. A failed kernel deploy still blocks the edge.
+    if: ${{ always() && needs.kernel.result != 'failure' && (vars.KERNEL_URL != '' || github.event_name == 'workflow_dispatch') }}
     # A red pipeline nobody can fix is a pipeline everybody learns to ignore. Until the deployment
     # is configured this job is skipped, not failed, and the published site is left alone.
     # KERNEL_URL stands in for "somebody has set this repository up": it is the one setting that is
     # a variable rather than a secret, and `secrets` cannot be read in an `if` at all. Deploying a
     # console with no kernel is deliberate for the first publish, so workflow_dispatch overrides.
-    if: ${{ vars.KERNEL_URL != '' || github.event_name == 'workflow_dispatch' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

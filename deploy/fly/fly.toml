@@ -1,0 +1,44 @@
+# The governance kernel on Fly. The edge Worker (deploy/cloudflare) serves the console and proxies
+# every API path here; this is the origin its KERNEL_URL points at.
+#
+# Deployed from the repo root — `fly deploy --config deploy/fly/fly.toml` — because the Dockerfile
+# copies six sibling packages that live above services/api.
+
+app = "jidoka-kernel"
+primary_region = "jnb"   # Johannesburg: the client data is South African, and POPIA section 72
+                         # makes where it rests a legal question rather than a latency one.
+
+[build]
+  dockerfile = "../../services/api/Dockerfile"
+
+[env]
+  JIDOKA_DB_URL = "sqlite:////data/jidoka.db"
+
+# The store is sqlite on a volume, not a managed database: jidoka-core is stdlib-only by charter
+# (packages/jidoka-core has no drivers and gains none), so the ledger's durability is this disk.
+# Create it once: `fly volumes create jidoka_data --size 10 --region jnb`.
+[mounts]
+  source = "jidoka_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # One writer. Two machines on one sqlite file is a corrupted hash chain, not horizontal scale —
+  # and a corrupted chain is indistinguishable from tampering, which is the whole thing the ledger
+  # exists to rule out. Scaling out is a repository change first (ADR required), a fly scale second.
+  auto_stop_machines = false
+  auto_start_machines = false
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    path = "/health"
+    timeout = "5s"
+    # /health reads the store, so a machine that cannot see its volume never takes traffic.
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
