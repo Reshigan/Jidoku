@@ -55,15 +55,35 @@ export function Skeleton({ rows = 3, tall = false }: { rows?: number; tall?: boo
   );
 }
 
-/** The mark: three lamps on a royal-blue spine. */
+/** The mark: a carved vermillion seal bearing 自働 — jidō, "moves by itself, with a human
+    inside the loop". Drawn as a hanko impression: square-cut border, uneven ink, slight rotation.
+    Colors are the theme's shu pigment, hardcoded here because an SVG mark must survive contexts
+    with no stylesheet (favicons, exports). */
 function Mark() {
   return (
-    <svg className="rail-mark" viewBox="0 0 40 52" aria-hidden="true">
-      <rect x="18" y="2" width="4" height="48" fill="#2B50E2" />
-      <circle cx="20" cy="10" r="7" fill="#E5484D" />
-      <circle cx="20" cy="26" r="7" fill="#E3A008" />
-      <circle cx="20" cy="42" r="7" fill="#3FB950" />
+    <svg className="rail-mark" viewBox="0 0 48 48" aria-hidden="true">
+      <g transform="rotate(-3 24 24)">
+        <rect x="3" y="3" width="42" height="42" rx="4" fill="none" stroke="#c94a2c" strokeWidth="3" />
+        <rect x="3" y="3" width="42" height="42" rx="4" fill="#c94a2c" opacity="0.16" />
+        <text x="24" y="20.5" textAnchor="middle" dominantBaseline="central"
+              fontFamily="'Zen Kaku Gothic New','Hiragino Kaku Gothic ProN',sans-serif"
+              fontSize="17" fontWeight="900" fill="#e8917a">自</text>
+        <text x="24" y="36.5" textAnchor="middle" dominantBaseline="central"
+              fontFamily="'Zen Kaku Gothic New','Hiragino Kaku Gothic ProN',sans-serif"
+              fontSize="17" fontWeight="900" fill="#e8917a">働</text>
+      </g>
     </svg>
+  );
+}
+
+/** A signature or approval rendered as a hanko impression beside the name.
+    A signed value is a human act; it gets a stamp, not a table cell. */
+export function Seal({ name, kanji = "印", lg = false }: { name: string; kanji?: string; lg?: boolean }) {
+  return (
+    <span className={lg ? "seal lg" : "seal"}>
+      <span className="seal-stamp" aria-hidden="true">{kanji}</span>
+      <span className="seal-name">{name}</span>
+    </span>
   );
 }
 

@@ -1,39 +1,48 @@
-/* goNXT JIDOKA — factory floor, not dashboard. Palette, type and rail per public/BRAND.md.
-   The page is a machine shop at night: charcoal ground, glass lamps under power, signage type. */
-@import url("https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@500;600;700&family=Poppins:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap");
+/* goNXT JIDOKA — Aizome & Seal.
+   The room: a consultant at a desk after hours, one line still running, the light kept low.
+   Ground is aizome — vat-dyed indigo, layered like cloth dipped more than once. Ink is warm
+   paper-white. Vermillion (shu) is the seal pigment and nothing else: signatures, approvals,
+   the one primary action on a screen. Lamps keep their jidoka semantics in Japanese pigment
+   hues — shu red, kihada amber, matsuba green. Dark is earned here, not a default. */
+@import url("https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap");
 
 :root {
-  --floor: #0e1116;
-  --floor2: #151a22;
-  --floor3: #1c222c;
-  --floor4: #222a36;
-  --line: #28313e;
-  --line-soft: #1e2530;
-  --run: #3fb950;
-  --call: #e3a008;
-  --stop: #e5484d;
-  --blue: #2b50e2;
-  --blue-lift: #4a6bf0;
-  --navy: #0a1245;
-  /* Each lamp needs a second, lifted value for TEXT: the lamp colour itself is tuned to read as a
-     lit glass at 8px, and at 10px on a tinted wash it is either too dark (run, blue) or glares
-     (stop). These four are the text rung of the same ramp, used by pills, tiers and any lamp-toned
-     label. All clear 8.6:1 on every floor. Never use --run/--call/--stop directly on type. */
-  --run-ink: #8ee79b;
-  --call-ink: #f5cf7a;
-  --stop-ink: #ffb4b7;
-  --blue-ink: #a9bcff;
-  --ink: #e7ecf3;
-  --ink-mut: #8b97a8;
-  /* Lifted from #66707e: at 3.18:1 on --floor3 it failed body contrast, and every consumer is
-     9-11px label text — the smallest type in the console was the least legible. 4.75:1 on floor3. */
-  --ink-dim: #828d9c;
-  --display: "Archivo Narrow", "Arial Narrow", system-ui, sans-serif;
-  --body: "Poppins", system-ui, -apple-system, sans-serif;
+  /* aizome floors — each one dip lighter than the last */
+  --floor: oklch(18.5% 0.032 272);
+  --floor2: oklch(21.5% 0.034 271);
+  --floor3: oklch(25% 0.036 270);
+  --floor4: oklch(28.5% 0.038 269);
+  --line: oklch(33% 0.034 268);
+  --line-soft: oklch(28% 0.032 269);
+  /* pigments. --stop IS shu; the seal and the halt share one pigment on purpose —
+     both are a human hand interrupting the machine. */
+  --run: oklch(64% 0.13 152);     /* matsuba — pine needle */
+  --call: oklch(74% 0.126 84);    /* kihada — amur cork bark */
+  --stop: oklch(60% 0.185 30);    /* shu — vermillion */
+  --shu: var(--stop);
+  --shu-deep: oklch(47% 0.155 31);
+  --blue: oklch(58% 0.115 262);   /* asagi — pale indigo, the working accent */
+  --blue-lift: oklch(68% 0.115 262);
+  --navy: oklch(15.5% 0.036 273); /* the deepest vat — the rail */
+  /* Each lamp needs a second, lifted value for TEXT: the lamp colour itself is tuned to read
+     as pigment at 8px, and at 10px on a tinted wash it either muddies (run, blue) or glares
+     (stop). These four are the text rung of the same ramp, used by pills, tiers and any
+     lamp-toned label. All clear 7:1 on every floor. Never use --run/--call/--stop on type. */
+  --run-ink: oklch(85% 0.1 152);
+  --call-ink: oklch(88% 0.09 88);
+  --stop-ink: oklch(84% 0.075 30);
+  --blue-ink: oklch(84% 0.055 262);
+  /* warm paper against cold indigo — the ink is the only warm thing on the ground */
+  --ink: oklch(93.5% 0.009 85);
+  --ink-mut: oklch(74% 0.014 275);
+  /* Smallest type in the console runs on this; 4.9:1 on floor3, never lower. */
+  --ink-dim: oklch(68.5% 0.016 275);
+  --display: "Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", system-ui, sans-serif;
+  --body: "Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", system-ui, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
-  --rail: 68px;
-  --r: 4px;
-  --shadow: 0 1px 0 rgba(0,0,0,.4);
+  --rail: 76px;
+  --r: 2px; /* carved, not rounded — a seal is cut square */
+  --shadow: 0 1px 0 oklch(0% 0 0 / .4);
   --ease: cubic-bezier(.22,.61,.36,1);
 }
 
@@ -41,25 +50,35 @@
 html, body, #root { height: 100%; }
 
 body {
-  background:
-    radial-gradient(1100px 620px at 78% -12%, rgba(43,80,226,.10), transparent 62%),
-    var(--floor);
+  background: var(--floor);
   color: var(--ink);
   font-family: var(--body);
   font-size: 13px;
   font-weight: 400;
-  line-height: 1.45;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
+/* Washi grain: one fixed turbulence sheet over everything, compositor-only, never repainted.
+   At .05 it reads as paper tooth, not noise. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 90;
+  opacity: .05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='w'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .6 0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23w)'/%3E%3C/svg%3E");
+}
+
 h1, h2, h3, .display {
   font-family: var(--display);
-  font-weight: 600;
-  letter-spacing: .005em;
-  line-height: 1.12;
+  font-weight: 700;
+  letter-spacing: .01em;
+  line-height: 1.15;
 }
-h1 { font-size: 22px; }
+h1 { font-size: 22px; font-weight: 900; }
 h2 { font-size: 14px; }
 h3 { font-size: 13px; }
 
@@ -81,8 +100,8 @@ h3 { font-size: 13px; }
 .figure {
   font-family: var(--display);
   font-size: 26px;
-  font-weight: 700;
-  letter-spacing: -.02em;
+  font-weight: 900;
+  letter-spacing: -.01em;
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
@@ -92,20 +111,49 @@ a { color: var(--blue-lift); }
 :focus-visible {
   outline: 2px solid var(--blue-lift);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: 2px;
 }
 
 .skip {
   position: absolute;
   left: -9999px;
   top: 8px;
-  background: var(--blue);
-  color: #fff;
+  background: var(--shu);
+  color: oklch(97% 0.01 85);
   padding: 10px 16px;
   border-radius: var(--r);
   z-index: 100;
 }
 .skip:focus { left: calc(var(--rail) + 16px); }
+
+/* ---------- the seal: a hanko impression. Every signature and approval renders as one.
+   Slightly rotated, unevenly inked — a stamp pressed by a hand, not printed by a machine. */
+.seal {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  vertical-align: middle;
+}
+.seal-stamp {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid var(--shu);
+  border-radius: 3px;
+  color: var(--stop-ink);
+  font-family: var(--display);
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+  background:
+    radial-gradient(140% 120% at 30% 25%, oklch(60% 0.185 30 / .28), oklch(60% 0.185 30 / .1) 70%);
+  transform: rotate(-2.5deg);
+  box-shadow: inset 0 0 4px oklch(47% 0.155 31 / .5);
+}
+.seal-name { font-size: 12.5px; }
+.seal.lg .seal-stamp { width: 30px; height: 30px; font-size: 14px; border-width: 2px; }
 
 /* ---------- layout ---------- */
 .shell { display: flex; min-height: 100%; }
@@ -119,19 +167,20 @@ a { color: var(--blue-lift); }
 }
 
 .page {
-  padding: 16px 20px 40px;
+  padding: 14px 18px 36px;
   max-width: 1560px;
   width: 100%;
   animation: rise .3s var(--ease) both;
 }
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
 
-/* ---------- the andon rail: the signature element, never scrolled away ---------- */
+/* ---------- the rail: a tategaki seal column — vertical writing down the deepest vat.
+   Never scrolled away; a lamp you must swipe to is a lamp that cannot alarm you. ---------- */
 .rail {
   position: fixed;
   inset: 0 auto 0 0;
   width: var(--rail);
-  background: linear-gradient(180deg, var(--navy), #070c1e 62%, #05080f);
+  background: linear-gradient(180deg, var(--navy), oklch(13% 0.034 274) 62%, oklch(11% 0.03 275));
   border-right: 1px solid var(--line);
   display: flex;
   flex-direction: column;
@@ -141,66 +190,76 @@ a { color: var(--blue-lift); }
   z-index: 40;
 }
 
-.rail-mark { width: 34px; height: 44px; flex: none; }
+.rail-mark { width: 38px; height: 38px; flex: none; }
 
 .rail-lamps {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
   width: 100%;
   align-items: stretch;
+  min-height: 0;
 }
 
-/* Each view is a lamp on the stack. The glass reads as glass under power, not neon. */
+/* Each view is a station on the column: glass above, its full name beneath it. The names are
+   never clipped — a station whose name you cannot read is a station you cannot trust. */
 .lamp {
   position: relative;
   appearance: none;
   border: 1px solid transparent;
   background: transparent;
-  color: #94a2c4;
+  color: oklch(66% 0.03 268);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 8.5px;
   font-weight: 500;
-  letter-spacing: .12em;
+  letter-spacing: .08em;
   text-transform: uppercase;
-  padding: 10px 2px 8px;
+  padding: 7px 1px 6px;
   border-radius: var(--r);
   cursor: pointer;
   display: grid;
+  grid-auto-flow: row;
   justify-items: center;
-  gap: 7px;
+  align-content: start;
+  gap: 4px;
+  min-height: 0;
   transition: background .18s var(--ease), color .18s var(--ease);
 }
-.lamp:hover { background: rgba(255,255,255,.05); color: #cfd9f2; }
+.lamp-label {
+  max-width: 100%;
+  overflow: hidden;
+}
+.lamp:hover { background: oklch(100% 0 0 / .05); color: oklch(85% 0.02 268); }
 .lamp[aria-current="true"] {
-  background: rgba(43,80,226,.20);
-  border-color: rgba(74,107,240,.5);
-  color: #fff;
+  background: oklch(58% 0.115 262 / .18);
+  border-color: oklch(68% 0.115 262 / .5);
+  color: var(--ink);
 }
 
 .glass {
-  width: 15px;
-  height: 15px;
+  width: 13px;
+  height: 13px;
   border-radius: 50%;
-  background: #2a3550;
-  box-shadow: inset 0 1px 2px rgba(0,0,0,.7);
+  background: oklch(30% 0.045 268);
+  box-shadow: inset 0 1px 2px oklch(0% 0 0 / .7);
   transition: background .2s var(--ease), box-shadow .2s var(--ease);
+  flex: none;
 }
-.lamp[data-lamp="run"]  .glass { background: var(--run);  box-shadow: 0 0 12px rgba(63,185,80,.65), inset 0 1px 2px rgba(0,0,0,.35); }
-.lamp[data-lamp="call"] .glass { background: var(--call); box-shadow: 0 0 12px rgba(227,160,8,.65), inset 0 1px 2px rgba(0,0,0,.35); }
-.lamp[data-lamp="stop"] .glass { background: var(--stop); box-shadow: 0 0 12px rgba(229,72,77,.7), inset 0 1px 2px rgba(0,0,0,.35); }
-.lamp[aria-current="true"] .glass { transform: scale(1.05); }
+.lamp[data-lamp="run"]  .glass { background: var(--run);  box-shadow: 0 0 10px oklch(64% 0.13 152 / .6), inset 0 1px 2px oklch(0% 0 0 / .35); }
+.lamp[data-lamp="call"] .glass { background: var(--call); box-shadow: 0 0 10px oklch(74% 0.126 84 / .6), inset 0 1px 2px oklch(0% 0 0 / .35); }
+.lamp[data-lamp="stop"] .glass { background: var(--stop); box-shadow: 0 0 10px oklch(60% 0.185 30 / .65), inset 0 1px 2px oklch(0% 0 0 / .35); }
+.lamp[aria-current="true"] .glass { transform: scale(1.05); box-shadow: 0 0 0 3px oklch(58% 0.115 262 / .3); }
 
 .rail-spacer { flex: 1; }
 
-/* The stop cord: anyone may halt the line. The brand's whole argument in one control. */
+/* The stop cord: anyone may halt the line. Same pigment as the seal — a hand on the machine. */
 .cord {
   width: 100%;
   appearance: none;
   cursor: pointer;
-  border: 1px solid rgba(229,72,77,.55);
-  background: rgba(229,72,77,.12);
-  color: #ffc9cb;
+  border: 1px solid oklch(60% 0.185 30 / .55);
+  background: oklch(60% 0.185 30 / .12);
+  color: var(--stop-ink);
   font-family: var(--mono);
   font-size: 9px;
   font-weight: 500;
@@ -211,6 +270,7 @@ a { color: var(--blue-lift); }
   display: grid;
   justify-items: center;
   gap: 8px;
+  line-height: 1.15;
   transition: background .18s var(--ease), transform .12s var(--ease);
 }
 .cord::before {
@@ -218,11 +278,11 @@ a { color: var(--blue-lift); }
   width: 3px;
   height: 22px;
   border-radius: 2px;
-  background: linear-gradient(180deg, #8d1f22, var(--stop));
+  background: linear-gradient(180deg, var(--shu-deep), var(--stop));
 }
-.cord:hover { background: rgba(229,72,77,.24); color: #fff; }
+.cord:hover { background: oklch(60% 0.185 30 / .24); color: oklch(97% 0.01 85); }
 .cord:active { transform: translateY(2px); }
-.cord[data-stopped="true"] { background: var(--stop); border-color: var(--stop); color: #fff; }
+.cord[data-stopped="true"] { background: var(--stop); border-color: var(--stop); color: oklch(98% 0.005 85); }
 
 /* ---------- top bar ---------- */
 .topbar {
@@ -233,40 +293,40 @@ a { color: var(--blue-lift); }
   align-items: center;
   gap: 18px;
   flex-wrap: wrap;
-  padding: 14px 34px;
-  background: rgba(14,17,22,.86);
+  padding: 12px 32px;
+  background: oklch(18.5% 0.032 272 / .88);
   backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--line);
 }
 
-.wordmark { font-family: var(--display); font-size: 21px; font-weight: 700; letter-spacing: .02em; }
+.wordmark { font-family: var(--display); font-size: 20px; font-weight: 900; letter-spacing: .02em; }
 .wordmark .nxt { color: var(--blue-lift); }
 .wordmark .jid { letter-spacing: .17em; margin-left: 9px; }
-.wordmark .kanji { color: var(--ink-dim); font-size: 12px; margin-left: 7px; letter-spacing: .05em; }
+.wordmark .kanji { color: var(--stop-ink); font-size: 12px; margin-left: 7px; letter-spacing: .12em; font-weight: 700; }
 
 .grow { flex: 1; }
 
 select, input[type="text"], input[type="search"], textarea {
   font-family: var(--body);
   font-size: 13px;
-  font-weight: 300;
+  font-weight: 400;
   color: var(--ink);
   background: var(--floor2);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 8px 11px;
+  border-radius: var(--r);
+  padding: 7px 10px;
   min-width: 0;
   transition: border-color .16s var(--ease);
 }
 select:hover, input:hover, textarea:hover { border-color: var(--floor4); }
-/* The border lifts on any focus, mouse or keyboard; the ring is the keyboard's own and must not be
-   cancelled here — a 1px hue shift is not an indicator, and these are the controls where knowing
-   where you are matters most. */
+/* The border lifts on any focus, mouse or keyboard; the ring is the keyboard's own and must not
+   be cancelled here — a 1px hue shift is not an indicator, and these are the controls where
+   knowing where you are matters most. */
 select:focus, input:focus, textarea:focus { border-color: var(--blue-lift); }
-textarea { resize: vertical; line-height: 1.5; }
+textarea { resize: vertical; line-height: 1.55; }
 label { display: grid; gap: 6px; }
 
-/* ---------- buttons ---------- */
+/* ---------- buttons. The primary is a seal press: vermillion, square-cut, pushed by a hand. */
 .btn {
   appearance: none;
   cursor: pointer;
@@ -276,22 +336,29 @@ label { display: grid; gap: 6px; }
   color: var(--ink);
   background: var(--floor3);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 8px 14px;
+  border-radius: var(--r);
+  padding: 7px 13px;
   display: inline-flex;
   align-items: center;
   gap: 7px;
   transition: background .16s var(--ease), border-color .16s var(--ease), transform .1s var(--ease);
 }
-.btn:hover:not(:disabled) { background: var(--floor4); border-color: #34404f; }
+.btn:hover:not(:disabled) { background: var(--floor4); border-color: oklch(38% 0.036 268); }
 .btn:active:not(:disabled) { transform: translateY(1px); }
 .btn:disabled { opacity: .42; cursor: not-allowed; }
-.btn.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
-.btn.primary:hover:not(:disabled) { background: var(--blue-lift); border-color: var(--blue-lift); }
-.btn.danger { background: rgba(229,72,77,.14); border-color: rgba(229,72,77,.5); color: var(--stop-ink); }
-.btn.danger:hover:not(:disabled) { background: rgba(229,72,77,.26); color: #fff; }
+.btn.primary {
+  /* Deeper than the lamp vermillion: this is ink for reading, and 4.5:1 is the floor. */
+  background: oklch(52% 0.168 30);
+  border-color: var(--shu-deep);
+  color: oklch(97.5% 0.008 85);
+  font-weight: 700;
+  box-shadow: inset 0 0 6px oklch(42% 0.15 31 / .45);
+}
+.btn.primary:hover:not(:disabled) { background: oklch(56% 0.178 30); border-color: var(--shu); }
+.btn.danger { background: oklch(60% 0.185 30 / .14); border-color: oklch(60% 0.185 30 / .5); color: var(--stop-ink); }
+.btn.danger:hover:not(:disabled) { background: oklch(60% 0.185 30 / .26); color: oklch(97% 0.01 85); }
 .btn.ghost { background: transparent; }
-.btn.sm { font-size: 11.5px; padding: 6px 11px; }
+.btn.sm { font-size: 11.5px; padding: 5px 10px; }
 
 /* ---------- surfaces ---------- */
 .card {
@@ -312,11 +379,11 @@ label { display: grid; gap: 6px; }
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
-  /* margin, padding and rule were set again 400 lines down; folded in here. */
   margin-bottom: 10px;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--line);
 }
+.head h1 { font-size: 20px; }
 
 /* ---------- status pills and lamps in content ---------- */
 .pill {
@@ -328,8 +395,8 @@ label { display: grid; gap: 6px; }
   font-weight: 500;
   letter-spacing: .1em;
   text-transform: uppercase;
-  padding: 4px 9px;
-  border-radius: 999px;
+  padding: 3px 8px;
+  border-radius: 3px;
   border: 1px solid var(--line);
   background: var(--floor3);
   color: var(--ink-mut);
@@ -337,68 +404,67 @@ label { display: grid; gap: 6px; }
 }
 .pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .pill.none::before { display: none; }
-.pill[data-lamp="run"]  { color: var(--run-ink); border-color: rgba(63,185,80,.4);  background: rgba(63,185,80,.12); }
-.pill[data-lamp="call"] { color: var(--call-ink); border-color: rgba(227,160,8,.4);  background: rgba(227,160,8,.12); }
-.pill[data-lamp="stop"] { color: var(--stop-ink); border-color: rgba(229,72,77,.42); background: rgba(229,72,77,.13); }
-.pill[data-lamp="blue"] { color: var(--blue-ink); border-color: rgba(74,107,240,.45); background: rgba(43,80,226,.16); }
+.pill[data-lamp="run"]  { color: var(--run-ink);  border-color: oklch(64% 0.13 152 / .4);  background: oklch(64% 0.13 152 / .12); }
+.pill[data-lamp="call"] { color: var(--call-ink); border-color: oklch(74% 0.126 84 / .4);  background: oklch(74% 0.126 84 / .12); }
+.pill[data-lamp="stop"] { color: var(--stop-ink); border-color: oklch(60% 0.185 30 / .42); background: oklch(60% 0.185 30 / .13); }
+.pill[data-lamp="blue"] { color: var(--blue-ink); border-color: oklch(68% 0.115 262 / .45); background: oklch(58% 0.115 262 / .16); }
 
 .tier {
   font-family: var(--mono);
   font-size: 10px;
   font-weight: 500;
   padding: 3px 7px;
-  border-radius: 5px;
+  border-radius: 3px;
   border: 1px solid var(--line);
   background: var(--floor3);
   color: var(--ink-mut);
 }
-.tier[data-t="A"] { color: var(--run-ink); border-color: rgba(63,185,80,.35); }
-.tier[data-t="B"] { color: var(--call-ink); border-color: rgba(227,160,8,.35); }
-.tier[data-t="C"] { color: var(--blue-ink); border-color: rgba(74,107,240,.4); }
+.tier[data-t="A"] { color: var(--run-ink);  border-color: oklch(64% 0.13 152 / .35); }
+.tier[data-t="B"] { color: var(--call-ink); border-color: oklch(74% 0.126 84 / .35); }
+.tier[data-t="C"] { color: var(--blue-ink); border-color: oklch(68% 0.115 262 / .4); }
 
 /* ---------- banners ---------- */
 .banner {
   display: flex;
   gap: 12px;
   align-items: flex-start;
-  padding: 13px 16px;
-  border-radius: 12px;
+  padding: 12px 15px;
+  border-radius: var(--r);
   border: 1px solid var(--line);
   background: var(--floor2);
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 .banner .bar { width: 3px; align-self: stretch; border-radius: 2px; background: var(--ink-dim); flex: none; }
-.banner[data-lamp="stop"] { border-color: rgba(229,72,77,.45); background: rgba(229,72,77,.09); }
+.banner[data-lamp="stop"] { border-color: oklch(60% 0.185 30 / .45); background: oklch(60% 0.185 30 / .09); }
 .banner[data-lamp="stop"] .bar { background: var(--stop); }
-.banner[data-lamp="call"] { border-color: rgba(227,160,8,.42); background: rgba(227,160,8,.08); }
+.banner[data-lamp="call"] { border-color: oklch(74% 0.126 84 / .42); background: oklch(74% 0.126 84 / .08); }
 .banner[data-lamp="call"] .bar { background: var(--call); }
-.banner[data-lamp="run"] { border-color: rgba(63,185,80,.38); background: rgba(63,185,80,.08); }
+.banner[data-lamp="run"] { border-color: oklch(64% 0.13 152 / .38); background: oklch(64% 0.13 152 / .08); }
 .banner[data-lamp="run"] .bar { background: var(--run); }
-.banner[data-lamp="blue"] { border-color: rgba(74,107,240,.42); background: rgba(43,80,226,.10); }
+.banner[data-lamp="blue"] { border-color: oklch(68% 0.115 262 / .42); background: oklch(58% 0.115 262 / .1); }
 .banner[data-lamp="blue"] .bar { background: var(--blue-lift); }
 
 /* ---------- phase / milestone rail ---------- */
-.phases { display: flex; align-items: stretch; gap: 0; flex-wrap: wrap; }
+.phases { display: grid; grid-template-columns: repeat(5, 1fr); align-items: stretch; gap: 0; }
 .phase {
   position: relative;
-  flex: 1 1 160px;
-  padding: 14px 16px;
+  padding: 8px 10px;
   border: 1px solid var(--line);
   border-right: none;
   background: var(--floor2);
 }
-.phase:first-child { border-radius: 12px 0 0 12px; }
-.phase:last-child { border-radius: 0 12px 12px 0; border-right: 1px solid var(--line); }
-.phase[data-state="done"] { background: rgba(63,185,80,.10); border-color: rgba(63,185,80,.3); }
-.phase[data-state="now"]  { background: rgba(43,80,226,.16); border-color: rgba(74,107,240,.5); }
+.phase:first-child { border-radius: var(--r) 0 0 var(--r); }
+.phase:last-child { border-radius: 0 var(--r) var(--r) 0; border-right: 1px solid var(--line); }
+.phase[data-state="done"] { background: oklch(64% 0.13 152 / .1); border-color: oklch(64% 0.13 152 / .3); }
+.phase[data-state="now"]  { background: oklch(58% 0.115 262 / .16); border-color: oklch(68% 0.115 262 / .5); }
 .phase .n { font-family: var(--mono); font-size: 10px; letter-spacing: .14em; color: var(--ink-dim); }
-.phase .t { font-family: var(--display); font-size: 13px; font-weight: 600; margin-top: 2px; }
+.phase .t { font-family: var(--display); font-size: 13px; font-weight: 700; margin-top: 2px; }
 
 /* ---------- station cards ---------- */
 .station {
   display: grid;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: 7px;
+  padding: 9px 11px;
   border: 1px solid var(--line);
   border-left: 2px solid var(--ink-dim);
   border-radius: var(--r);
@@ -409,26 +475,19 @@ label { display: grid; gap: 6px; }
 .station[data-lamp="call"] { border-left-color: var(--call); }
 .station[data-lamp="stop"] { border-left-color: var(--stop); }
 .station[data-locked="true"] { opacity: .55; }
-.station:hover { background: #171d26; }
-.station .key { font-family: var(--mono); font-size: 11px; color: var(--ink-mut); }
-.station .title { font-family: var(--display); font-size: 14px; font-weight: 600; }
+.station:hover { background: oklch(23% 0.035 271); }
+.station .key { font-family: var(--mono); font-size: 10.5px; color: var(--ink-dim); margin-top: 2px; }
+.station .title { font-family: var(--display); font-size: 14px; font-weight: 700; }
 
 /* Flex and grid children default to min-width:auto — "never shrink below my content" — so one long
-   client name, DP question, system id or German label pushed the whole page sideways and took the
-   rail with it: 3553px of horizontal slop on every screen, measured. Every container in this console
-   holds server data of arbitrary length, so enumerating the ones that happen to break today is a
-   list that goes stale on the next screen. The floor goes on all of them, and the text is allowed to
-   break rather than to push.
-
+   client name, DP question, system id or German label pushes the whole page sideways and takes the
+   rail with it. Every container here holds server data of arbitrary length, so the floor goes on
+   all of them, and text is allowed to break rather than to push.
    Two deliberate exemptions: .wordmark is the brand string, fixed by us, and .meter-num is "3 / 7",
    which must not wrap between the number and its total. */
 .main :where([class]) > *, .topbar > *, .topbar :where([class]) > * { min-width: 0; }
-/* Only where a long word would push: block text and cells. Not on every span — the ledger's mono
-   hashes are already truncated with the full value in a title, and letting them break mid-hash
-   shortened every row and left 310px of void under the panel. */
 .main :where(p, h1, h2, h3, li, dd, dt), .main .mut, .main .say, .main .title,
 .topbar :where(p, h1, h2) { overflow-wrap: anywhere; }
-/* The brand string is ours and fixed; "3 / 7" must not wrap between the number and its total. */
 .wordmark, .wordmark > *, .meter-num { overflow-wrap: normal; }
 
 /* ---------- tables ---------- */
@@ -441,38 +500,39 @@ label { display: grid; gap: 6px; }
   letter-spacing: .14em;
   text-transform: uppercase;
   color: var(--ink-dim);
-  padding: 9px 12px;
+  padding: 8px 11px;
   border-bottom: 1px solid var(--line);
   white-space: nowrap;
 }
 .tbl td { padding: 6px 10px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
 .tbl tr:last-child td { border-bottom: none; }
-.tbl tbody tr:hover td { background: rgba(255,255,255,.025); }
+.tbl tbody tr:hover td { background: oklch(100% 0 0 / .025); }
 .tbl .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.tbl td.num, .tbl th { white-space: nowrap; }
+.tbl td.num, .figure { font-variant-numeric: tabular-nums; }
 
 .scroll-x { overflow-x: auto; }
 
-/* A table is the one block here with a floor width it will not go below, so on a narrow screen it
-   pushes the whole page sideways and the andon rail scrolls off with it. Given every table lives in
-   a panel body, one rule holds all four call sites: the body takes the overflow, the page does not.
-   Keyboard-reachable because a scroll container with content wider than itself is focusable. */
+/* A table is the one block with a floor width it will not go below; the panel body takes the
+   overflow, the page does not. Keyboard-reachable because a scroll container with content wider
+   than itself is focusable. */
 .sec > .body:has(> .tbl), .sec > .body:has(> .scroll-x > .tbl) { overflow-x: auto; }
 
 /* Hashes: long, truncated, full value in the title attribute. */
 .hash {
   font-family: var(--mono);
   font-size: 11px;
-  color: var(--ink-dim);
+  color: var(--ink-mut);
   max-width: 15ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   display: inline-block;
   vertical-align: bottom;
+  cursor: help;
 }
 
 /* The chain: each entry linked to the one before it, drawn as a spine. */
-.chain { display: grid; gap: 0; }
 .link {
   display: grid;
   grid-template-columns: 26px 1fr;
@@ -498,16 +558,16 @@ label { display: grid; gap: 6px; }
   background: var(--floor3);
   border: 2px solid var(--ink-dim);
 }
-.link[data-lamp="run"]  .node { border-color: var(--run); background: rgba(63,185,80,.3); }
-.link[data-lamp="call"] .node { border-color: var(--call); background: rgba(227,160,8,.3); }
-.link[data-lamp="stop"] .node { border-color: var(--stop); background: rgba(229,72,77,.3); }
-.link[data-lamp="blue"] .node { border-color: var(--blue-lift); background: rgba(43,80,226,.35); }
+.link[data-lamp="run"]  .node { border-color: var(--run);  background: oklch(64% 0.13 152 / .3); }
+.link[data-lamp="call"] .node { border-color: var(--call); background: oklch(74% 0.126 84 / .3); }
+.link[data-lamp="stop"] .node { border-color: var(--stop); background: oklch(60% 0.185 30 / .3); }
+.link[data-lamp="blue"] .node { border-color: var(--blue-lift); background: oklch(58% 0.115 262 / .35); }
 
 /* ---------- modal ---------- */
 .scrim {
   position: fixed;
   inset: 0;
-  background: rgba(5,7,11,.72);
+  background: oklch(10% 0.02 272 / .74);
   backdrop-filter: blur(3px);
   display: grid;
   place-items: center;
@@ -523,15 +583,15 @@ label { display: grid; gap: 6px; }
   overflow: auto;
   background: var(--floor2);
   border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: 0 30px 80px -20px rgba(0,0,0,.9);
+  border-radius: var(--r);
+  padding: 22px;
+  box-shadow: 0 30px 80px -20px oklch(0% 0 0 / .9);
   display: grid;
-  gap: 15px;
+  gap: 14px;
   animation: pop .2s var(--ease) both;
 }
 @keyframes pop { from { opacity: 0; transform: translateY(10px) scale(.985); } }
-.modal.refusal { border-color: rgba(229,72,77,.55); }
+.modal.refusal { border-color: oklch(60% 0.185 30 / .55); }
 .modal.wide { width: min(900px, 100%); }
 
 /* The server's own words, never reworded by the interface. */
@@ -542,21 +602,20 @@ label { display: grid; gap: 6px; }
   background: var(--floor);
   border: 1px solid var(--line);
   border-left: 3px solid var(--stop);
-  border-radius: 8px;
+  border-radius: var(--r);
   padding: 12px 14px;
-  color: #ffc9cb;
+  color: var(--stop-ink);
   white-space: pre-wrap;
   word-break: break-word;
 }
 .verbatim.calm { border-left-color: var(--blue-lift); color: var(--ink-mut); }
 
-/* ---------- skeleton: the shape of the thing, never a fake number ---------- */
-/* The sheen is a pseudo-element sliding on transform, not background-position on the box: the old
-   form repainted every skeleton row every frame, forever, and a skeleton is on screen precisely when
-   the machine is already busy. The bar itself is flat paint; only the overlay moves, on the compositor. */
+/* ---------- skeleton: the shape of the thing, never a fake number ----------
+   The sheen is a pseudo-element sliding on transform, not background-position on the box;
+   only the overlay moves, on the compositor. */
 .skeleton {
   height: 13px;
-  border-radius: 6px;
+  border-radius: 3px;
   background: var(--floor2);
   position: relative;
   overflow: hidden;
@@ -575,7 +634,7 @@ label { display: grid; gap: 6px; }
   gap: 14px;
   justify-items: start;
   max-width: 560px;
-  padding: 34px 0;
+  padding: 32px 0;
 }
 
 footer {
@@ -584,24 +643,16 @@ footer {
   border-top: 1px solid var(--line);
   font-family: var(--mono);
   font-size: 9.5px;
-  letter-spacing: .14em;
-  text-transform: uppercase;
+  letter-spacing: .16em;
   color: var(--ink-dim);
 }
 
 /* ---------- responsive: the rail becomes a bottom bar ---------- */
 @media (max-width: 760px) {
-  /* The rail becomes a bottom bar, and a bottom bar cannot hold ten labelled destinations: at 390px
-     that was 370px of lamps ending past the viewport, so Ledger, Evidence and Milestones were
-     unreachable — the audit trail and the evidence store, missing, on a platform whose argument is
-     that nothing goes unrecorded. Scrolling them into reach is the wrong fix: BRAND is explicit that
-     the rail is "always visible, never scrolled away", and a stopped line turns every lamp red, so a
-     lamp you have to swipe to is a lamp that cannot alarm you.
-
-     The glass is what carries state; the label is the part that does not fit. So the labels go, all
-     ten lamps stay lit and reachable, and the name is read out by the accessible name that is still
-     on every button. The cord leaves the row entirely and spans the bar above the lamps — it is the
-     one control that must be hit without aiming, which is exactly what it was losing here. */
+  /* A bottom bar cannot hold twelve labelled destinations. The glass carries state; the label is
+     the part that does not fit. Labels go off-canvas (accessible name stays on the button), all
+     lamps stay lit and reachable, and the cord spans the bar — the one control that must be hit
+     without aiming. */
   .rail {
     inset: auto 0 0 0;
     width: auto;
@@ -617,12 +668,9 @@ footer {
   .rail-lamps { flex-direction: row; gap: 2px; justify-content: space-between; }
   .lamp {
     flex: 1 1 0; min-width: 0; padding: 0;
-    /* 44px of target for a thumb; the glass sits centred in it. */
     min-height: 44px; place-content: center; gap: 0;
   }
   .lamp-label {
-    /* Off-canvas, not display:none — the button keeps its accessible name, so a screen reader still
-       announces "Ledger" on a bar that shows only glass. */
     position: absolute; width: 1px; height: 1px; overflow: hidden;
     clip-path: inset(50%); white-space: nowrap;
   }
@@ -630,7 +678,6 @@ footer {
   .cord { width: 100%; min-height: 44px; padding: 8px 12px; grid-auto-flow: column; }
   .main { margin-left: 0; padding-bottom: 124px; }
   .page, .topbar { padding-left: 16px; padding-right: 16px; }
-  /* Desktop padding on a touch target is a 26px button. Every control clears 44px here. */
   .btn, select, input, textarea { min-height: 44px; }
 }
 
@@ -649,12 +696,9 @@ footer {
   }
 }
 
-/* ---- sections, fields, sign-in: added with the full console ---- */
-.sec { margin-top: 16px; }
-
+/* ---- sections, fields, sign-in ---- */
 .field { display: grid; gap: 6px; margin-top: 12px; }
-.field .req { color: var(--call); letter-spacing: .08em; }
-/* Inputs inherit the shared control styling above; only bare inputs need the default type. */
+.field .req { color: var(--call-ink); letter-spacing: .08em; }
 .field input, .field select, .field textarea { width: 100%; }
 
 .cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -664,15 +708,6 @@ footer {
 .signin { display: grid; place-items: center; min-height: 74vh; }
 .signin h1 { margin: 0; }
 .signin p { max-width: 46ch; }
-
-.station .title {
-  font-family: var(--display); font-weight: 600; font-size: 14px;
-}
-.station .key { font-family: var(--mono); font-size: 10.5px; color: var(--ink-dim); margin-top: 2px; }
-.tbl td.num, .figure { font-variant-numeric: tabular-nums; }
-
-/* ---- polish pass after the first visual review ---- */
-.page { max-width: 1560px; }
 
 /* The engagement picker is chrome the browser would otherwise draw in its own colours. */
 .topbar select {
@@ -686,18 +721,8 @@ footer {
   max-width: 320px;
 }
 
-footer { text-transform: none; letter-spacing: .16em; }
-
-/* An unlit rail lamp still marks where you are. */
-.lamp[aria-current="true"] .glass { box-shadow: 0 0 0 3px rgba(43, 80, 226, .28); }
-
-
-
-/* ---- industrial density pass ----
-   The console is an instrument panel: hairline rules, flat panels, packed columns.
-   Nothing here is decoration; every rule separates two things a person must not confuse. */
-
-/* Sections stop being stacked full-width blocks and become a packed board. */
+/* ---- the board: an instrument panel — hairline rules, flat panels, packed columns.
+   Every rule separates two things a person must not confuse. ---- */
 .board { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); align-items: start; }
 .board > .span2 { grid-column: span 2; }
 @media (max-width: 900px) { .board > .span2 { grid-column: auto; } }
@@ -709,44 +734,33 @@ footer { text-transform: none; letter-spacing: .16em; }
   border-radius: var(--r);
   background: var(--floor2);
 }
-/* One definition, merged from the two that had accumulated here: the second block silently
-   overrode the first's padding, ground and type, so the first's only surviving contribution was
-   its flex row. Reading either one alone told you the wrong thing about how a panel header looks. */
 .sec-head {
   display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
-  padding: 7px 10px;
+  padding: 6px 10px;
   border-bottom: 1px solid var(--line);
   background: var(--floor3);
   border-radius: var(--r) var(--r) 0 0;
 }
-.sec-head h2 { font-family: var(--mono); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; margin: 0; }
+.sec-head h2 { font-family: var(--mono); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; margin: 0; font-weight: 500; }
 .sec-head .mut { font-size: 12.5px; }
 .sec > *:not(.sec-head) { padding: 10px; }
-.sec .tbl { width: calc(100% + 20px); margin: -10px; }
+/* Flush to three edges only: overflow-x:auto on the body clips whatever hangs past its
+   bottom, and a clipped last row reads as a cut-off record. */
+.sec .tbl { width: calc(100% + 20px); margin: -10px -10px 0; }
 
 /* Stations sit flush inside a panel, divided by a rule rather than floated apart. */
 .sec .station { border-radius: 0; border-left-width: 2px; border-top: none; border-right: none; }
 .sec .grid { gap: 0; }
 .sec .grid > .station + .station { border-top: 1px solid var(--line-soft); }
 
-.head h1 { font-size: 20px; }
-
 /* Counters read as gauges on one rail, not four separate cards. */
 .counters { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
 .counters > * { border-right: 1px solid var(--line); background: var(--floor2); }
 .counters > *:last-child { border-right: none; }
 
-/* Five phases, one rail — never a wrapped remainder row. */
-.phases { display: grid; grid-template-columns: repeat(5, 1fr); }
-.phase { padding: 8px 10px; }
-
-/* The cord is one word per line at 68px, so it stays two short lines by design. */
-.cord { line-height: 1.15; }
-
-/* Panels in a board row match heights; content pins to the top. The body is only stretched when it
-   can use the room — a scrolling list fills what it is given, a fixed block cannot, and stretching
-   one anyway is what left 764px of void under a three-row Lanes panel beside a full activity feed.
-   On a control panel that void reads as "nothing more to see", which is a lie. */
+/* Panels in a board row match heights; content pins to the top. Only a scrolling list is
+   stretched — a fixed block cannot use the room, and stretching one leaves a void that reads
+   as "nothing more to see", which is a lie. */
 .board > .sec { display: flex; flex-direction: column; }
 .board > .sec.grow { height: 100%; }
 .board > .sec > *:not(.sec-head) { flex: 0 0 auto; }
@@ -759,14 +773,8 @@ footer { text-transform: none; letter-spacing: .16em; }
 .sec .cols > .card:last-child { border-right: none; }
 .sec .grid > .card + .card { border-top: 1px solid var(--line-soft); }
 
-/* A timestamp is one token; wrapping it doubles every row height for nothing. */
-.tbl td.num, .tbl th { white-space: nowrap; }
-
-/* ---- viewport pass ----
-   Every screen collapsed into the top third of the display with a void beneath it. On a control
-   panel that void reads as "nothing more to see", which is a lie — it is just a block layout that
-   stopped. The page now claims the full height and the content region distributes what is left,
-   so a screen with two panels fills the glass the same way a screen with six does. */
+/* ---- viewport: the page claims full height and distributes the slack; a screen with two
+   panels fills the glass the same way a screen with six does. ---- */
 .main { min-height: 100vh; }
 
 .page {
@@ -774,33 +782,24 @@ footer { text-transform: none; letter-spacing: .16em; }
   display: flex;
   flex-direction: column;
   gap: 8px;
-  min-height: 0;          /* children may scroll instead of forcing the page to grow */
+  min-height: 0;
 }
 
-/* The last panel on a screen takes the slack rather than leaving it at the bottom. Opt-in, because
-   a panel that should stay its natural size (a summary strip) must not be stretched into a banner. */
 .page > .grow,
 .board > .grow { flex: 1; min-height: 0; }
 .board:has(> .grow) { align-content: stretch; }
-
-/* A board that is the main content of a screen should fill, not sit. */
 .page > .board.fill { flex: 1; min-height: 0; align-content: start; }
 
-/* Panels that own a scrolling list: the panel stays put, its body scrolls. Otherwise a long ledger
-   pushes the page down and the operator loses the header that says what they are looking at. */
+/* Panels that own a scrolling list: the panel stays put, its body scrolls. */
 .sec.scrolls { display: flex; flex-direction: column; min-height: 0; }
 .sec.scrolls > .body { overflow: auto; min-height: 0; }
 
-/* ---- shared primitives (src/viz.tsx) ----
-   The console's data is structured — a hash chain, a gated progression, a promotion graph — and v1
-   drew all of it as flat text. These are the drawn forms. Palette and type come from BRAND.md; no
-   new fonts, no new colours, no library. */
-
+/* ---- shared primitives (src/viz.tsx) ---- */
 .sec-actions { margin-left: auto; display: flex; gap: 6px; align-items: center; }
 .sec-actions button { font-size: 12px; padding: 3px 9px; }
 
 /* the chain — linkage is drawn, because a chain whose links are invisible proves nothing */
-.chain { list-style: none; margin: 0; padding: 0; }
+.chain { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
 .chain-node { position: relative; padding: 0 0 14px 26px; }
 .chain.dense .chain-node { padding-bottom: 8px; }
 .chain-node:last-child { padding-bottom: 0; }
@@ -808,16 +807,16 @@ footer { text-transform: none; letter-spacing: .16em; }
   position: absolute; left: 4px; top: 4px; width: 11px; height: 11px; border-radius: 50%;
   background: var(--line); box-shadow: 0 0 0 3px var(--floor);
 }
-.chain-mark.lamp-run  { background: var(--run); box-shadow: 0 0 0 3px var(--floor), 0 0 9px color-mix(in srgb, var(--run) 40%, transparent); }
-.chain-mark.lamp-call { background: var(--call); box-shadow: 0 0 0 3px var(--floor), 0 0 9px color-mix(in srgb, var(--call) 40%, transparent); }
-.chain-mark.lamp-stop { background: var(--stop); box-shadow: 0 0 0 3px var(--floor), 0 0 9px color-mix(in srgb, var(--stop) 40%, transparent); }
+.chain-mark.lamp-run  { background: var(--run);  box-shadow: 0 0 0 3px var(--floor), 0 0 9px oklch(64% 0.13 152 / .4); }
+.chain-mark.lamp-call { background: var(--call); box-shadow: 0 0 0 3px var(--floor), 0 0 9px oklch(74% 0.126 84 / .4); }
+.chain-mark.lamp-stop { background: var(--stop); box-shadow: 0 0 0 3px var(--floor), 0 0 9px oklch(60% 0.185 30 / .4); }
 .chain-link {
   position: absolute; left: 9px; top: 15px; bottom: 0; width: 1px; background: var(--line);
 }
 .chain-node.broken > .chain-link { background: repeating-linear-gradient(var(--stop) 0 3px, transparent 3px 6px); }
 .chain-node.broken > .chain-mark { background: var(--stop); }
 .chain-title { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; font-size: 13px; }
-.chain-meta { color: var(--ink-dim); font-size: 11px; font-family: "JetBrains Mono", monospace; }
+.chain-meta { color: var(--ink-dim); font-size: 11px; font-family: var(--mono); }
 .chain-body { margin-top: 3px; font-size: 12px; color: var(--ink-mut); }
 
 /* the track — a gated left-to-right run. Phases, transports, milestones are one shape. */
@@ -836,11 +835,11 @@ footer { text-transform: none; letter-spacing: .16em; }
   background: var(--floor); border: 2px solid var(--line);
 }
 .track-stop.is-done .track-dot { background: var(--run); border-color: var(--run); }
-.track-stop.is-current .track-dot { background: var(--call); border-color: var(--call); box-shadow: 0 0 10px color-mix(in srgb, var(--call) 47%, transparent); }
+.track-stop.is-current .track-dot { background: var(--call); border-color: var(--call); box-shadow: 0 0 10px oklch(74% 0.126 84 / .47); }
 .track-stop.is-blocked .track-dot { background: var(--stop); border-color: var(--stop); }
 .track-idx { font-size: 10px; color: var(--ink-dim); letter-spacing: .08em; }
 .track-label {
-  font-family: "Archivo Narrow", sans-serif; font-size: 14px; letter-spacing: .02em;
+  font-family: var(--display); font-size: 13px; font-weight: 700; letter-spacing: .04em;
   text-transform: uppercase; color: var(--ink);
 }
 .track-stop.is-todo .track-label { color: var(--ink-dim); }
@@ -850,8 +849,8 @@ footer { text-transform: none; letter-spacing: .16em; }
 /* the meter — a ratio stated flatly, bad ones included */
 .meter { display: flex; align-items: center; gap: 8px; }
 .meter-track { flex: 1; height: 6px; background: var(--floor3); border-radius: 3px; overflow: hidden; min-width: 60px; }
-/* scaleX, not width: width is a layout property and animating it relayouts the row on every frame.
-   Transform is composited, and the bar is a solid block so the scale is invisible as a distortion. */
+/* scaleX, not width: transform is composited, and the bar is a solid block so the scale is
+   invisible as a distortion. */
 .meter-fill {
   height: 100%; width: 100%; border-radius: 3px;
   transform-origin: left; transform: scaleX(var(--pct, 0));
@@ -861,7 +860,7 @@ footer { text-transform: none; letter-spacing: .16em; }
 .meter-fill.tone-call { background: var(--call); }
 .meter-fill.tone-stop { background: var(--stop); }
 .meter-fill.tone-blue { background: var(--blue); }
-.meter-num { font-size: 12px; color: var(--ink); white-space: nowrap; }
+.meter-num { font-size: 12px; color: var(--ink); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .meter-num .dim { color: var(--ink-dim); }
 
 /* the flow — an edge drawn as an edge, not as a dash between two pills */
@@ -869,7 +868,7 @@ footer { text-transform: none; letter-spacing: .16em; }
 .flow-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 0; }
 .flow-node {
   display: flex; flex-direction: column; gap: 1px; padding: 6px 10px;
-  background: var(--floor2); border: 1px solid var(--line); border-radius: 3px; min-width: 0;
+  background: var(--floor2); border: 1px solid var(--line); border-radius: var(--r); min-width: 0;
 }
 .flow-node.tone-run  { border-left: 3px solid var(--run); }
 .flow-node.tone-call { border-left: 3px solid var(--call); }
@@ -889,11 +888,9 @@ footer { text-transform: none; letter-spacing: .16em; }
   letter-spacing: .1em; text-transform: uppercase; white-space: nowrap;
 }
 
-.hash { font-size: 11px; color: var(--ink-mut); cursor: help; }
-
-/* a compact key/value strip — the answer to "label far left, pill far right, 900px of nothing" */
+/* a compact key/value strip — label and value together, no 900px of nothing between them */
 .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--line); }
 .fact { background: var(--floor2); padding: 8px 10px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .fact-k { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-dim); }
-.fact-v { font-size: 15px; font-family: "Archivo Narrow", sans-serif; color: var(--ink); }
-.fact-v.mono { font-family: "JetBrains Mono", monospace; font-size: 13px; }
+.fact-v { font-size: 15px; font-family: var(--display); font-weight: 700; color: var(--ink); }
+.fact-v.mono { font-family: var(--mono); font-size: 13px; font-weight: 400; }

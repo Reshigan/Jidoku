@@ -4,7 +4,7 @@
 import type { ReactNode } from "react";
 import type { Evidence } from "./api";
 import { type Milestone } from "./derive";
-import { Empty, Pill, Section, Skeleton } from "./ui";
+import { Empty, Pill, Seal, Section, Skeleton } from "./ui";
 import { Facts, Hash, Meter, Track } from "./viz";
 import type { TrackStop } from "./viz";
 import "./views_record.css";
@@ -156,7 +156,7 @@ export function EvidenceView(props: {
                       <tr key={s.task}>
                         <td className="mono">{s.task}</td>
                         <td>{s.executed_by.join(", ") || "—"}</td>
-                        <td>{s.approved_by}</td>
+                        <td>{s.approved_by ? <Seal name={s.approved_by} kanji="承" /> : "—"}</td>
                         <td><Pill lamp={s.separation_held ? "run" : "stop"}>{s.separation_held ? "Held" : "Violated"}</Pill></td>
                         <td><Pill lamp={s.snapshot_present ? "run" : "stop"}>{s.snapshot_present ? "Present" : "Missing"}</Pill></td>
                       </tr>

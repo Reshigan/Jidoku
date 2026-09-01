@@ -34,7 +34,7 @@
 .fl-need.is-met::before { background: var(--run); }
 .fl-need.is-open::before { background: var(--call); }
 
-.fl-q { font-family: "Archivo Narrow", sans-serif; font-size: 17px; line-height: 1.25; color: var(--ink); }
+.fl-q { font-family: var(--display); font-size: 17px; line-height: 1.25; color: var(--ink); }
 
 /* ---- landscape ---- */
 

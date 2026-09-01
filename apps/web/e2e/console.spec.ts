@@ -293,12 +293,43 @@ test("no text in any view falls below its WCAG AA contrast floor", async ({ page
   for (const tab of await page.getByRole("tab").all()) {
     const view = (await tab.getAttribute("title"))?.split(" ")[0] ?? "?";
     await tab.click();
+    await page.waitForTimeout(250); // let the lamp color transitions settle; mid-flight oklab is not the design
     const bad = await page.evaluate(() => {
       const lum = (r: number, g: number, b: number) => {
         const f = (x: number) => { x /= 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; };
         return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
       };
-      const parse = (s: string) => (s.match(/[\d.]+/g) ?? []).map(Number);
+      /* Computed colors serialize in their specified space now (oklch since the aizome theme) —
+         Chromium keeps oklch() through getComputedStyle AND canvas fillStyle, so the only honest
+         path to sRGB channels is the OKLab math itself (CSS Color 4 reference matrices). */
+      const oklchToRgb = (L: number, C: number, H: number) => {
+        const hr = (H * Math.PI) / 180;
+        const a = C * Math.cos(hr), b = C * Math.sin(hr);
+        const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+        const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+        const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
+        const lin = [
+          4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+          -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+          -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
+        ];
+        return lin.map((x) => {
+          x = Math.min(1, Math.max(0, x));
+          return Math.round((x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055) * 255);
+        });
+      };
+      const parse = (s: string): number[] => {
+        const m = /^okl(ch|ab)\(\s*([\d.]+)(%?)\s+(-?[\d.]+)\s+(-?[\d.]+)(?:\s*\/\s*([\d.]+%?))?\s*\)/.exec(s);
+        if (m) {
+          const L = parseFloat(m[2]) / (m[3] ? 100 : 1);
+          const [x, y] = [parseFloat(m[4]), parseFloat(m[5])];
+          const alpha = m[6] === undefined ? 1 : parseFloat(m[6]) / (m[6].endsWith("%") ? 100 : 1);
+          // oklab carries a/b directly; oklch carries chroma/hue — same space either way.
+          const [C, H] = m[1] === "ab" ? [Math.hypot(x, y), (Math.atan2(y, x) * 180) / Math.PI] : [x, y];
+          return [...oklchToRgb(L, C, H), alpha];
+        }
+        return (s.match(/[\d.]+/g) ?? []).map(Number);
+      };
       /* Walk up for the first opaque ancestor: a tinted pill over a panel over the floor means the
          element's own background is a wash that tells you nothing on its own. */
       const bgOf = (el: Element): number[] => {

@@ -3,7 +3,7 @@
    the barrel App.tsx imports from. */
 import { Fragment, useMemo, useState } from "react";
 import type { IRRecordView, LedgerEntry } from "./api";
-import { Empty, Pill, Section, Skeleton } from "./ui";
+import { Empty, Pill, Seal, Section, Skeleton } from "./ui";
 import { Chain, Facts, Hash, Meter, Track } from "./viz";
 import type { ChainNode, TrackStop } from "./viz";
 import { fmt, humanAction } from "./viewkit";
@@ -140,8 +140,8 @@ export function IntentView(props: {
                         <td className="mono dim" title={String(r.source.workbook ?? "")}>
                           {String(r.source.workbook ?? "—")}
                         </td>
-                        <td className="mono dim">
-                          {ok ? String(r.source.signed_by) : <span className="unsigned">Not signed</span>}
+                        <td>
+                          {ok ? <Seal name={String(r.source.signed_by)} /> : <span className="unsigned">Not signed</span>}
                           <div style={{ fontSize: 10 }}>{String(r.source.date ?? "")}</div>
                         </td>
                         <td>

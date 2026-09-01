@@ -124,7 +124,13 @@ export function DocumentsView(props: { eid: string | null; onRefusal: (t: string
     setText(null);
     platform.document(eid, pick)
       .then((t) => { if (live) { setText(t); setStamp(new Date().toLocaleTimeString()); } })
-      .catch((e) => { if (live && e instanceof ApiError) onRefusal("Documents", e.detail); });
+      .catch((e) => {
+        if (!live || !(e instanceof ApiError)) return;
+        /* A document that is not there yet is an empty state, not a refusal — the modal is
+           reserved for the server saying no, in its own words. */
+        if (e.notAvailable) { setText(""); return; }
+        onRefusal("Documents", e.detail);
+      });
     return () => { live = false; };
   }, [eid, pick, onRefusal]);
 
@@ -162,7 +168,10 @@ export function DocumentsView(props: { eid: string | null; onRefusal: (t: string
         decision register and ledger when you open it — a document that could disagree with the
         system cannot be produced here.
       </p>
-      {text === null ? <Skeleton rows={8} tall /> : <article className="doc"><Markdown text={text} /></article>}
+      {text === null ? <Skeleton rows={8} tall />
+        : text === "" ? <Empty title="Nothing to project yet"
+                               body="This document reads from the engagement's signed intent and ledger. Once there is intent to read, it appears here." />
+        : <article className="doc"><Markdown text={text} /></article>}
     </Section>
   );
 }

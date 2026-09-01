@@ -20,7 +20,7 @@
 .lane-row[data-lamp="call"] { border-left-color: var(--call); }
 .lane-row[data-lamp="stop"] { border-left-color: var(--stop); }
 .lane-name {
-  font-family: "Archivo Narrow", sans-serif; font-size: 14px; font-weight: 600;
+  font-family: var(--display); font-size: 14px; font-weight: 600;
   letter-spacing: .02em; text-transform: uppercase;
 }
 /* Long step wording truncates rather than reflowing the row — BRAND's long-text rule, and the
