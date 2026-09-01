@@ -9,7 +9,7 @@ router = APIRouter(prefix="/engagements/{eid}/plan", tags=["plans"])
 
 def _plan_or_409(e):
     try:
-        return plan(e.ir, e.open_dps)
+        return plan(e.ir, {**e.open_dps, **e.decisions.unresolved()})
     except PlanError as ex:
         raise HTTPException(409, str(ex))   # 409: open DPs / cycles block the plan by design
 

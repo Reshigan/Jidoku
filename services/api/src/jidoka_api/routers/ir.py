@@ -12,9 +12,17 @@ router = APIRouter(prefix="/engagements/{eid}/ir", tags=["ir"])
 def upload_ir(eid: str, records: list[dict], identity: Identity = Depends(require("write_ir"))):
     e = get_or_404(eid)
     try:
-        e.ir, e.open_dps = load_ir(records)
+        loaded, open_dps = load_ir(records)
     except IRValidationError as ex:
         raise HTTPException(422, str(ex))
+    # Codes are checked before anything is kept: an IR set that half-loads leaves the engagement
+    # holding records whose codes the numbering registry would have refused.
+    clashes = [msg for r in loaded
+               if (msg := e.numbering.validate(r.object, r.external_code
+                                               or r.intent.get("externalCode")))]
+    if clashes:
+        raise HTTPException(422, "; ".join(clashes))
+    e.ir, e.open_dps = loaded, open_dps
     e.persist_ir()
     e.ledger.append("IR", "LOADED", identity.subject,
                     f"{len(e.ir)} records, {len(e.open_dps)} with open DPs")

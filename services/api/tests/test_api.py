@@ -60,7 +60,7 @@ def test_documents_project_the_engagement_over_http():
 
 def test_the_document_catalogue_lists_what_can_be_projected():
     ids = {d["id"] for d in c.get(f"/engagements/{_eng()}/documents").json()["documents"]}
-    assert ids == {"config-rationale", "solution-design", "decision-register"}
+    assert ids == {"config-rationale", "solution-design", "decision-register", "verification-report"}
 
 
 def test_an_unknown_document_is_404_not_an_empty_page():

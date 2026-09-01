@@ -15,6 +15,7 @@ from jidoka_core.decisions import DecisionEngine, DecisionPoint
 from jidoka_core.ir import IRRecord
 from jidoka_core.ledger import Ledger
 from jidoka_core.lifecycle import PHASES
+from jidoka_core.numbering import NumberRanges
 from jidoka_core.registry import SystemRecord, SystemRegistry
 from jidoka_core.repository import Repository, open_repository
 from jidoka_knowledge import Claim, ProjectStore, SystemStore
@@ -51,6 +52,9 @@ class Engagement:
     # system_id -> connector. Never persisted: a connector holds live credentials, and a restart
     # must unbind every one of them rather than reload a write path nobody re-authorised.
     connectors: dict = field(default_factory=dict)
+    # Number ranges rebuild from the ledger (their registrations and allocations ride in entries),
+    # so they need no table of their own.
+    numbering: NumberRanges = None
 
     def __post_init__(self):
         if self.ledger is None:
@@ -59,6 +63,8 @@ class Engagement:
             self.decisions = DecisionEngine(self.ledger)
         if self.memory is None:
             self.memory = ProjectStore(self.engagement_id, ledger=self.ledger)
+        if self.numbering is None:
+            self.numbering = NumberRanges(self.ledger)
 
     def bind_ledger(self, ledger) -> None:
         """Swap in the persistent ledger, carrying every component that writes to it.
@@ -70,6 +76,8 @@ class Engagement:
         self.ledger = ledger
         self.decisions = DecisionEngine(ledger)
         self.memory = ProjectStore(self.engagement_id, ledger=ledger)
+        self.numbering = NumberRanges(ledger)
+        self.numbering.rehydrate()
 
     # --- persistence mirrors: called after a mutation that core has already accepted -------------
     def persist_header(self) -> None:
