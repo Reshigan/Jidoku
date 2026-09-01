@@ -26,6 +26,12 @@ class DecisionEngine:
         self.ledger.append(dp.dp_id, "DP_RAISED", "jidoka", f"{dp.dp_type}: {dp.question} -> {dp.owner}")
         return dp
 
+    def unresolved(self) -> dict[str, list[str]]:
+        """Open questions in planner shape ({dp_id: [question]}), so an unresolved decision
+        point blocks a plan through the same gate an IR gap does — invariant 2 does not care
+        where the question came from."""
+        return {d.dp_id: [d.question] for d in self.dps.values() if not d.resolution}
+
     def resolve(self, dp_id: str, decided_by: str, value, evidence_ref: str,
                 second_approver: str | None = None):
         dp = self.dps[dp_id]
