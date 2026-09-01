@@ -1,0 +1,38 @@
+# goNXT JIDOKA — edge front door (phase 1).
+#
+# Serves the built console and forwards the API surface to the Python kernel. The kernel is NOT
+# ported to Workers here: docs/JIDOKA_DEPLOYMENT_AND_KNOWLEDGE_SPEC.md Part B sequences that as
+# phase 2 explicitly — "don't rewrite the kernel to launch" — because every invariant reimplemented
+# in a second language is an invariant that can drift out of agreement with the tested one.
+#
+# The phase-2 bindings (EngagementLedger Durable Object, D1-per-tenant, R2 evidence, Queues) are
+# recorded in wrangler.phase2.toml rather than here. Declaring a binding whose class does not exist
+# fails the deploy, and a scaffold that cannot deploy is not a scaffold, it is a broken build.
+name = "jidoka"
+main = "src/index.ts"
+compatibility_date = "2026-08-01"
+
+[assets]
+directory = "../../apps/web/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"   # client-side routing: unknown paths render the app
+# Assets are served BEFORE the Worker by default, and with SPA handling that means /engagements
+# would return index.html instead of reaching the kernel. The API prefixes must run the Worker first.
+run_worker_first = [
+  "/engagements", "/engagements/*",
+  "/health",
+  "/auth", "/auth/*",
+  "/schema", "/schema/*",
+  "/openapi.json",
+]
+
+[env.production]
+name = "jidoka"
+routes = [{ pattern = "jidoka.vantax.co.za", custom_domain = true }]
+
+[env.production.vars]
+# Origin of the FastAPI kernel. Empty here on purpose — no environment's origin is committed; the
+# deploy passes `--var KERNEL_URL:...`. It is a hostname, not a credential; real secrets go through
+# `wrangler secret put` and never into this file. Environments do not inherit a top-level [vars],
+# so this must live under the environment or the deploy silently drops it.
+KERNEL_URL = ""

@@ -1,0 +1,29 @@
+# Build output and dependencies
+node_modules/
+dist/
+*.egg-info/
+__pycache__/
+.pytest_cache/
+.venv/
+venv/
+
+# Local state. The ledger is the record of truth; a dev sqlite file is not, and committing one
+# would put an unsigned, unverified chain into the repo where it looks authoritative.
+*.db
+*.db-journal
+.jidoka/
+
+# Credentials, always. .env.example is the committed one; .env never is.
+.env
+.env.*
+!.env.example
+.dev.vars
+.wrangler/
+
+# Playwright
+apps/web/test-results/
+apps/web/playwright-report/
+apps/web/e2e/**/*.png
+
+.DS_Store
+jidoku.zip

@@ -1,0 +1,32 @@
+# Phase 2 — Workers-native kernel. NOT DEPLOYED YET; kept so the target shape stays visible.
+#
+# Promoting this is gated on one thing, from deploy/cloudflare/README.md: "every gate that exists
+# in jidoka-core must exist identically here before any tenant goes live." That means the DO port
+# of ledger.py (append / approve / verify_chain) reproducing invariant 4's hash chain and the
+# reviewer != builder + prior-snapshot rule, with tests, before a single tenant is pointed at it.
+name = "jidoka-kernel"
+main = "src/kernel.ts"
+compatibility_date = "2026-08-01"
+
+[[durable_objects.bindings]]
+name = "LEDGER"                 # one DO per engagement: ordering + hash chain by construction
+class_name = "EngagementLedger"
+
+[[d1_databases]]
+binding = "TENANT_DB"           # provisioned per tenant by the org-onboarding worker
+database_name = "jidoka-tenant-template"
+database_id = "REPLACE_AT_PROVISIONING"
+
+[[r2_buckets]]
+binding = "EVIDENCE"
+bucket_name = "jidoka-evidence" # per-tenant prefixes; EU jurisdiction for POPIA-adequate residency
+
+[[queues.producers]]
+binding = "JOBS"
+queue = "jidoka-jobs"           # extract / diff / verification-suite / release-readiness
+
+[triggers]
+crons = ["0 2 * * *"]           # nightly consistency + drift classification
+
+[vars]
+AI_GATEWAY = "https://gateway.ai.cloudflare.com/v1/ACCOUNT/jidoka/anthropic"

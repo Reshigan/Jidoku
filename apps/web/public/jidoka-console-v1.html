@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>goNXT JIDOKA — Andon Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@500;600;700&family=Poppins:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* Factory floor — not pure black; the charcoal of a machine shop at night */
+  --floor:#0E1116; --floor-2:#151A22; --floor-3:#1C222C; --line:#28313E;
+  /* Andon lamps — real signal-tower colours, slightly desaturated so they read as glass not neon */
+  --lamp-run:#3FB950; --lamp-call:#E3A008; --lamp-stop:#E5484D; --lamp-off:#2A323D;
+  /* goNXT brand thread */
+  --nxt:#2B50E2; --navy:#0A1245; --ink:#E8ECF3; --ink-2:#98A3B4; --ink-3:#5D6877;
+  --focus:#6E8BFF;
+  --disp:'Archivo Narrow','Oswald',Impact,sans-serif;
+  --body:'Poppins','Segoe UI',system-ui,sans-serif;
+  --mono:'JetBrains Mono',Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--floor);color:var(--ink);font-family:var(--body);font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:4px}
+button{font-family:inherit;color:inherit;cursor:pointer;background:none;border:none}
+.mono{font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase;font-size:10px}
+
+/* ---------- shell ---------- */
+.shell{display:grid;grid-template-columns:88px 1fr;min-height:100vh}
+/* Signature element: the andon lamp rail — the line's true state, always visible, never scrolled away */
+.rail{background:var(--floor-2);border-right:1px solid var(--line);position:sticky;top:0;height:100vh;
+      display:flex;flex-direction:column;align-items:center;padding:18px 0 14px;gap:14px;z-index:20}
+.mark{width:44px;height:44px;flex:none}
+.rail-lamps{display:flex;flex-direction:column;gap:7px;flex:1;justify-content:center;width:100%;align-items:center}
+.lamp{width:46px;height:34px;border-radius:5px;background:var(--lamp-off);position:relative;
+      display:flex;align-items:center;justify-content:center;border:1px solid #000;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.06);transition:background .35s,box-shadow .35s}
+.lamp span{font-family:var(--mono);font-size:9px;color:#0009;font-weight:500}
+.lamp[data-s="run"]{background:var(--lamp-run);box-shadow:0 0 16px -2px var(--lamp-run),inset 0 1px 0 rgba(255,255,255,.35)}
+.lamp[data-s="call"]{background:var(--lamp-call);box-shadow:0 0 16px -2px var(--lamp-call),inset 0 1px 0 rgba(255,255,255,.35)}
+.lamp[data-s="stop"]{background:var(--lamp-stop);box-shadow:0 0 18px -1px var(--lamp-stop),inset 0 1px 0 rgba(255,255,255,.35);animation:pulse 1.6s infinite}
+.lamp[data-s="off"] span{color:#5D6877}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.62}}
+@media (prefers-reduced-motion:reduce){.lamp[data-s="stop"]{animation:none}*{transition:none!important}}
+/* The cord: anyone can stop the line. Toyota's rule, made literal. */
+.cord{width:100%;display:flex;flex-direction:column;align-items:center;gap:0}
+.cord-wire{width:2px;height:26px;background:linear-gradient(var(--line),var(--ink-3))}
+.cord-grip{width:34px;height:34px;border-radius:50%;background:var(--lamp-stop);border:2px solid #7d1c1f;
+  font-family:var(--disp);font-size:10px;letter-spacing:.06em;color:#fff;display:grid;place-items:center;
+  transition:transform .18s}
+.cord-grip:hover,.cord-grip:focus-visible{transform:translateY(4px)}
+
+/* ---------- header ---------- */
+main{min-width:0}
+header{position:sticky;top:0;background:rgba(14,17,22,.92);backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--line);padding:14px 26px;display:flex;gap:18px;align-items:center;flex-wrap:wrap;z-index:15}
+.brandline{display:flex;align-items:baseline;gap:10px}
+.wordmark{font-family:var(--disp);font-size:22px;font-weight:700;letter-spacing:.01em}
+.wordmark .go{color:#fff}.wordmark .nxt{color:var(--nxt)}
+.jid{font-family:var(--disp);font-weight:600;font-size:22px;letter-spacing:.14em;color:var(--ink)}
+.kanji{font-size:13px;color:var(--ink-3);letter-spacing:.1em}
+nav{display:flex;gap:2px;margin-left:auto;flex-wrap:wrap}
+nav button{padding:7px 13px;border-radius:7px;font-size:12px;font-weight:500;color:var(--ink-2)}
+nav button:hover{background:var(--floor-3);color:var(--ink)}
+nav button[aria-current="page"]{background:var(--nxt);color:#fff}
+.env{font-family:var(--mono);font-size:10px;padding:5px 10px;border:1px solid var(--line);border-radius:6px;color:var(--ink-2)}
+.env b{color:var(--lamp-call)}
+
+/* ---------- layout ---------- */
+.wrap{padding:26px;max-width:1240px;margin:0 auto}
+.eyebrow{font-family:var(--mono);font-size:10px;color:var(--nxt);margin-bottom:6px}
+h1{font-family:var(--disp);font-size:30px;font-weight:600;letter-spacing:.01em;margin-bottom:4px}
+h2{font-family:var(--disp);font-size:19px;font-weight:600;letter-spacing:.02em;margin-bottom:2px}
+.sub{color:var(--ink-2);font-size:13px;margin-bottom:20px;max-width:70ch}
+.card{background:var(--floor-2);border:1px solid var(--line);border-radius:12px;padding:18px}
+.grid{display:grid;gap:14px}
+.g3{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+.g2{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+hr.rule{border:0;border-top:1px solid var(--line);margin:26px 0}
+
+/* status readouts — the big number is earned, so it gets the display face */
+.readout .fig{font-family:var(--disp);font-size:42px;font-weight:700;line-height:1;letter-spacing:-.01em}
+.readout .lab{font-family:var(--mono);font-size:10px;color:var(--ink-3);margin-top:7px}
+.readout .note{font-size:12px;color:var(--ink-2);margin-top:8px}
+.fig.run{color:var(--lamp-run)}.fig.call{color:var(--lamp-call)}.fig.stop{color:var(--lamp-stop)}.fig.blue{color:var(--nxt)}
+
+/* gate cards */
+.gate{background:var(--floor-2);border:1px solid var(--line);border-left:3px solid var(--lamp-off);
+  border-radius:10px;padding:14px 16px;margin-bottom:10px}
+.gate[data-s="run"]{border-left-color:var(--lamp-run)}
+.gate[data-s="call"]{border-left-color:var(--lamp-call)}
+.gate[data-s="stop"]{border-left-color:var(--lamp-stop)}
+.gate-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.gate h3{font-size:14px;font-weight:500}
+.gate .meta{font-family:var(--mono);font-size:9.5px;color:var(--ink-3);margin-top:5px}
+.pill{font-family:var(--mono);font-size:9px;padding:3px 8px;border-radius:20px;border:1px solid var(--line);color:var(--ink-2);white-space:nowrap}
+.pill.oneway{border-color:#7d5a10;background:#3a2c07;color:#F0C14B}
+.pill.blocked{border-color:#7d1c1f;background:#3a1113;color:#FF9DA1}
+.pill.earned{border-color:#1d5c33;background:#0f2e1c;color:#7EE39A}
+.steps{display:flex;gap:5px;margin-top:12px;flex-wrap:wrap}
+.step{flex:1;min-width:64px;height:4px;border-radius:2px;background:var(--lamp-off)}
+.step.done{background:var(--lamp-run)}.step.now{background:var(--nxt)}
+.steplab{display:flex;gap:5px;margin-top:5px;flex-wrap:wrap}
+.steplab span{flex:1;min-width:64px;font-family:var(--mono);font-size:8.5px;color:var(--ink-3)}
+.actions{display:flex;gap:8px;margin-top:13px;flex-wrap:wrap}
+.btn{padding:7px 13px;border-radius:7px;font-size:12px;font-weight:500;border:1px solid var(--line);background:var(--floor-3)}
+.btn:hover{border-color:var(--ink-3)}
+.btn.primary{background:var(--nxt);border-color:var(--nxt);color:#fff}
+.btn.stop{background:transparent;border-color:#7d1c1f;color:#FF9DA1}
+.btn:disabled{opacity:.38;cursor:not-allowed}
+
+/* tables */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{font-family:var(--mono);font-size:9px;color:var(--ink-3);text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);font-weight:500}
+td{padding:11px 10px;border-bottom:1px solid var(--floor-3);vertical-align:top}
+tr:last-child td{border-bottom:0}
+.trunc{max-width:34ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+
+/* ledger */
+.chain{font-family:var(--mono);font-size:10.5px;letter-spacing:0;text-transform:none}
+.chain-row{display:grid;grid-template-columns:132px 1fr;gap:12px;padding:8px 0;border-bottom:1px solid var(--floor-3)}
+.chain-row .h{color:var(--ink-3);overflow:hidden;text-overflow:ellipsis}
+.verified{color:var(--lamp-run)}
+
+/* banners */
+.banner{border-radius:10px;padding:13px 16px;margin-bottom:16px;display:flex;gap:12px;align-items:flex-start;font-size:13px}
+.banner.stop{background:#2a0f11;border:1px solid #7d1c1f;color:#FFC9CB}
+.banner.call{background:#2b2107;border:1px solid #7d5a10;color:#F4D58D}
+.banner.info{background:#0f1733;border:1px solid #23306b;color:#B9C6FF}
+.banner b{display:block;margin-bottom:2px}
+
+/* empty / loading / error */
+.empty{text-align:center;padding:56px 20px;border:1px dashed var(--line);border-radius:12px}
+.empty h2{color:var(--ink);margin-bottom:6px}
+.empty p{color:var(--ink-2);max-width:44ch;margin:0 auto 16px}
+.skel{background:linear-gradient(90deg,var(--floor-2) 25%,var(--floor-3) 50%,var(--floor-2) 75%);
+  background-size:200% 100%;animation:sh 1.3s infinite;border-radius:8px}
+@keyframes sh{0%{background-position:200% 0}100%{background-position:-200% 0}}
+@media (prefers-reduced-motion:reduce){.skel{animation:none}}
+
+/* modal */
+.scrim{position:fixed;inset:0;background:rgba(5,7,10,.72);display:grid;place-items:center;padding:20px;z-index:50}
+.modal{background:var(--floor-2);border:1px solid var(--line);border-radius:14px;padding:22px;max-width:460px;width:100%}
+.modal h2{margin-bottom:8px}
+.modal p{color:var(--ink-2);font-size:13px;margin-bottom:14px}
+label.f{display:block;margin-bottom:12px}
+label.f span{font-family:var(--mono);font-size:9px;color:var(--ink-3);display:block;margin-bottom:5px}
+input[type=text],textarea,select{width:100%;background:var(--floor);border:1px solid var(--line);border-radius:7px;
+  padding:9px 11px;color:var(--ink);font-family:inherit;font-size:13px}
+textarea{min-height:74px;resize:vertical}
+
+/* toast */
+.toasts{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:9px;z-index:60;max-width:340px}
+.toast{background:var(--floor-3);border:1px solid var(--line);border-left:3px solid var(--nxt);border-radius:9px;
+  padding:11px 14px;font-size:12.5px;animation:slide .22s ease-out}
+.toast.stop{border-left-color:var(--lamp-stop)}
+.toast.run{border-left-color:var(--lamp-run)}
+@keyframes slide{from{transform:translateX(14px);opacity:0}to{transform:none;opacity:1}}
+
+/* analytics */
+.chartcard h2{margin-bottom:2px}
+.chartcard .sub{margin-bottom:14px;font-size:12px}
+svg .ax{stroke:var(--line);stroke-width:1}
+svg .gl{stroke:var(--floor-3);stroke-width:1}
+svg text{font-family:var(--mono);font-size:9px;fill:var(--ink-3);letter-spacing:.06em}
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-family:var(--mono);font-size:9px;color:var(--ink-3)}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+
+footer{border-top:1px solid var(--line);padding:20px 26px;color:var(--ink-3);
+  font-family:var(--mono);font-size:9px;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
+
+@media(max-width:760px){
+  .shell{grid-template-columns:1fr}
+  .rail{position:fixed;bottom:0;top:auto;height:auto;width:100%;flex-direction:row;border-right:0;border-top:1px solid var(--line);padding:9px 12px}
+  .rail-lamps{flex-direction:row;gap:5px}
+  .lamp{width:34px;height:26px}
+  .cord{flex-direction:row;align-items:center;width:auto}.cord-wire{width:18px;height:2px}
+  .wrap{padding:18px 16px 96px}
+  h1{font-size:24px}
+}
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- ============ ANDON RAIL (signature) ============ -->
+<aside class="rail" aria-label="Line status">
+  <svg class="mark" viewBox="0 0 44 44" role="img" aria-label="goNXT JIDOKA">
+    <rect x="0" y="0" width="44" height="44" rx="10" fill="#0A1245"/>
+    <rect x="13" y="7"  width="18" height="8" rx="2" fill="#E5484D"/>
+    <rect x="13" y="18" width="18" height="8" rx="2" fill="#E3A008"/>
+    <rect x="13" y="29" width="18" height="8" rx="2" fill="#3FB950"/>
+    <rect x="20" y="15" width="4"  height="14" fill="#2B50E2"/>
+  </svg>
+  <div class="rail-lamps" id="railLamps"></div>
+  <div class="cord">
+    <div class="cord-wire"></div>
+    <button class="cord-grip" id="cordBtn" title="Stop the line" aria-label="Stop the line">STOP</button>
+  </div>
+</aside>
+
+<main>
+<header>
+  <div class="brandline">
+    <span class="wordmark"><span class="go">go</span><span class="nxt">NXT</span></span>
+    <span class="jid">JIDOKA</span>
+    <span class="kanji">自働化</span>
+  </div>
+  <nav id="nav" aria-label="Sections"></nav><button class="env" onclick="openPalette()" title="Command palette">⌘K</button>
+  <span class="env" title="Night shift complete"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--lamp-run);margin-right:6px;vertical-align:1px"></span>ON SHIFT · <b id="envName">DEV</b></span>
+</header>
+
+<div class="wrap" id="view" role="main" aria-live="polite"></div>
+
+<footer>
+  <span>goNXT · What Comes Next is Built Here — and here, it is proven</span>
+  <span id="footState">Ledger chain verified · 09:42 SAST</span>
+</footer>
+</main>
+</div>
+
+<div id="modalHost"></div>
+<div class="toasts" id="toasts" aria-live="assertive"></div>
+
+<script>
+/* ================= state ================= */
+const S={
+  view:'line', env:'DEV', loading:true, offline:false, chainOk:true, lineStopped:false, stopReason:'',
+  engagementLoaded:true,
+  gates:[
+    {id:'P1-3',t:'Succession Data Model delta upload',layer:'XML',oneway:false,step:4,status:'call',
+     owner:'C. Muunganirwa',reviewer:null,snap:'git 8f2a1c · Check Tool CT-1187'},
+    {id:'P3-2',t:'Legal Entity load — externalCode = ECC company code',layer:'FO',oneway:false,step:5,status:'run',
+     owner:'S. Lavu',reviewer:'L. Chadhliwa',snap:'EXP-2026-0912-03 · 41 rows'},
+    {id:'P3-3',t:'Cost centre replication iFlow ECC→EC',layer:'INT',oneway:false,step:2,status:'call',
+     owner:'N. Devatala',reviewer:null,snap:'—'},
+    {id:'P7-1',t:'Time Off — Mozambique calendars & accruals',layer:'TO',oneway:false,step:0,status:'stop',
+     owner:'—',reviewer:null,snap:'—',blocked:'DP-B14'},
+    {id:'P8-4',t:'Production cutover load — 18-step sequence',layer:'EMP',oneway:true,step:0,status:'call',
+     owner:'—',reviewer:null,snap:'—'}
+  ],
+  dps:[
+    {id:'DP-B14',type:'STATUTORY',q:'Mozambique annual leave: 22 or 30 working days after year one?',owner:'Komatsu HR MZ / counsel',age:11,cost:'ZAR 48k/wk',blocks:'P7-1 + 6 downstream'},
+    {id:'DP-B01',type:'SEQUENCE',q:'Provisioning access route — partner access or SAP ticket?',owner:'Komatsu IT',age:3,cost:'Day-for-day slip',blocks:'P0 · all phases'},
+    {id:'DP-B06',type:'ONE_WAY',q:'Person ID strategy — ECC PERNR or new EC range?',owner:'Komatsu IT + HR',age:6,cost:'Irreversible after first load',blocks:'P8-1'},
+    {id:'DP-M00',type:'COMMERCIAL',q:'Wave 2 module licences — confirm entitlement in writing',owner:'Komatsu procurement',age:19,cost:'Wave 2 unplannable',blocks:'M1–M9'}
+  ],
+  ledger:[
+    {ts:'09:41:07',task:'P3-2',act:'APPROVED',who:'L. Chadhliwa',h:'a17c…9f2b'},
+    {ts:'09:38:52',task:'P3-2',act:'POST-VALIDATED',who:'jidoka',h:'6d02…41ae'},
+    {ts:'09:22:14',task:'P3-2',act:'EXECUTED',who:'S. Lavu',h:'be93…07c1'},
+    {ts:'09:19:03',task:'P3-2',act:'SNAPSHOT',who:'jidoka',h:'2f5a…bb80'},
+    {ts:'08:55:41',task:'DP-B14',act:'DP_RAISED',who:'jidoka',h:'91e7…3d44'},
+    {ts:'08:02:10',task:'P7-1',act:'PLAN_BLOCKED',who:'jidoka',h:'0c48…7a19'}
+  ],
+  refusals:[
+    {ts:'Today 08:02',what:'Refused to plan MZ Time Off without a signed statutory source',rule:'R-705'},
+    {ts:'Yesterday',what:'Refused approval — reviewer equals builder',rule:'SoD'},
+    {ts:'Yesterday',what:'Refused write to KOM-ECC-PRD (source system, read-only)',rule:'R-101'},
+    {ts:'2 days ago',what:'Refused load without restore snapshot',rule:'Rollback §01'}
+  ]
+};
+const VIEWS=[['line','Line'],['handover','Handover'],['impact','Impact'],['gates','Gates'],['decisions','Decisions'],['evidence','Evidence'],['analytics','Analytics']];
+const LAMP_PHASES=[['P0','run'],['P1','call'],['P2','run'],['P3','call'],['P4','off'],['P6','off'],['P7','stop'],['P8','off'],['P9','off'],['P10','off']];
+
+/* ================= helpers ================= */
+const $=(id)=>document.getElementById(id);
+function toast(msg,kind=''){const t=document.createElement('div');t.className='toast '+kind;t.textContent=msg;
+  $('toasts').appendChild(t);setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.remove(),300)},4200);}
+function modal(html,onMount){$('modalHost').innerHTML=`<div class="scrim" id="scrim"><div class="modal" role="dialog" aria-modal="true">${html}</div></div>`;
+  const first=$('modalHost').querySelector('input,textarea,button');first&&first.focus();
+  $('scrim').addEventListener('click',e=>{if(e.target.id==='scrim')closeModal()});
+  document.addEventListener('keydown',escClose);onMount&&onMount();}
+function closeModal(){$('modalHost').innerHTML='';document.removeEventListener('keydown',escClose)}
+function escClose(e){if(e.key==='Escape')closeModal()}
+const STEPS=['Pre-flight','Snapshot','Execute','Verify','Approve'];
+
+/* ================= views ================= */
+function vLine(){
+  const running=S.gates.filter(g=>g.status==='run').length;
+  const calling=S.gates.filter(g=>g.status==='call').length;
+  const stopped=S.gates.filter(g=>g.status==='stop').length;
+  return `
+  ${S.lineStopped?`<div class="banner stop"><div><b>Line stopped</b>${S.stopReason||'Halt raised from the andon cord. Nothing executes until a reviewer clears it.'}</div></div>`:''}
+  ${!S.chainOk?`<div class="banner stop"><div><b>Evidence chain broken at entry 0c48…7a19</b>Approvals are suspended. Export the chain and contact the platform owner — do not continue building.</div></div>`:''}
+  ${S.offline?`<div class="banner call"><div><b>Working offline</b>Showing the last verified state from 09:42. Nothing will be written until the connection returns.</div></div>`:''}
+  <div class="banner info"><div><b>I worked the night shift and left you a handover</b>Two things need a person this morning, one of them is mine to fix and I have drafted it. <button class="btn" style="margin-top:8px" onclick="go('handover')">Read the handover</button></div></div>
+  <p class="eyebrow">Komatsu Southern Africa · SuccessFactors greenfield · Wave 1</p>
+  <h1>The line, right now</h1>
+  <p class="sub">Every status here is earned from an approved checkpoint. Nothing on this board can be typed in by hand.</p>
+
+  <div class="grid g3" style="margin-bottom:20px">
+    <div class="card readout"><div class="fig ${stopped?'stop':'run'}">${stopped?'STOPPED':'RUNNING'}</div>
+      <div class="lab">Line state</div>
+      <div class="note">${stopped?`${stopped} station halted — Mozambique Time Off, waiting on a signed statutory source.`:'All stations feeding.'}</div></div>
+    <div class="card readout"><div class="fig blue">0.62</div><div class="lab">P(go-live ≤ 1 Dec)</div>
+      <div class="note">Up from 0.54 last week. Closing DP-B14 moves it most: +0.19.</div></div>
+    <div class="card readout"><div class="fig call">${calling}</div><div class="lab">Waiting on a person</div>
+      <div class="note">Approver capacity, not build capacity, is the constraint this week.</div></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h2>Stations</h2><p class="sub" style="margin-bottom:14px">Live station state across the build.</p>
+      ${S.gates.map(g=>`<div class="gate" data-s="${g.status}">
+        <div class="gate-top">
+          <div><h3>${g.id} · ${g.t}</h3>
+            <div class="meta">${g.layer} · ${g.owner==='—'?'unassigned':'built by '+g.owner}${g.snap!=='—'?' · '+g.snap:''}</div></div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            ${g.oneway?'<span class="pill oneway">One-way</span>':''}
+            ${g.blocked?`<span class="pill blocked">Blocked · ${g.blocked}</span>`:''}
+            ${g.status==='run'?'<span class="pill earned">Earned</span>':''}
+          </div>
+        </div>
+        <div class="steps">${STEPS.map((_,i)=>`<div class="step ${i<g.step?'done':i===g.step&&!g.blocked?'now':''}"></div>`).join('')}</div>
+        <div class="steplab">${STEPS.map(s=>`<span>${s}</span>`).join('')}</div>
+      </div>`).join('')}
+    </div>
+
+    <div>
+      <div class="card" style="margin-bottom:14px">
+        <h2>What it refused</h2>
+        <p class="sub" style="margin-bottom:12px">The most useful thing this platform does is decline. Four refusals in the last 48 hours.</p>
+        <table><tbody>${S.refusals.map(r=>`<tr><td style="width:96px"><span class="mono" style="color:var(--ink-3)">${r.ts}</span></td>
+          <td>${r.what}<div class="meta mono" style="color:var(--ink-3);margin-top:3px">${r.rule}</div></td></tr>`).join('')}</tbody></table>
+      </div>
+      <div class="card">
+        <h2>Next gate</h2>
+        <p class="sub" style="margin-bottom:10px">MS-04 · Config complete, synced to TEST</p>
+        <div class="readout"><div class="fig call">12</div><div class="lab">Days to earn it</div>
+        <div class="note">Four checkpoints outstanding. Two need a reviewer who is not the builder.</div></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function vGates(){
+  return `<p class="eyebrow">Execution</p><h1>Gates</h1>
+  <p class="sub">A gate opens when its checkpoint is approved by someone who did not build it. Steps run in order; the platform will not let you skip one.</p>
+  ${S.gates.map((g,i)=>`<div class="gate" data-s="${g.status}">
+    <div class="gate-top">
+      <div><h3>${g.id} · ${g.t}</h3><div class="meta">${g.layer} · ${STEPS[Math.min(g.step,4)]}${g.reviewer?' · reviewed by '+g.reviewer:''}</div></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${g.oneway?'<span class="pill oneway">One-way · two approvers</span>':''}
+        ${g.blocked?`<span class="pill blocked">Blocked · ${g.blocked}</span>`:''}</div>
+    </div>
+    <div class="steps">${STEPS.map((_,j)=>`<div class="step ${j<g.step?'done':j===g.step&&!g.blocked?'now':''}"></div>`).join('')}</div>
+    <div class="steplab">${STEPS.map(s=>`<span>${s}</span>`).join('')}</div>
+    ${g.blocked?`<div class="banner stop" style="margin:13px 0 0"><div><b>Waiting on ${g.blocked}</b>Mozambique leave entitlement is reported two ways in the sources we hold. The platform will not choose one. A signed position from Komatsu releases this station and six behind it.</div></div>`:`
+    <div class="actions">
+      <button class="btn primary" onclick="advance(${i})">${['Confirm pre-flight','Capture snapshot','Mark executed','Confirm verification','Approve gate'][Math.min(g.step,4)]}</button>
+      <button class="btn" onclick="showRollback('${g.id}','${g.layer}')">Roll back</button>
+      ${g.step>=4?`<button class="btn stop" onclick="wrongApprover()">Approve as ${g.owner}</button>`:''}
+    </div>`}
+  </div>`).join('')}`;
+}
+
+function vDecisions(){
+  const order={STATUTORY:0,ONE_WAY:1,SEQUENCE:2,COMMERCIAL:3};
+  const sorted=[...S.dps].sort((a,b)=>order[a.type]-order[b.type]);
+  return `<p class="eyebrow">Human-in-the-loop</p><h1>Decisions</h1>
+  <p class="sub">Open decisions, aged and priced. Statutory questions stay open until someone with the authority to answer them signs — the platform has no opinion to offer.</p>
+  <div class="banner info"><div><b>Four decisions are holding work</b>Two are older than a week. The cost line is what a week of waiting costs, in the same units as scope.</div></div>
+  <div class="card"><table>
+    <thead><tr><th>Decision</th><th>Type</th><th>Owner</th><th>Open</th><th>Cost of waiting</th><th>Holds</th><th></th></tr></thead>
+    <tbody>${sorted.map(d=>`<tr>
+      <td><b style="font-weight:500">${d.id}</b><div style="color:var(--ink-2);font-size:12.5px;margin-top:3px">${d.q}</div></td>
+      <td><span class="pill ${d.type==='ONE_WAY'?'oneway':d.type==='STATUTORY'?'blocked':''}">${d.type.replace('_',' ')}</span></td>
+      <td style="color:var(--ink-2)">${d.owner}</td>
+      <td><span class="mono" style="color:${d.age>7?'var(--lamp-call)':'var(--ink-2)'}">${d.age}d</span></td>
+      <td style="color:var(--ink-2);font-size:12.5px">${d.cost}</td>
+      <td style="color:var(--ink-3);font-size:12.5px">${d.blocks}</td>
+      <td><button class="btn" onclick="resolveDP('${d.id}','${d.type}')">Open brief</button></td></tr>`).join('')}
+    </tbody></table></div>`;
+}
+
+function vEvidence(){
+  return `<p class="eyebrow">Assurance</p><h1>Evidence</h1>
+  <p class="sub">Every action is chained to the one before it. An auditor can verify this file offline, without trusting us or the platform.</p>
+  <div class="grid g3" style="margin-bottom:18px">
+    <div class="card readout"><div class="fig ${S.chainOk?'run':'stop'}">${S.chainOk?'VERIFIED':'BROKEN'}</div><div class="lab">Chain integrity</div>
+      <div class="note">${S.chainOk?'1,284 entries · re-verified 09:42':'Verification failed. Approvals suspended.'}</div></div>
+    <div class="card readout"><div class="fig blue">100%</div><div class="lab">Population tested</div>
+      <div class="note">Controls run over every record, not a sample of them.</div></div>
+    <div class="card readout"><div class="fig run">15</div><div class="lab">Controls passing</div>
+      <div class="note">C-PAY-01 dual approval: 41 changes, 41 matched approvals.</div></div>
+  </div>
+  <div class="card">
+    <h2>Chain</h2>
+    <label class="f" style="margin-bottom:12px"><span>As of — drag to reconstruct the programme at any moment</span>
+    <input type="range" min="0" max="100" value="100" style="width:100%;accent-color:var(--nxt)"
+      oninput="footState.textContent='Reconstructed as of '+(this.value==100?'now':Math.round(this.value*0.84)+'% through the build')+' · from the ledger, not from memory'"></label>
+    <p class="sub" style="margin-bottom:12px">Most recent first. The slider replays the chain — state is computed, never remembered.</p>
+    <div class="chain">${S.ledger.map(l=>`<div class="chain-row">
+      <span class="h">${l.ts} · ${l.h}</span>
+      <span><b style="font-weight:500">${l.act}</b> — ${l.task} · ${l.who}</span></div>`).join('')}</div>
+    <div class="actions"><button class="btn primary" onclick="toast('Evidence bundle exported. Verify it offline with the published checker.','run')">Export bundle</button>
+      <button class="btn" onclick="breakChain()">Simulate tamper</button></div>
+  </div>`;
+}
+
+function vAnalytics(){
+  return `<p class="eyebrow">Results</p><h1>Analytics</h1>
+  <p class="sub">Four numbers we publish whether they flatter us or not. If a curve flattens, the platform is not learning and we say so.</p>
+  <div class="grid g2">
+    <div class="card chartcard"><h2>Go-live forecast</h2>
+      <p class="sub">Ten thousand runs over the plan graph, refitted nightly from this programme's own actuals.</p>
+      ${histogram()}
+      <div class="legend"><span><i style="background:var(--nxt)"></i>Finish date</span><span><i style="background:var(--lamp-run)"></i>On or before 1 Dec (62%)</span></div>
+    </div>
+    <div class="card chartcard"><h2>First-time-right</h2>
+      <p class="sub">Writes accepted with no repair cycle. The slope is the claim.</p>
+      ${lineChart()}
+      <div class="legend"><span><i style="background:var(--nxt)"></i>JIDOKA</span><span><i style="background:var(--ink-3)"></i>Manual baseline (74%)</span></div>
+    </div>
+    <div class="card chartcard"><h2>Fit-to-standard budget</h2>
+      <p class="sub">30 deviations agreed. Each one is a decision, not a default.</p>
+      ${deltaGauge()}
+      <div class="legend"><span><i style="background:var(--nxt)"></i>Used 19</span><span><i style="background:var(--lamp-call)"></i>Reserved for UAT 6</span><span><i style="background:var(--lamp-off)"></i>Free 5</span></div>
+    </div>
+    <div class="card chartcard"><h2>Who the work is waiting on</h2>
+      <p class="sub">Approver load, this week. The bottleneck at scale is people, not machines.</p>
+      ${approverBars()}
+      <div class="legend"><span><i style="background:var(--lamp-call)"></i>At capacity</span><span><i style="background:var(--nxt)"></i>Within capacity</span></div>
+    </div>
+  </div>`;
+}
+
+
+function vHandover(){
+  return `<p class="eyebrow">Night shift · 22:04–05:38 · 7h 34m</p>
+  <h1>Handover</h1>
+  <p class="sub">Written at 05:38 after the overnight run. Three parts, every morning: what I did, what I found, what I need from you.</p>
+
+  <div class="grid g2">
+    <div>
+      <div class="card" style="margin-bottom:14px">
+        <h2>What I did</h2>
+        <p class="sub" style="margin-bottom:12px">Work completed while the team was off the clock.</p>
+        <table><tbody>
+          <tr><td style="width:26px;color:var(--lamp-run)">✓</td><td>Extracted all four instances and diffed against intent. 2,914 objects checked.</td></tr>
+          <tr><td style="color:var(--lamp-run)">✓</td><td>Ran the regression grammar: 1,180 personas across ZAF, NAM, BWA, MOZ. Two failures, both in the same accrual rule.</td></tr>
+          <tr><td style="color:var(--lamp-run)">✓</td><td>Refitted the forecast on this week's actuals. P(go-live ≤ 1 Dec) moved 0.58 → 0.62.</td></tr>
+          <tr><td style="color:var(--lamp-run)">✓</td><td>Assembled the evidence bundle for MS-03 and filed it. Ready for Internal Audit whenever they want it.</td></tr>
+          <tr><td style="color:var(--lamp-run)">✓</td><td>Drafted the CSDM delta for the Namibian social security field. Waiting on your review, not mine.</td></tr>
+        </tbody></table>
+      </div>
+
+      <div class="card">
+        <h2>What I found</h2>
+        <p class="sub" style="margin-bottom:12px">Ranked by what it costs to leave unsaid.</p>
+        <div class="gate" data-s="stop">
+          <div class="gate-top"><div><h3>The Mozambique accrual rule fails on mid-year hires</h3>
+            <div class="meta">Found 02:14 · both regression failures trace here</div></div></div>
+          <p style="color:var(--ink-2);font-size:12.5px;margin-top:9px">The rule prorates from 1 January rather than the hire date, so anyone hired after January gets a full year's entitlement. I have written the corrected rule and a test that fails on the old one. I have not applied it — it touches a statutory value, and that is not mine to change.</p>
+          <div class="actions"><button class="btn primary" onclick="toast('Correction opened for review. Nothing applied.','')">Review my correction</button></div>
+        </div>
+        <div class="gate" data-s="call">
+          <div class="gate-top"><div><h3>Komatsu IT is over approval capacity this week</h3>
+            <div class="meta">Found 05:31 · 11 approvals queued against a capacity of 10</div></div></div>
+          <p style="color:var(--ink-2);font-size:12.5px;margin-top:9px">Four of the eleven do not need IT specifically — the legal entity checks can be approved by HR ZA, who has room. If you agree, I will reroute them and IT stays inside capacity.</p>
+          <div class="actions"><button class="btn primary" onclick="toast('Rerouted four approvals to HR ZA. IT is back within capacity.','run')">Reroute the four</button>
+          <button class="btn" onclick="toast('Left as is. I will raise it again on Thursday if the queue has not cleared.','')">Leave it</button></div>
+        </div>
+        <div class="gate" data-s="call">
+          <div class="gate-top"><div><h3>I was wrong about the cost centre count</h3>
+            <div class="meta">Found 03:47 · my forecast said 118, the extract says 122</div></div></div>
+          <p style="color:var(--ink-2);font-size:12.5px;margin-top:9px">Four cost centres were created in ECC on Tuesday after my last read. My parity check should have caught this within the hour and did not — the schedule was daily, not hourly. I have changed it to hourly. Logged against my own record.</p>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card" style="margin-bottom:14px">
+        <h2>What I need from you</h2>
+        <p class="sub" style="margin-bottom:12px">Named, because asking everyone is asking no one.</p>
+        <table><tbody>
+          <tr><td><b style="font-weight:500">Komatsu HR MZ</b><div style="color:var(--ink-2);font-size:12.5px;margin-top:3px">The signed leave position. Eleven days open. Six stations behind it.</div></td>
+              <td style="width:74px"><button class="btn" onclick="go('decisions')">Brief</button></td></tr>
+          <tr><td><b style="font-weight:500">Reshigan</b><div style="color:var(--ink-2);font-size:12.5px;margin-top:3px">Provisioning access closes today or the start date moves day for day.</div></td>
+              <td><button class="btn" onclick="go('decisions')">Brief</button></td></tr>
+          <tr><td><b style="font-weight:500">L. Chadhliwa</b><div style="color:var(--ink-2);font-size:12.5px;margin-top:3px">Two gates need a reviewer who is not the builder. Ten minutes each.</div></td>
+              <td><button class="btn" onclick="go('gates')">Gates</button></td></tr>
+        </tbody></table>
+      </div>
+
+      <div class="card" style="margin-bottom:14px">
+        <h2>Where I was wrong</h2>
+        <p class="sub" style="margin-bottom:12px">My own record, kept in public. Twelve weeks.</p>
+        <div class="grid g3" style="grid-template-columns:1fr 1fr">
+          <div class="readout"><div class="fig call">6</div><div class="lab">Misses</div></div>
+          <div class="readout"><div class="fig blue">0.91</div><div class="lab">Forecast calibration</div></div>
+        </div>
+        <table style="margin-top:12px"><tbody>
+          <tr><td>Twin passed a rule the tenant rejected — fidelity gap in effective-dating. Fixed, test added.</td></tr>
+          <tr><td>Blocked a load that did not need blocking. My rule was too broad; narrowed after review.</td></tr>
+          <tr><td>Underestimated Namibian sign-off latency by four days. The forecast now uses observed latency, not assumed.</td></tr>
+        </tbody></table>
+      </div>
+
+      <div class="card">
+        <h2>Something I still disagree with</h2>
+        <p style="color:var(--ink-2);font-size:12.5px;margin-top:8px">On 14 November it was decided to carry three severity-2 defects into hypercare to hold the date. I said at the time that two of them touch payroll and would surface at the first month-end. That is on the chain with my objection and your decision.</p>
+        <p style="color:var(--ink-3);font-size:12px;margin-top:9px">Month-end is 30 November. I will tell you what actually happened, either way.</p>
+      </div>
+    </div>
+  </div>`;
+}
+
+
+function vImpact(){
+  // 41,000 people as dots; 12 affected. The truest thing the platform knows, drawn 1:1 (sampled 1:10 for pixels).
+  const cols=205, rows=20, total=cols*rows; // 4,100 dots = 1:10 sample of 41,000
+  const affected=new Set([311,1287,1289,1301,2044,2050,2612,2613,3390,3391,3402,4001]);
+  let dots='';
+  for(let i=0;i<total;i++){
+    const x=(i%cols)*4.6+2, y=Math.floor(i/cols)*4.6+2;
+    dots+=`<circle cx="${x}" cy="${y}" r="1.5" fill="${affected.has(i)?'var(--lamp-call)':'#2A323D'}"/>`;
+  }
+  return `<p class="eyebrow">Blast radius · person level</p>
+  <h1>Who this change touches</h1>
+  <p class="sub">Proposed change: correct the Mozambique accrual basis to prorate from hire date. Every dot is ten employees across all four countries.</p>
+  <div class="card" style="margin-bottom:14px">
+    <svg viewBox="0 0 ${cols*4.6+4} ${rows*4.6+4}" width="100%" role="img"
+      aria-label="41,000 employees shown as dots; 12 affected employees highlighted">${dots}</svg>
+  </div>
+  <div class="grid g3">
+    <div class="card readout"><div class="fig run">40,988</div><div class="lab">People unchanged</div>
+      <div class="note">Payslips identical to the cent, verified against the twin.</div></div>
+    <div class="card readout"><div class="fig call">12</div><div class="lab">People affected</div>
+      <div class="note">All Mozambique mid-year hires. Largest movement: +2.4 leave days.</div></div>
+    <div class="card readout"><div class="fig blue">0</div><div class="lab">Retro impact</div>
+      <div class="note">No change lands before the ECC retro limit.</div></div>
+  </div>
+  <div class="card" style="margin-top:14px"><h2>The twelve</h2>
+    <p class="sub" style="margin-bottom:10px">Named to HR MZ only — this table is field-level permissioned.</p>
+    <table><thead><tr><th>Person</th><th>Hired</th><th>Today</th><th>After change</th><th>Δ</th></tr></thead>
+    <tbody>
+      <tr><td>MZ-00218</td><td>14 Mar 2026</td><td>22.0 days</td><td>17.6 days</td><td style="color:var(--lamp-call)">−4.4</td></tr>
+      <tr><td>MZ-00311</td><td>02 Jun 2026</td><td>22.0 days</td><td>12.8 days</td><td style="color:var(--lamp-call)">−9.2</td></tr>
+      <tr><td colspan="5" style="color:var(--ink-3)">…ten more, exported with the decision brief for HR MZ sign-off.</td></tr>
+    </tbody></table>
+    <div class="actions"><button class="btn primary" onclick="toast('Impact table attached to DP-B14 brief.','run')">Attach to decision brief</button></div>
+  </div>`;
+}
+
+/* ---------- hand-drawn charts (no libraries) ---------- */
+function histogram(){
+  const bars=[2,4,7,12,18,24,29,26,19,13,8,5,3,2];const w=440,h=150,bw=w/bars.length,max=30;
+  return `<svg viewBox="0 0 ${w} ${h+26}" width="100%" role="img" aria-label="Forecast distribution: 62 percent of runs finish on or before 1 December">
+    ${bars.map((v,i)=>{const bh=v/max*h;return `<rect x="${i*bw+2}" y="${h-bh}" width="${bw-4}" height="${bh}" rx="2"
+      fill="${i<=7?'var(--lamp-run)':'var(--nxt)'}" opacity="${i<=7?.9:.55}"/>`}).join('')}
+    <line class="ax" x1="0" y1="${h}" x2="${w}" y2="${h}"/>
+    <line x1="${8*bw}" y1="0" x2="${8*bw}" y2="${h}" stroke="var(--ink)" stroke-dasharray="3 3" opacity=".55"/>
+    <text x="${8*bw+6}" y="12" fill="var(--ink-2)">1 DEC TARGET</text>
+    <text x="2" y="${h+18}">24 NOV</text><text x="${w-58}" y="${h+18}">18 DEC</text></svg>`;
+}
+function lineChart(){
+  const pts=[71,74,79,83,86,88,91,92];const w=440,h=150,step=w/(pts.length-1);
+  const y=v=>h-((v-65)/32)*h;
+  const d=pts.map((v,i)=>`${i?'L':'M'}${i*step},${y(v)}`).join(' ');
+  return `<svg viewBox="0 0 ${w} ${h+26}" width="100%" role="img" aria-label="First-time-right rising from 71 to 92 percent over eight weeks">
+    ${[70,80,90].map(v=>`<line class="gl" x1="0" y1="${y(v)}" x2="${w}" y2="${y(v)}"/><text x="2" y="${y(v)-4}">${v}%</text>`).join('')}
+    <line x1="0" y1="${y(74)}" x2="${w}" y2="${y(74)}" stroke="var(--ink-3)" stroke-dasharray="4 4"/>
+    <path d="${d}" fill="none" stroke="var(--nxt)" stroke-width="2.5" stroke-linejoin="round"/>
+    ${pts.map((v,i)=>`<circle cx="${i*step}" cy="${y(v)}" r="3" fill="var(--nxt)"/>`).join('')}
+    <text x="0" y="${h+18}">WK 1</text><text x="${w-38}" y="${h+18}">WK 8</text></svg>`;
+}
+function deltaGauge(){
+  const seg=[[19,'var(--nxt)'],[6,'var(--lamp-call)'],[5,'var(--lamp-off)']];let x=0;const w=440;
+  return `<svg viewBox="0 0 ${w} 96" width="100%" role="img" aria-label="19 of 30 deviations used, 6 reserved, 5 free">
+    ${seg.map(([v,c])=>{const bw=v/30*w;const r=`<rect x="${x}" y="26" width="${bw-3}" height="30" rx="4" fill="${c}"/>`;x+=bw;return r}).join('')}
+    <text x="0" y="18">DEVIATIONS AGAINST A 30-CHANGE BUDGET</text>
+    <text x="0" y="76" fill="var(--ink-2)">NEXT DEVIATION BECOMES A COMMERCIAL DECISION</text></svg>`;
+}
+function approverBars(){
+  const rows=[['Komatsu HR ZA',8,10],['Komatsu IT',11,10],['Payroll MZ',2,6],['Internal Audit',3,8]];
+  const w=440,rh=30;
+  return `<svg viewBox="0 0 ${w} ${rows.length*rh+10}" width="100%" role="img" aria-label="Approver load by group">
+    ${rows.map(([n,v,cap],i)=>{const bw=Math.min(v/cap,1)*(w-150);const over=v>cap;
+      return `<text x="0" y="${i*rh+19}" fill="var(--ink-2)">${n.toUpperCase()}</text>
+        <rect x="150" y="${i*rh+8}" width="${w-150}" height="14" rx="3" fill="var(--floor-3)"/>
+        <rect x="150" y="${i*rh+8}" width="${bw}" height="14" rx="3" fill="${over?'var(--lamp-call)':'var(--nxt)'}"/>
+        <text x="${w-2}" y="${i*rh+19}" text-anchor="end" fill="${over?'var(--lamp-call)':'var(--ink-3)'}">${v}/${cap}</text>`}).join('')}</svg>`;
+}
+
+/* ================= interactions & edge cases ================= */
+function advance(i){
+  const g=S.gates[i];
+  if(g.step===4){ // approval requires a different person
+    modal(`<h2>Approve ${g.id}</h2><p>The person approving cannot be the person who built it. ${g.owner} executed this checkpoint.</p>
+      <label class="f"><span>Reviewer initials</span><input type="text" id="rev" placeholder="e.g. L. Chadhliwa"></label>
+      <div class="actions"><button class="btn primary" onclick="doApprove(${i})">Approve gate</button>
+      <button class="btn" onclick="closeModal()">Cancel</button></div>`);
+    return;
+  }
+  if(g.step===1&&!g.snapSet){
+    modal(`<h2>Capture the before state</h2><p>Nothing executes without somewhere to return to. Record the export reference and row count.</p>
+      <label class="f"><span>Export or Git reference</span><input type="text" id="ref" placeholder="EXP-2026-0918-01"></label>
+      <label class="f"><span>Row count</span><input type="text" id="cnt" placeholder="1,482"></label>
+      <div class="actions"><button class="btn primary" onclick="doSnap(${i})">Capture snapshot</button>
+      <button class="btn" onclick="closeModal()">Cancel</button></div>`);
+    return;
+  }
+  g.step++;g.status=g.step>=5?'run':'call';render();
+  toast(`${g.id} — ${STEPS[Math.min(g.step-1,4)]} recorded on the chain.`,'run');
+}
+function doSnap(i){const r=$('ref').value.trim();
+  if(!r){toast('A snapshot reference is required. Without it there is no way back.','stop');return}
+  S.gates[i].snap=r;S.gates[i].snapSet=true;S.gates[i].step++;closeModal();render();
+  toast('Snapshot captured. The station can now execute.','run');}
+function doApprove(i){const r=$('rev').value.trim();
+  if(!r){toast('Reviewer initials are required.','stop');return}
+  if(r.toLowerCase()===S.gates[i].owner.toLowerCase()){
+    closeModal();wrongApprover();return;}
+  S.gates[i].step=5;S.gates[i].status='run';S.gates[i].reviewer=r;closeModal();render();
+  toast(`${S.gates[i].id} approved by ${r}. Gate earned.`,'run');}
+function wrongApprover(){
+  modal(`<h2>That approval was refused</h2>
+    <p>The reviewer and the builder are the same person. Separation of duties is enforced in the platform kernel, so this cannot be overridden here — or from any other client.</p>
+    <p style="color:var(--ink-3);font-size:12px">Ask a second qualified reviewer to approve. The refusal has been recorded on the chain.</p>
+    <div class="actions"><button class="btn primary" onclick="closeModal()">Understood</button></div>`);
+  S.refusals.unshift({ts:'Just now',what:'Refused approval — reviewer equals builder',rule:'SoD'});}
+function showRollback(id,layer){
+  const proc={XML:'Re-upload the previous XML version from Git, then run the data model checks. Hidden fields keep their data; changing a populated field type does not roll back.',
+    FO:'Re-import the before snapshot for this object. In production use an effective-dated correction — a full purge would destroy history.',
+    INT:'Redeploy the previous iFlow version. The ECC side is Komatsu-owned; use the joint procedure.',
+    EMP:'Reload the full 18-portlet snapshot before go-live. After go-live, correct forward per portlet.',
+    TO:'Re-import the balance snapshot and re-run a targeted recalculation.'}[layer]||'Restore from the recorded snapshot.';
+  modal(`<h2>Roll back ${id}</h2><p>${proc}</p>
+    <label class="f"><span>Why are you rolling back?</span><textarea id="why" placeholder="Recorded on the chain and reviewed at the next gate"></textarea></label>
+    <div class="actions"><button class="btn stop" onclick="doRollback('${id}')">Roll back</button>
+    <button class="btn" onclick="closeModal()">Cancel</button></div>`);}
+function doRollback(id){const w=$('why').value.trim();
+  if(!w){toast('A reason is required. Rollbacks teach the system what to prevent.','stop');return}
+  const g=S.gates.find(x=>x.id===id);g.step=0;g.status='call';g.snapSet=false;closeModal();render();
+  toast(`${id} rolled back and reset. The reason is on the chain.`,'');}
+function resolveDP(id,type){
+  if(type==='STATUTORY'){
+    modal(`<h2>${id}</h2>
+      <p>This is a statutory question. JIDOKA holds two conflicting figures from unsigned sources and will not choose between them — a wrong entitlement is a payroll breach, not a defect.</p>
+      <p style="color:var(--ink-3);font-size:12px">To release this decision, attach a signed position from Komatsu HR Mozambique or counsel. Six stations open the moment it lands.</p>
+      <label class="f"><span>Signed source reference</span><input type="text" id="ev" placeholder="e.g. KOM-MZ-LEG-2026-014"></label>
+      <div class="actions"><button class="btn primary" onclick="doResolve('${id}')">Attach and release</button>
+      <button class="btn" onclick="closeModal()">Cancel</button></div>`);
+  } else {
+    modal(`<h2>${id}</h2><p>Decision brief: options, consequences and a recommendation, with the reasoning behind it.</p>
+      <p style="color:var(--ink-3);font-size:12px">${type==='ONE_WAY'?'This decision cannot be reversed once the first record loads. Two named approvers are required.':'Recorded on the chain with the decider named.'}</p>
+      <div class="actions"><button class="btn primary" onclick="closeModal();toast('Brief sent to the decision owner.','run')">Send to owner</button>
+      <button class="btn" onclick="closeModal()">Close</button></div>`);
+  }
+}
+function doResolve(id){const e=$('ev').value.trim();
+  if(!e){toast('A signed source reference is required. The platform does not accept an unsourced statutory value.','stop');return}
+  S.dps=S.dps.filter(d=>d.id!==id);
+  const g=S.gates.find(x=>x.blocked===id);if(g){g.blocked=null;g.status='call';}
+  closeModal();render();toast('DP-B14 released. Mozambique Time Off and six downstream stations are open.','run');}
+function stopLine(){
+  if(S.lineStopped){S.lineStopped=false;S.stopReason='';render();toast('Line restarted.','run');return}
+  modal(`<h2>Stop the line</h2><p>Anyone can stop the line. Everything in flight pauses until a reviewer clears the halt — that is the point of the cord.</p>
+    <label class="f"><span>What did you see?</span><textarea id="hr" placeholder="Describe what looks wrong"></textarea></label>
+    <div class="actions"><button class="btn stop" onclick="doStop()">Stop the line</button>
+    <button class="btn" onclick="closeModal()">Cancel</button></div>`);}
+function doStop(){const r=$('hr').value.trim();
+  if(!r){toast('Say what you saw. The reason is what makes a halt useful.','stop');return}
+  S.lineStopped=true;S.stopReason=r;closeModal();render();toast('Line stopped. Everyone can see why.','stop');}
+function breakChain(){S.chainOk=false;render();toast('Chain verification failed. Approvals are suspended.','stop');
+  $('footState').textContent='Chain verification FAILED · approvals suspended';}
+
+/* ================= render ================= */
+function render(){
+  $('nav').innerHTML=VIEWS.map(([k,l])=>`<button ${S.view===k?'aria-current="page"':''} onclick="go('${k}')">${l}</button>`).join('');
+  $('railLamps').innerHTML=LAMP_PHASES.map(([p,s])=>{
+    let st=s; if(S.lineStopped) st = s==='off'?'off':'stop';
+    return `<div class="lamp" data-s="${st}" title="${p}"><span>${p}</span></div>`}).join('');
+  if(S.loading){$('view').innerHTML=`<p class="eyebrow">Loading</p><h1>Reading the line</h1>
+    <p class="sub">Pulling live state from the tenant. Nothing is shown until it is verified.</p>
+    <div class="grid g3">${'<div class="card skel" style="height:132px"></div>'.repeat(3)}</div>
+    <div class="skel" style="height:220px;margin-top:14px"></div>`;return;}
+  if(!S.engagementLoaded){$('view').innerHTML=`<div class="empty"><h2>No engagement loaded</h2>
+    <p>Load a signed design set to begin. JIDOKA builds the plan from it — it will not start from a blank page.</p>
+    <button class="btn primary" onclick="S.engagementLoaded=true;render()">Load design set</button></div>`;return;}
+  $('view').innerHTML={line:vLine,handover:vHandover,impact:vImpact,gates:vGates,decisions:vDecisions,evidence:vEvidence,analytics:vAnalytics}[S.view]();
+}
+function go(v){S.view=v;render();window.scrollTo({top:0})}
+$('cordBtn').addEventListener('click',stopLine);
+window.addEventListener('offline',()=>{S.offline=true;render()});
+window.addEventListener('online',()=>{S.offline=false;render();toast('Back online.','run')});
+
+const CMDS=[
+ ['Go to Line','go("line")'],['Go to Handover','go("handover")'],['Go to Impact','go("impact")'],
+ ['Go to Gates','go("gates")'],['Go to Decisions','go("decisions")'],['Go to Evidence','go("evidence")'],
+ ['Go to Analytics','go("analytics")'],['Stop the line','stopLine()'],
+ ['Export evidence bundle','toast("Evidence bundle exported.","run")'],
+ ['Open DP-B14 brief','resolveDP("DP-B14","STATUTORY")'],
+ ['Time travel: state as of 15 Oct','toast("Reconstructed from the ledger: 14 gates earned, DP-B14 open, line running.","")']];
+function openPalette(){
+  modal(`<h2 style="margin-bottom:10px">Where to?</h2>
+    <label class="f"><span>Type a command</span><input type="text" id="pal" placeholder="line, stop, evidence, dp…"></label>
+    <div id="palList"></div>`,()=>{
+    const inp=document.getElementById('pal'), list=document.getElementById('palList');
+    let sel=0, cur=CMDS;
+    const draw=()=>{list.innerHTML=cur.map((c,i)=>`<div style="padding:8px 10px;border-radius:7px;font-size:13px;cursor:pointer;
+      background:${i===sel?'var(--nxt)':'transparent'};color:${i===sel?'#fff':'var(--ink-2)'}"
+      onclick="closeModal();${c[1]}">${c[0]}</div>`).join('')};
+    draw();
+    inp.addEventListener('input',()=>{cur=CMDS.filter(c=>c[0].toLowerCase().includes(inp.value.toLowerCase()));sel=0;draw()});
+    inp.addEventListener('keydown',e=>{
+      if(e.key==='ArrowDown'){sel=Math.min(sel+1,cur.length-1);draw();e.preventDefault()}
+      if(e.key==='ArrowUp'){sel=Math.max(sel-1,0);draw();e.preventDefault()}
+      if(e.key==='Enter'&&cur[sel]){const a=cur[sel][1];closeModal();eval(a)}});
+  });
+}
+document.addEventListener('keydown',e=>{
+  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openPalette()}});
+
+document.addEventListener('keydown',e=>{ // keyboard: 1-5 switch views
+  if(e.target.matches('input,textarea'))return;
+  const i=parseInt(e.key)-1; if(i>=0&&i<VIEWS.length) go(VIEWS[i][0]);});
+setTimeout(()=>{S.loading=false;render();toast('Line state verified against the tenant.','run')},900);
+render();
+</script>
+</body>
+</html>

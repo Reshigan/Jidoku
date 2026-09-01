@@ -1,0 +1,35 @@
+name: deploy
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:        # so a rollback does not require an empty commit
+
+# One deploy at a time, and never cancel one mid-flight: a half-published edge is worse than a
+# late one.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: npm, cache-dependency-path: apps/web/package-lock.json }
+
+      - name: Build the console
+        working-directory: apps/web
+        run: npm ci && npm run build
+
+      - name: Publish the edge front door
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: deploy/cloudflare
+          # KERNEL_URL is passed at deploy time, not committed: no environment's origin belongs in
+          # the repo. It is a repository variable rather than a secret because it is a hostname —
+          # the kernel still refuses every unauthenticated call on its own.
+          command: deploy --env production --var KERNEL_URL:${{ vars.KERNEL_URL }}

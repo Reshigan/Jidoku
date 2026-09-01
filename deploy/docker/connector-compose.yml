@@ -1,0 +1,9 @@
+# JIDOKA Edge Connector — installed INSIDE the client network by client IT. Outbound-only.
+services:
+  connector:
+    image: ghcr.io/gonxt/jidoka-connector:latest
+    environment:
+      - TUNNEL_TOKEN                      # Cloudflare Tunnel service token (client-issued)
+      - SYSTEM_BINDINGS=KOM-SF-DEV:rw,KOM-ECC-PRD:ro   # ro bindings are compiled without write capability
+      - VAULT_ADDR                        # client-side credential vault; secrets never leave premises
+    restart: unless-stopped

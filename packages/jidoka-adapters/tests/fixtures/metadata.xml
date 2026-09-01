@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<edmx:Edmx Version="1.0" xmlns:edmx="http://schemas.microsoft.com/ado/2007/06/edmx">
+ <edmx:DataServices>
+  <Schema Namespace="SFOData" xmlns="http://schemas.microsoft.com/ado/2008/09/edm"
+          xmlns:sf="http://www.successfactors.com/edm/sf">
+   <EntityType Name="FOCostCenter">
+    <Key><PropertyRef Name="externalCode"/></Key>
+    <Property Name="externalCode" Type="Edm.String" Nullable="false"/>
+    <Property Name="name" Type="Edm.String" Nullable="false"/>
+    <Property Name="costcenterManager" Type="Edm.String" Nullable="true"/>
+    <Property Name="status" Type="Edm.String" Nullable="true" sf:picklist="ACTIVE_STATUS"/>
+   </EntityType>
+   <EntityType Name="TimeType">
+    <Property Name="externalCode" Type="Edm.String" Nullable="false"/>
+    <Property Name="timeTypeClass" Type="Edm.String" Nullable="true"/>
+   </EntityType>
+  </Schema>
+ </edmx:DataServices>
+</edmx:Edmx>
