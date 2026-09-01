@@ -1,6 +1,7 @@
 # Build output and dependencies
 node_modules/
 dist/
+apps/web/.vite/
 *.egg-info/
 __pycache__/
 .pytest_cache/

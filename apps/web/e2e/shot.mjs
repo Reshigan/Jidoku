@@ -1,6 +1,14 @@
 /* Screenshot every screen, signed in, against the live API. Visual review, not assertion. */
 import { chromium } from "@playwright/test";
 import { mkdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
+
+/* Driven off VIEWS in src/ui.tsx: a second copy of the list is what silently misses a new screen.
+   Read rather than imported — node cannot load .tsx, and a build step for one array is not worth it. */
+const VIEWS = JSON.parse(
+  readFileSync(new URL("../src/ui.tsx", import.meta.url), "utf8")
+    .match(/export const VIEWS = (\[[^\]]*\])/)[1].replace(/'/g, '"'),
+);
 
 const OUT = process.argv[2] ?? "/tmp/claude-501/shots";
 mkdirSync(OUT, { recursive: true });
@@ -22,7 +30,7 @@ await page.waitForTimeout(800);
 const EID = process.env.SHOT_EID;
 if (EID) { await page.selectOption("header select", EID); await page.waitForTimeout(800); }
 
-for (const [i, v] of ["Line", "Work", "Configure", "Decisions", "Intent", "Landscape", "Ledger", "Evidence", "Milestones"].entries()) {
+for (const [i, v] of VIEWS.entries()) {
   await page.getByRole("tab", { name: new RegExp(`^${v}`) }).click();
   await page.waitForTimeout(500);
   await page.screenshot({ path: `${OUT}/${String(i + 1).padStart(2, "0")}-${v.toLowerCase()}.png`, fullPage: true });

@@ -3,6 +3,7 @@
    the barrel App.tsx imports from. */
 import type { DecisionPoint, Landscape, SystemRecord } from "./api";
 import { dpRelease } from "./derive";
+import { roleLabel } from "./viewkit";
 import { Empty, Pill, Section, Skeleton } from "./ui";
 import { Facts, Flow, Meter, Track } from "./viz";
 import type { GraphNode, TrackStop } from "./viz";
@@ -372,8 +373,8 @@ function SystemTable({ systems }: { systems: SystemRecord[] }) {
           <div key={s.system_id}
                className={"fl-sys-row " + (lock ? "is-locked" : bindable ? "is-writable" : "")}>
             <span className="fl-sys-id" title={s.system_id}>{s.system_id}</span>
-            <span className="fl-sys-v" title={`${s.product} · ${s.role.replace(/_/g, " ")}`}>
-              {s.product} · {s.role.replace(/_/g, " ")}
+            <span className="fl-sys-v" title={`${s.product} · ${roleLabel(s.role)}`}>
+              {s.product} · {roleLabel(s.role)}
             </span>
             <span className="fl-sys-v mono" title={s.change_substrate || "no change substrate declared"}>
               {s.environment} · {s.change_substrate || "no change substrate"}

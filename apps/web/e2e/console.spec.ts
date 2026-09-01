@@ -29,6 +29,20 @@ async function newEngagement(page: Page, client: string, name: string) {
   await expect(page.locator(".head h1")).toHaveText(name);
 }
 
+/** The tallest gap between a panel's body and the content in it, in pixels — for panels that did
+ *  not ask to fill the glass. A board marked `data-fill="stretch"` claims the height on purpose
+ *  (its panels *are* the screen), so a gap there is the design, not a fault. Everywhere else a gap
+ *  means two panels both claimed the row's slack and only one could use it. */
+async function slack(page: Page): Promise<number> {
+  return page.locator(".board:not([data-fill]) > .sec").evaluateAll((els) =>
+    Math.max(0, ...els.map((el) => {
+      const body = [...el.children].find((c) => !c.classList.contains("sec-head"));
+      if (!body) return 0;
+      const used = [...body.children].reduce((h, c) => h + c.getBoundingClientRect().height, 0);
+      return body.getBoundingClientRect().height - used;
+    })));
+}
+
 function view(page: Page, name: string) {
   return page.getByRole("tab", { name: new RegExp(`^${name}`) });
 }
@@ -49,6 +63,10 @@ test("every view is reachable, and by number key", async ({ page }) => {
   for (const n of VIEWS) {
     await view(page, n).click();
     await expect(page.locator(".page")).not.toBeEmpty();
+    /* Two panels in a row both marked `grow` is 764px of void under whichever one cannot fill it —
+       on a control panel that void reads as "nothing more to see", which is a lie. Only one panel
+       in a row can take the slack, and it has to be the one whose content is unbounded. */
+    expect(await slack(page), `${n} has a panel with a void under its content`).toBeLessThan(200);
   }
   for (const [i, n] of VIEWS.entries()) {
     if (i >= 10) break;                       // only the first ten have a number key

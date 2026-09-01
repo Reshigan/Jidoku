@@ -64,6 +64,25 @@ export const CLAIM_WORDS: Record<string, string> = {
   UNVERIFIED: "Formed from a source but never re-checked since. Treat it as a lead, not a finding.",
 };
 
+/** A system's role, as a phrase inside a sentence: "KOM-S4-DEV — a system JIDOKA may write into". */
+export const ROLE_PHRASE: Record<string, string> = {
+  TARGET: "a system JIDOKA may write into",
+  SOURCE_LEGACY: "a read-only legacy source",
+  TWIN: "a twin, which never holds write credentials",
+  SANDBOX: "a sandbox",
+};
+
+/** The same role as a standalone label. Enum-shaped caps are the platform's word, not a person's,
+    and BRAND is absolute: never name internals in the UI. */
+export const ROLE_LABEL: Record<string, string> = {
+  TARGET: "Write target",
+  SOURCE_LEGACY: "Legacy source",
+  TWIN: "Digital twin",
+  SANDBOX: "Sandbox",
+};
+
+export const roleLabel = (r: string) => ROLE_LABEL[r] ?? sentence(r);
+
 export function humanAction(a: string) {
   const words: Record<string, string> = {
     CREATED: "Engagement opened", LOADED: "Signed intent loaded", BUILT: "Plan built",
@@ -134,15 +153,7 @@ export function detailWords(task: string, detail: string): string {
 
   // "KOM-S4-DEV role=TARGET" — the id stays, the enum does not.
   const role = d.match(/^(\S+) role=([A-Z_]+)$/);
-  if (role) {
-    const words: Record<string, string> = {
-      TARGET: "a system JIDOKA may write into",
-      SOURCE_LEGACY: "a read-only legacy source",
-      TWIN: "a twin, which never holds write credentials",
-      SANDBOX: "a sandbox",
-    };
-    return `${role[1]} — ${words[role[2]] ?? sentence(role[2])}`;
-  }
+  if (role) return `${role[1]} — ${ROLE_PHRASE[role[2]] ?? sentence(role[2])}`;
 
   // "value='-5' evidence=KOM-POL-114" — a taken decision. The value is the client's, so it stays.
   const dp = d.match(/^value=(.+?) evidence=(.*)$/);

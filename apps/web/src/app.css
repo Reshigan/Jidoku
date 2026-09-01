@@ -671,9 +671,14 @@ footer { text-transform: none; letter-spacing: .16em; }
 /* The cord is one word per line at 68px, so it stays two short lines by design. */
 .cord { line-height: 1.15; }
 
-/* Panels in a board row match heights; content pins to the top. */
-.board > .sec { height: 100%; display: flex; flex-direction: column; }
-.board > .sec > *:not(.sec-head) { flex: 1; }
+/* Panels in a board row match heights; content pins to the top. The body is only stretched when it
+   can use the room — a scrolling list fills what it is given, a fixed block cannot, and stretching
+   one anyway is what left 764px of void under a three-row Lanes panel beside a full activity feed.
+   On a control panel that void reads as "nothing more to see", which is a lie. */
+.board > .sec { display: flex; flex-direction: column; }
+.board > .sec.grow { height: 100%; }
+.board > .sec > *:not(.sec-head) { flex: 0 0 auto; }
+.board > .sec.grow.scrolls > .body { flex: 1 1 auto; }
 
 /* A card inside a panel is a box in a box. Inside, it is a ruled row instead. */
 .sec .card { background: transparent; border: none; border-radius: 0; box-shadow: none; padding: 8px 10px; }

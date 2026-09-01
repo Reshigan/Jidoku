@@ -116,9 +116,13 @@ export function LineView(props: {
         {/* One lane is the honest shape of a small engagement, not a rendering fault — but a row and
             700px of nothing reads as one. So a single lane opens: the row keeps its size and the
             slack below it carries that lane's stations, which is what the operator would click
-            through to next anyway. With several lanes the rows fill the panel on their own. */}
+            through to next anyway. With several lanes the rows fill the panel on their own.
+
+            Not `grow` though: a lane list is a handful of rows however it is opened, and cannot
+            fill a screen's height. Claiming the row's slack as well left 764px of void under it —
+            both panels asked for the slack and only the activity feed beside it can use it. */}
         <Section title="Lanes" note={total ? `${approved} of ${total} stations approved` : "No plan built yet"}
-                 className="grow scrolls">
+                 className="scrolls">
           {!total ? (
             <span className="mut">Nothing to run until the plan builds.</span>
           ) : (
