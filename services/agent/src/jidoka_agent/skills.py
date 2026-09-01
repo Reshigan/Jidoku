@@ -24,10 +24,18 @@ class Skill:
 
 
 def _exam_for(name: str, evals_dir: pathlib.Path, results_dir: pathlib.Path) -> ExamResult | None:
+    """Grade one skill against the scenarios that certify it, and no others.
+
+    A scenario declares the skill it examines. Grading every skill against the whole bank would
+    certify cutover discipline on an integration question, and — worse — a skill with no
+    scenarios of its own would score a vacuous 100% and promote itself. So an untested skill
+    returns an empty result, which cannot pass, rather than no result at all.
+    """
     results = results_dir / f"{name}.json"
     if not results.is_file() or not evals_dir.is_dir():
         return None
-    return grade(load_scenarios(evals_dir), load_results(results))
+    mine = [s for s in load_scenarios(evals_dir) if s.get("skill") == name]
+    return grade(mine, load_results(results))
 
 
 def load_skills(skills_dir: pathlib.Path | str = SKILLS_DIR,
@@ -57,6 +65,8 @@ def gate_status(skills: list[Skill]) -> dict:
     for s in skills:
         if s.exam is None:
             blocked = "never sat the K5 exam"
+        elif not s.exam.total:
+            blocked = "no exam scenario certifies this skill"
         elif s.exam.ungraded:
             blocked = f"{len(s.exam.ungraded)} scenario(s) ungraded"
         elif getattr(s.exam, "autofailed", ()):
