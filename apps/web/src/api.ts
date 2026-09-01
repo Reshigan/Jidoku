@@ -369,6 +369,11 @@ const api2 = {
       `/engagements/${eid}/decisions`,
     ),
   evidence: (eid: string) => call<Evidence>(`/engagements/${eid}/ledger/evidence`),
+  documents: (eid: string) =>
+    call<{ documents: { id: string; title: string }[] }>(`/engagements/${eid}/documents`),
+  /* Markdown, not JSON. `call` keeps a non-JSON body verbatim, so the document arrives as written
+     rather than round-tripped through an envelope that would only be unwrapped again here. */
+  document: (eid: string, id: string) => call<string>(`/engagements/${eid}/documents/${id}`),
   armed: (eid: string) => call<{ armed: ArmedTarget[] }>(`/engagements/${eid}/execution/arm`),
   connectors: (eid: string) =>
     call<{ connectors: Connector[] }>(`/engagements/${eid}/execution/connector`),

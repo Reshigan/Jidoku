@@ -46,3 +46,22 @@ def test_statutory_dp_requires_evidence():
     r = c.post(f"/engagements/{eid}/decisions/DP-B11/resolve",
                json={"decided_by": "komatsu.hr", "value": "-5", "evidence_ref": "KOM-POL-114"})
     assert r.status_code == 200
+
+
+def test_documents_project_the_engagement_over_http():
+    """The document is the artefact, so it comes back as Markdown rather than in an envelope."""
+    eid = _eng()
+    c.post(f"/engagements/{eid}/ir", json=IR)
+    r = c.get(f"/engagements/{eid}/documents/config-rationale")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/markdown")
+    assert r.text.startswith("# Configuration Rationale")
+
+
+def test_the_document_catalogue_lists_what_can_be_projected():
+    ids = {d["id"] for d in c.get(f"/engagements/{_eng()}/documents").json()["documents"]}
+    assert ids == {"config-rationale", "solution-design", "decision-register"}
+
+
+def test_an_unknown_document_is_404_not_an_empty_page():
+    assert c.get(f"/engagements/{_eng()}/documents/blueprint").status_code == 404

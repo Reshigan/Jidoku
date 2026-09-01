@@ -1,0 +1,134 @@
+/* Documents. A reading surface inside an industrial console — the one screen where a column of
+   prose is the point, so it gets a measure and a rhythm the dense screens deliberately refuse.
+   Everything else on the platform is instrumentation; this is the thing an auditor prints. */
+
+.doc-tabs { display: flex; gap: 1px; background: var(--line); }
+.doc-tab {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-mut);
+  background: var(--floor3);
+  border: 0;
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: color .16s var(--ease), background .16s var(--ease);
+}
+.doc-tab:hover { color: var(--ink); background: var(--floor4); }
+.doc-tab[data-on="true"] { color: var(--ink); background: var(--floor4); box-shadow: inset 0 -2px 0 var(--blue); }
+.doc-tab:focus-visible { outline: 2px solid var(--blue-lift); outline-offset: -2px; }
+
+.doc-provenance {
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--ink-mut);
+  max-width: 78ch;
+  margin: 0 0 18px;
+  padding-left: 12px;
+  border-left: 1px solid var(--line);
+}
+
+/* The measure. Long-form prose at console density is unreadable; 74ch is the document, and tables
+   are allowed past it because a config book's columns are data, not reading. */
+.doc { max-width: 74ch; padding-bottom: 32px; }
+.doc-p { font-size: 13.5px; line-height: 1.7; color: var(--ink); margin: 0 0 12px; }
+.doc-lede {
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--ink-mut);
+  margin: 0 0 20px;
+  font-style: italic;
+}
+.doc-meta { font-size: 11.5px; line-height: 1.6; color: var(--ink-dim); margin: 0 0 10px; }
+
+.doc-h1 {
+  font-family: var(--display);
+  font-size: 27px;
+  letter-spacing: .01em;
+  color: var(--ink);
+  margin: 0 0 6px;
+  text-wrap: balance;
+}
+.doc-h2 {
+  font-family: var(--display);
+  font-size: 18px;
+  letter-spacing: .02em;
+  color: var(--ink);
+  margin: 30px 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+  text-wrap: balance;
+}
+.doc-h3 {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  letter-spacing: .06em;
+  color: var(--ink);
+  margin: 22px 0 8px;
+}
+.doc-h4 { font-family: var(--body); font-size: 13px; color: var(--ink-mut); margin: 16px 0 6px; }
+
+.doc-rule { border: 0; border-top: 1px solid var(--line); margin: 26px 0 14px; }
+
+.doc-list { margin: 0 0 14px; padding-left: 0; list-style: none; }
+.doc-list li {
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--ink);
+  padding-left: 16px;
+  position: relative;
+}
+.doc-list li::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: .85em;
+  width: 5px;
+  height: 1px;
+  background: var(--ink-dim);
+}
+
+.doc code {
+  font-family: var(--mono);
+  font-size: .92em;
+  color: var(--blue-ink);
+  background: var(--floor3);
+  padding: 1px 5px;
+  border-radius: var(--r);
+}
+.doc strong { color: var(--ink); font-weight: 600; }
+
+/* Wider than the measure on purpose, and scrolling inside itself so the page never does. */
+.doc-tablewrap {
+  overflow-x: auto;
+  margin: 0 0 18px;
+  border: 1px solid var(--line);
+  max-width: min(100%, 108ch);
+}
+.doc-table { border-collapse: collapse; width: 100%; font-size: 12px; }
+.doc-table th {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-mut);
+  text-align: left;
+  background: var(--floor3);
+  padding: 8px 11px;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--line);
+}
+.doc-table td {
+  padding: 8px 11px;
+  color: var(--ink);
+  border-bottom: 1px solid var(--line-soft);
+  vertical-align: top;
+  line-height: 1.55;
+}
+.doc-table tbody tr:last-child td { border-bottom: 0; }
+.doc-table tbody tr:hover td { background: var(--floor3); }
+
+@media (prefers-reduced-motion: reduce) {
+  .doc-tab { transition: none; }
+}

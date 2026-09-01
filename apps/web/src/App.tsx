@@ -13,6 +13,7 @@ import {
   ConfigureView, DecisionsView, EvidenceView, IntentView, LandscapeView, LedgerView, LineView,
   MemoryView, MilestonesView, WorkView,
 } from "./views";
+import { DocumentsView } from "./views_document";
 import { DP_KINDS, SYSTEM_ROLES, kindWords, roleLabel } from "./viewkit";
 import "./app.css";
 
@@ -437,6 +438,10 @@ export default function App() {
               )}
               {view === "Milestones" && (
                 <MilestonesView milestones={milestones(lanes)} planBlock={d.planBlock} />
+              )}
+              {view === "Documents" && (
+                <DocumentsView eid={eid}
+                               onRefusal={(title, text) => setRefusal({ title, text })} />
               )}
             </>
           )}
