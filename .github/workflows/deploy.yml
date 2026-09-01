@@ -14,6 +14,12 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: production
+    # A red pipeline nobody can fix is a pipeline everybody learns to ignore. Until the deployment
+    # is configured this job is skipped, not failed, and the published site is left alone.
+    # KERNEL_URL stands in for "somebody has set this repository up": it is the one setting that is
+    # a variable rather than a secret, and `secrets` cannot be read in an `if` at all. Deploying a
+    # console with no kernel is deliberate for the first publish, so workflow_dispatch overrides.
+    if: ${{ vars.KERNEL_URL != '' || github.event_name == 'workflow_dispatch' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
