@@ -1,0 +1,11 @@
+[project]
+name = "jidoka-agent"
+version = "0.1.0"
+description = "JIDOKA K5 consultant: Anthropic tool-use loop, governed skills, K5 exam harness"
+requires-python = ">=3.11"
+dependencies = ["jidoka-core"]   # stdlib urllib for HTTP; exam YAML subset parsed in-tree (no pyyaml)
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,0 +1,6 @@
+{"TimeType":{"fields":{"externalCode":{"type":"string","required":true},
+ "unit":{"type":"string","required":true},
+ "accrual_frequency":{"type":"string","required":false,"picklist":"FREQ"},
+ "timeAccountType":{"type":"string","required":true}}},
+ "TimeAccountType":{"fields":{"externalCode":{"type":"string","required":true},
+ "unit":{"type":"string","required":true},"country":{"type":"string","required":false}}}}

@@ -1,0 +1,3 @@
+{ "python.testing.pytestEnabled": true,
+  "python.testing.pytestArgs": ["packages/jidoka-core/tests", "services/api/tests"],
+  "editor.formatOnSave": true, "files.trimTrailingWhitespace": true }

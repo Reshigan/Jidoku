@@ -1,0 +1,17 @@
+[
+ {"object":"TimeAccountType","product":"SuccessFactors","system_binding":"KOM-SF-DEV","tier":"A",
+  "external_code":"ANN_ACC_ZAF",
+  "intent":{"externalCode":"ANN_ACC_ZAF","unit":"DAYS","country":"ZAF"},
+  "depends_on":[],
+  "source":{"workbook":"TO_Workbook_ZAF v2.1","cell_range":"B4:F9","signed_by":"Komatsu HR ZA","date":"2026-08-20"}},
+ {"object":"TimeType","product":"SuccessFactors","system_binding":"KOM-SF-DEV","tier":"A",
+  "external_code":"ANN_LEAVE_ZAF",
+  "intent":{"externalCode":"ANN_LEAVE_ZAF","unit":"DAYS","accrual_frequency":"MONTHLY","timeAccountType":"ANN_ACC_ZAF"},
+  "depends_on":["TimeAccountType:ANN_ACC_ZAF"],
+  "source":{"workbook":"TO_Workbook_ZAF v2.1","cell_range":"B14:F22","signed_by":"Komatsu HR ZA","date":"2026-08-20"}},
+ {"object":"DATA_MODEL_XML","product":"SuccessFactors","system_binding":"KOM-SF-DEV","tier":"C",
+  "external_code":"CSDM_ZAF_NID",
+  "intent":{"externalCode":"CSDM_ZAF_NID","change":"Add ZA national-id format ^[0-9]{13}$"},
+  "depends_on":[],
+  "source":{"workbook":"CSDM Delta Spec v1.0","cell_range":"sec 2.1","signed_by":"Komatsu IT","date":"2026-08-21"}}
+]

@@ -1,0 +1,11 @@
+[project]
+name = "jidoka-insight"
+version = "0.1.0"
+description = "JIDOKA insight services: archaeology, time-travel, blast radius, technical debt"
+requires-python = ">=3.11"
+dependencies = ["jidoka-core"]
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+[tool.setuptools.packages.find]
+where = ["src"]

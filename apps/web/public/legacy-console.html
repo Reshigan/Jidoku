@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>goNXT · JIDOKA Andon Board — Build Checkpoints — Komatsu SuccessFactors</title>
+<style>
+  :root{
+    --navy:#0A1245; --blue:#2B50E2; --info:#EEF1FD; --card:#F5F6FA; --line:#D9DEEA;
+    --body:#1F2937; --mut:#6B7280; --amber-bg:#FDF3E4; --amber:#C2660A;
+    --ok:#0E7A4E; --ok-bg:#E7F5EE; --bad:#B4232A; --bad-bg:#FBEBEC;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Poppins','Segoe UI',Arial,Calibri,sans-serif;color:var(--body);background:#fff;font-size:14px;line-height:1.5}
+  .mono{font-family:Consolas,'SF Mono',Menlo,monospace;letter-spacing:.12em;text-transform:uppercase}
+  header{background:var(--navy);color:#fff;padding:22px 28px;display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between}
+  .wordmark{font-weight:700;font-size:26px}
+  .wordmark .nxt{color:var(--blue)}
+  .tagline{font-size:10px;color:#B9C2E8;margin-top:2px}
+  .chip{display:inline-block;background:var(--blue);color:#fff;border-radius:20px;padding:3px 12px;font-size:10px}
+  .hdr-right{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  select,input[type=text],textarea{font-family:inherit;font-size:13px;border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:#fff;color:var(--body)}
+  select:focus,input:focus,textarea:focus,button:focus{outline:2px solid var(--blue);outline-offset:1px}
+  .inst-sel{background:#141d5c;color:#fff;border-color:#2a3577;font-weight:600}
+  main{max-width:1080px;margin:0 auto;padding:26px 20px 80px}
+  .bar-wrap{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:22px}
+  .bar-track{background:#E3E7F2;border-radius:8px;height:10px;overflow:hidden;margin-top:8px}
+  .bar-fill{background:var(--blue);height:100%;width:0;transition:width .3s}
+  @media (prefers-reduced-motion:reduce){.bar-fill{transition:none}}
+  .stats{display:flex;gap:22px;flex-wrap:wrap;margin-top:12px}
+  .stat b{font-size:20px;color:var(--navy);display:block}
+  .stat span{font-size:10px;color:var(--mut)}
+  .phase{margin-bottom:14px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fff}
+  .phase-hd{width:100%;text-align:left;background:var(--navy);color:#fff;border:0;padding:13px 18px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px;font-family:inherit}
+  .phase-hd .eyebrow{color:#8FA3F0;font-size:10px}
+  .phase-hd h2{font-size:15px;font-weight:600;margin-top:2px}
+  .phase-count{font-size:10px;color:#B9C2E8}
+  .tasks{padding:14px}
+  .task{border:1px solid var(--line);border-radius:12px;background:var(--card);margin-bottom:12px;padding:14px 16px}
+  .task.locked{opacity:.55}
+  .task-top{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:flex-start}
+  .task h3{font-size:14px;color:var(--navy)}
+  .badges{display:flex;gap:6px;flex-wrap:wrap}
+  .badge{font-size:9px;border-radius:12px;padding:2px 9px;background:#fff;border:1px solid var(--line);color:var(--mut)}
+  .badge.oneway{background:var(--amber-bg);color:var(--amber);border-color:#F2D9B8;font-weight:600}
+  .st{font-size:9px;border-radius:12px;padding:3px 10px;font-weight:600}
+  .st-PENDING{background:#fff;border:1px solid var(--line);color:var(--mut)}
+  .st-PREVALIDATED,.st-SNAPSHOT,.st-EXECUTED,.st-POSTVALIDATED{background:var(--info);color:var(--blue);border:1px solid #C9D4F8}
+  .st-APPROVED{background:var(--ok-bg);color:var(--ok);border:1px solid #BFE3D1}
+  .st-ROLLEDBACK{background:var(--bad-bg);color:var(--bad);border:1px solid #F0C4C7}
+  .sect{margin-top:12px;border-top:1px dashed var(--line);padding-top:10px}
+  .sect .lbl{font-size:9px;color:var(--blue);margin-bottom:6px}
+  .chk{display:flex;gap:8px;align-items:flex-start;margin:4px 0;font-size:13px}
+  .chk input{margin-top:3px}
+  .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px}
+  .fld label{display:block;font-size:9px;color:var(--mut);margin-bottom:3px;font-family:Consolas,monospace;letter-spacing:.1em;text-transform:uppercase}
+  .fld input,.fld textarea{width:100%}
+  .btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  button.act{font-family:inherit;font-size:12px;font-weight:600;border-radius:8px;padding:8px 14px;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--navy)}
+  button.act.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+  button.act.approve{background:var(--ok);border-color:var(--ok);color:#fff}
+  button.act.danger{background:#fff;border-color:#F0C4C7;color:var(--bad)}
+  button.act:disabled{opacity:.4;cursor:not-allowed}
+  .callout{background:var(--info);border:1px solid #C9D4F8;border-radius:10px;padding:10px 12px;font-size:12px;margin-top:8px}
+  .callout.warn{background:var(--amber-bg);border-color:#F2D9B8}
+  .callout.warn b{color:var(--amber)}
+  .meta{font-size:11px;color:var(--mut);margin-top:8px}
+  .log{background:var(--navy);color:#DDE3F8;border-radius:12px;padding:16px;font-family:Consolas,monospace;font-size:11px;max-height:260px;overflow:auto;letter-spacing:0}
+  .log div{margin-bottom:4px;border-bottom:1px solid #1b2560;padding-bottom:4px}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 14px}
+  footer{border-top:1px solid var(--line);padding:18px;text-align:center;font-size:9px;color:var(--mut);font-family:Consolas,monospace;letter-spacing:.12em;text-transform:uppercase}
+  .saving{font-size:10px;color:#8FA3F0}
+  .ms{display:flex;justify-content:space-between;gap:10px;align-items:center;border-bottom:1px dashed var(--line);padding:6px 2px;font-size:12px;flex-wrap:wrap}
+  .ms b{color:var(--navy)}
+  .ms .d{font-family:Consolas,monospace;font-size:11px;color:var(--mut)}
+  .ms-ACHIEVED{color:var(--ok);font-weight:600}
+  .ms-OVERDUE{color:var(--bad);font-weight:600}
+  .ms-UPCOMING{color:var(--blue)}
+  h2.secttl{font-size:15px;color:var(--navy);margin:26px 0 8px}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <div class="wordmark">go<span class="nxt">NXT</span></div>
+    <div class="tagline mono">What Comes Next is Built Here</div>
+  </div>
+  <div class="hdr-right">
+    <span class="chip mono">JIDOKA Andon Board — Build Checkpoints</span>
+    <label class="mono" style="font-size:9px;color:#B9C2E8" for="inst">Instance</label>
+    <select id="inst" class="inst-sel" onchange="switchInstance(this.value)">
+      <option value="DEV">DEV</option><option value="TEST">TEST</option><option value="PROD">PROD</option>
+    </select>
+    <span id="saveState" class="saving mono"></span>
+  </div>
+</header>
+<main>
+  <div class="bar-wrap">
+    <div class="mono" style="font-size:10px;color:var(--blue)">00 — Programme position · Komatsu SF EC Greenfield · Build 1 Sep → Go-live 1 Dec 2026</div>
+    <div class="bar-track"><div class="bar-fill" id="barFill"></div></div>
+    <div class="stats">
+      <div class="stat"><b id="stApproved">0</b><span class="mono">Approved</span></div>
+      <div class="stat"><b id="stInflight">0</b><span class="mono">In flight</span></div>
+      <div class="stat"><b id="stRolled">0</b><span class="mono">Rolled back</span></div>
+      <div class="stat"><b id="stOverride">0</b><span class="mono">Seq. overrides</span></div>
+      <div class="stat"><b id="stPending">0</b><span class="mono">Pending</span></div>
+    </div>
+    <div class="callout" style="margin-top:12px">Every task follows <b>Snapshot → Execute → Validate → Approve / Roll back</b>. Reviewer initials must differ from builder initials (segregation of duties). Tasks are locked until all earlier tasks are approved; overrides are permitted but logged as J-SOX exceptions.</div>
+  </div>
+  <div class="bar-wrap">
+    <div class="mono" style="font-size:10px;color:var(--blue)">01 — Milestone rail · Wave 1 baseline (Register v1.0) · status earned from approved checkpoints, never asserted</div>
+    <div id="msRail" style="margin-top:10px"></div>
+  </div>
+  <div id="phases"></div>
+  <h2 class="secttl">Audit log — <span id="logInst" class="mono" style="font-size:11px;color:var(--blue)"></span></h2>
+  <div class="toolbar">
+    <button class="act" onclick="exportJSON()">Export audit log (JSON)</button>
+    <button class="act" onclick="exportCSV()">Export audit log (CSV)</button>
+    <button class="act danger" onclick="resetInstance()">Reset this instance's checkpoints</button>
+  </div>
+  <div class="log" id="logBox"></div>
+</main>
+<footer>goNXT · What Comes Next is Built Here · Build Checkpoint Console · Komatsu SF EC · Client Confidential</footer>
+
+<script>
+// ---------- Task catalogue (mirrors Master Build Runbook sequence) ----------
+const ROLLBACK = {
+  PROV:"Toggle setting back in Provisioning (verify not a one-way door per Framework §02). Screenshot after-state; log reversal.",
+  XML:"Re-upload prior XML version from Git (hash recorded in snapshot). Run Check Tool data-model checks; confirm hidden-field data intact.",
+  PICK:"Re-import the pre-change Picklist Center export. Never delete values — obsolete instead. Re-run rule-trace test on dependent rules.",
+  FO:"Incremental re-import of the before-snapshot export for the affected object. In PROD use effective-dated correction; Full Purge only in DEV/TEST pre-load.",
+  MDF:"Re-import prior object/rule definition export or Instance Sync from last-known-good instance. Re-run rule trace on one test employee.",
+  RBP:"Re-import prior role/group export; re-verify static group membership; re-run SoD report R-08.",
+  EMP:"Non-prod pre-go-live: Full Purge + reload of full 18-portlet snapshot. PROD: corrective incremental imports per portlet against snapshot counts.",
+  TO:"Re-import balance snapshot; re-run targeted accrual recalc; reconcile balances to snapshot.",
+  INT:"Redeploy prior iFlow version in Integration Suite (native versioning) or undeploy to hard-stop. ECC-side reversal is Komatsu-owned — invoke joint procedure.",
+  TPL:"Re-import prior template version (form/req/offer/doc template exported before change). Templates version by copy: never edit a live template — clone to _vN, switch pointer, revert = switch pointer back.",
+  LMS:"Learning has NO Instance Sync and separate admin config: revert = re-key from the before-state config workbook captured in snapshot (export System Config pages + item/curricula exports). Treat every LMS change as manual-revert; small batches only.",
+  ONB:"Re-import prior process variant / document template exports; revert data-collection field config via BCUI change log. In-flight onboardees must be dispositioned (restart or manual completion) — list them in the rollback log.",
+  CMP:"Re-import prior comp plan template XML + eligibility rule export. If worksheets were launched: rollback = delete worksheets BEFORE any manager input; after manager input, worksheets are a one-way door — correct forward only."
+};
+// ---------- Milestone rail (Wave 1 baseline; status EARNED from linked task apjidokals, never asserted) ----------
+const MILESTONES=[
+ {id:"MS-00",t:"Provisioning access (DP-B01)",date:"2026-08-28",links:[]},
+ {id:"MS-01",t:"Build start",date:"2026-09-01",links:[]},
+ {id:"MS-02",t:"Gate 1: data models + picklists",date:"2026-09-11",links:["P0-1","P0-2","P1-1","P1-2","P1-3","P1-4","P1-5","P2-1"]},
+ {id:"MS-03",t:"Foundation + CC replication",date:"2026-09-25",links:["P3-1","P3-2","P3-3","P3-4"]},
+ {id:"MS-04",t:"Gate 2: config complete + Sync to TEST",date:"2026-10-09",links:["P4-1","P4-2","P6-1","P7-1"]},
+ {id:"MS-05",t:"Mock load 1 reconciled",date:"2026-10-23",links:["P8-1","P8-2"]},
+ {id:"MS-07",t:"UAT + control-test exit",date:"2026-11-13",links:["P9-1"]},
+ {id:"MS-08",t:"Dress rehearsal",date:"2026-11-20",links:["P8-3"]},
+ {id:"MS-09",t:"Go/No-Go (Komatsu decision)",date:"2026-11-24",links:[]},
+ {id:"MS-10",t:"Production cutover",date:"2026-11-30",links:["P8-4"]},
+ {id:"MS-11",t:"GO-LIVE + PTP ON",date:"2026-12-01",links:["P9-2"]},
+ {id:"MS-13",t:"Hypercare exit / Wave 1 closure",date:"2027-01-15",links:["P10-1"]}
+];
+function msStatus(ms){
+  const today=new Date().toISOString().slice(0,10);
+  if(ms.links.length&&ms.links.every(id=>{const t=state[current].tasks[id];return t&&t.status==='APPROVED';})) return 'ACHIEVED';
+  if(ms.links.length===0) return today>ms.date?'DUE — external gate':'UPCOMING';
+  return today>ms.date?'OVERDUE':'UPCOMING';
+}
+const CATALOG = [
+ {ph:"P0 — Provisioning", items:[
+  {id:"P0-1",t:"Provisioning switches set (checklist E-P0, 17 items)",layer:"PROV",oneway:false,
+   pre:["Provisioning access confirmed (DP-B01 closed)","Checklist reviewed against latest release notes","Reviewer available for same-day verification"],
+   post:["All 17 screenshots captured & filed E-P0","One-way doors (CE/GA OFF, Person-ID strategy) verified by second person"]},
+  {id:"P0-2",t:"Person ID / User ID strategy locked (DP-B06)",layer:"PROV",oneway:true,
+   pre:["Komatsu approver named in Decision Register","ECC PERNR ranges documented; EC range set above ceiling"],
+   post:["Strategy note signed by Komatsu","Test user created and ID format verified"]}
+ ]},
+ {ph:"P1 — Data model XML", items:[
+  {id:"P1-1",t:"Corporate Data Model (CDM) delta upload",layer:"XML",oneway:false,
+   pre:["SAP best-practice content ACTIVATED and baseline extract captured & filed (week-one critical step)","Current CDM downloaded from Provisioning & committed to Git","Delta reviewed vs Build Standards naming","XSD validation passed offline"],
+   post:["Check Tool data-model checks: zero critical","FO screens render custom fields correctly"]},
+  {id:"P1-2",t:"Country-Specific CDM (ZAF/NAM/BWA/MOZ) upload",layer:"XML",oneway:false,
+   pre:["Current CSCDM downloaded & committed","Country field list signed by data owners"],
+   post:["Legal-entity country fields visible per country","Check Tool zero critical"]},
+  {id:"P1-3",t:"Succession Data Model (SDM) delta upload",layer:"XML",oneway:false,
+   pre:["Current SDM downloaded & committed","HRIS-sync mappings peer-reviewed","No standard fields repurposed"],
+   post:["Job Info / Personal Info render per spec","Check Tool zero critical"]},
+  {id:"P1-4",t:"Country-Specific SDM upload (national ID + address formats)",layer:"XML",oneway:false,
+   pre:["Regex per country validated against sample IDs (R-02 pre-check)","Statutory format sources logged — no consultant interpretation (escalated where unclear)"],
+   post:["National ID entry enforces format per country","Address blocks render per country"]},
+  {id:"P1-5",t:"Propagation model upload",layer:"XML",oneway:false,
+   pre:["Propagation pairs reviewed vs Functional Config Spec"],post:["Job Classification change propagates on test record"]}
+ ]},
+ {ph:"P2 — Picklists", items:[
+  {id:"P2-1",t:"Picklist import (legacy + MDF, incl. cascading, pt translations)",layer:"PICK",oneway:false,
+   pre:["Full pre-change picklist export captured","Values deduplicated; external codes follow Build Standards","Portuguese labels present for MOZ-facing lists"],
+   post:["Cascading parent→child resolves on UI test","No orphan external codes (R-05)"]}
+ ]},
+ {ph:"P3 — Foundation Objects", items:[
+  {id:"P3-1",t:"FO load part 1: Frequency→Geo Zone→Location Group→Location",layer:"FO",oneway:false,
+   pre:["Templates validated offline; effective date 1900-01-01","Row counts recorded per file"],
+   post:["Import job IDs logged; rejects = 0 or dispositioned","Spot-check 5 locations incl. time zones"]},
+  {id:"P3-2",t:"FO load part 2: Legal Entity (externalCode = ECC BUKRS)",layer:"FO",oneway:false,
+   pre:["BUKRS list confirmed in writing by Komatsu ECC team","CSCDM statutory fields populated from Komatsu-supplied register"],
+   post:["Each legal entity opens clean per country","Currency & standard-hours verified"]},
+  {id:"P3-3",t:"Cost Center replication iFlow ECC→EC deployed (DP-B05)",layer:"INT",oneway:false,
+   pre:["Connectivity & certificates proven","ECC quality-client CC extract reconciled to expected count"],
+   post:["EC cost centers = ECC count exactly (R-06)","externalCode format matches iFlow output"]},
+  {id:"P3-4",t:"FO load part 3: BU→Division→Department→Pay structures→Job Class→Event Reasons→Dynamic Roles→Workflows",layer:"FO",oneway:false,
+   pre:["Associations mapped (Dept→Division→BU)","Event reason register signed by Komatsu HR"],
+   post:["Hire wizard completes end-to-end on test record","Workflow routes resolve approvers"]}
+ ]},
+ {ph:"P4/P5 — MDF, rules, workflows", items:[
+  {id:"P4-1",t:"MDF custom objects created",layer:"MDF",oneway:false,
+   pre:["Definitions per Technical Config Spec","Security (RBP-secured) flagged on each object"],post:["Objects render; RBP secured","Check Tool MDF checks clean"]},
+  {id:"P4-2",t:"Business rules built (per-country event derivation ABOVE workflow derivation)",layer:"MDF",oneway:false,
+   pre:["Rule register peer-reviewed","Naming per BR_ standard","Rule order in BCUI documented"],
+   post:["Rule trace on test employees per country: correct event reason & workflow","No rule references obsolete picklist values"]}
+ ]},
+ {ph:"P6 — RBP", items:[
+  {id:"P6-1",t:"Groups → Roles → assignments loaded; SoD verified",layer:"RBP",oneway:false,
+   pre:["Role matrix signed by Komatsu (owner of access decisions)","Integration user scoped API-only"],
+   post:["SoD report R-08 clean: no comp-maintain + comp-approve overlap","Test logins per persona pass"]}
+ ]},
+ {ph:"P7 — Time Off", items:[
+  {id:"P7-1",t:"Holidays→Calendars→Work Schedules→Time Types→Profiles",layer:"TO",oneway:false,
+   pre:["Statutory leave rules per country supplied by Komatsu/legal — not consultant-interpreted","Balance snapshot process rehearsed"],
+   post:["Accrual test: ZA annual, sick 36-month cycle, family responsibility all correct on test employees","MOZ/BWA/NAM calendars verified by local owners"]}
+ ]},
+ {ph:"P8 — Employee data loads", items:[
+  {id:"P8-1",t:"Mock load 1 — full 18-step sequence",layer:"EMP",oneway:false,
+   pre:["FULL 18-portlet restore snapshot captured (hard gate)","Files sorted start-date ascending per user","Managers precede subordinates (hierarchy check R-04)"],
+   post:["In→accepted→rejected reconciled per file, signed","R-01…R-07 data reports clean or dispositioned"]},
+  {id:"P8-2",t:"Time Off opening balances loaded (recalc controlled)",layer:"TO",oneway:false,
+   pre:["Balance file reconciled to legacy sign-off","Recalc switched off for load window"],
+   post:["Targeted recalc run; balances match legacy per country","Sick-cycle start dates carried (EC-06)"]},
+  {id:"P8-3",t:"Mock load 2 / Dress rehearsal (TEST→PROD path timed)",layer:"EMP",oneway:false,
+   pre:["Defects from Mock 1 closed","Cutover timing plan rehearsed with Komatsu"],
+   post:["Load window fits cutover plan","Komatsu data owners sign per country"]},
+  {id:"P8-4",t:"PRODUCTION cutover load",layer:"EMP",oneway:true,
+   pre:["Go/no-go held; fallback (stay on legacy input, DP-B09) confirmed","Restore snapshot of empty-state config exported","All approvers on call"],
+   post:["Reconciliation signed by Komatsu per country","Hypercare log opened per Runbook v2.0"]}
+ ]},
+ {ph:"P9 — ECC integration", items:[
+  {id:"P9-1",t:"Employee replication EC→ECC pilot (10 employees, quality client)",layer:"INT",oneway:false,
+   pre:["Mapping spec signed by Komatsu ECC team","Retro-limit handling agreed (R-09)"],
+   post:["10/10 infotypes correct in ECC QA","Error handling path tested (poison record)"]},
+  {id:"P9-2",t:"PTP delta replication ON in production",layer:"INT",oneway:true,
+   pre:["Komatsu approver signed (one-way door CC-03)","Joint rollback procedure rehearsed"],
+   post:["First delta cycle reconciled EC↔ECC","Monitoring & alerting live"]}
+ ]},
+ {ph:"P10 — Validation & evidence", items:[
+  {id:"P10-1",t:"Check Tool zero-critical gate + R-01…R-10 report pack filed",layer:"MDF",oneway:false,
+   pre:["All prior tasks approved (no open overrides)","Report definitions match 09_validation_reports spec"],
+   post:["Evidence pack filed for J-SOX (run IDs, hashes, sign-offs)","Steering informed; UAT/go-live gate minuted"]}
+ ]},
+ // ================= WAVE 2+ — FULL SUITE (parallel phases; each locked only on Wave-1 completion + own-phase order) =================
+ {ph:"M1 — Recruiting (RCM)", par:true, items:[
+  {id:"M1-1",t:"Recruiting scope, licences & applicant-flow design signed (DP-M01)",layer:"PROV",oneway:false,
+   pre:["Komatsu licence entitlement confirmed in writing (Komatsu owns purchases)","Applicant statuses & POPIA retention rules signed by Komatsu HR/legal"],
+   post:["Design doc filed; Decision Register entry closed"]},
+  {id:"M1-2",t:"Job Requisition / Application / Offer XML templates uploaded",layer:"TPL",oneway:false,
+   pre:["Templates cloned from delivered baseline; Git-committed before-state","Field mapping to EC Job Classification & Position data reviewed"],
+   post:["Req→application→offer cycle completes on test req","Check Tool recruiting checks clean"]},
+  {id:"M1-3",t:"Route maps, applicant statuses, career site & agency config",layer:"MDF",oneway:false,
+   pre:["Status set per country agreed; career-site branding assets from Komatsu"],
+   post:["End-to-end test: post → apply → interview → offer","Recruiter/approver RBP verified"]},
+  {id:"M1-4",t:"RCM→EC hire integration (Manage Pending Hires) verified",layer:"INT",oneway:false,
+   pre:["Field mapping req/offer→New Hire wizard signed","Duplicate check (R-07) wired into hire step"],
+   post:["Test candidate lands in EC with correct FO references","Event reason HIR-NEW derived correctly"]}
+ ]},
+ {ph:"M2 — Onboarding (ONB)", par:true, items:[
+  {id:"M2-1",t:"Onboarding process variants per country + document templates",layer:"ONB",oneway:false,
+   pre:["Country document packs (contracts, statutory forms) supplied & signed by Komatsu legal — never consultant-drafted","Process variant matrix agreed (internal vs external hires)"],
+   post:["Variant fires per country on test hire","E-signature flow completes; documents filed correctly"]},
+  {id:"M2-2",t:"Data-collection steps mapped to EC portlets (no duplicate capture)",layer:"ONB",oneway:false,
+   pre:["Field-level map ONB→EC reviewed (national ID, bank, address formats reuse CSDM regex)","Bank-detail capture routed through C-PAY-01 dual apjidokal"],
+   post:["Onboardee data lands in EC portlets without re-keying","POPIA notices presented & logged"]},
+  {id:"M2-3",t:"RCM→ONB→EC end-to-end thread test",layer:"INT",oneway:false,
+   pre:["M1-4 approved","Test personas per country prepared"],
+   post:["Offer-accept → onboarding → Day-1 active EC record, all four countries","Audit trail complete for J-SOX walkthrough"]}
+ ]},
+ {ph:"M3 — Performance & Goals (PMGM)", par:true, items:[
+  {id:"M3-1",t:"Goal plan template (XML) + cascade/alignment settings",layer:"TPL",oneway:false,
+   pre:["Komatsu performance policy signed (rating scale, cycle dates)","Template cloned & Git-committed"],
+   post:["Goal plan opens for test population; cascade works","Field permissions per role verified"]},
+  {id:"M3-2",t:"Performance form template, route map, rating scales",layer:"TPL",oneway:false,
+   pre:["Route map (self→manager→calibration→signature) signed","pt_PT labels for MOZ population"],
+   post:["Full form cycle on test users incl. signature stage","Reporting fields flow to Story reports"]},
+  {id:"M3-3",t:"Calibration sessions + 360 (if licensed) configured",layer:"MDF",oneway:false,
+   pre:["DP-M03: 360 licence confirmed by Komatsu","Calibration facilitator roles agreed"],
+   post:["Calibration session executes bin-drag on test data","RBP: calibration data restricted correctly"]},
+  {id:"M3-4",t:"LAUNCH forms to live population",layer:"CMP",oneway:true,
+   pre:["Komatsu approver initials (one-way: mass launch is disruptive to recall)","Population filter validated on report first"],
+   post:["Launch count = expected count exactly","Stragglers/errors dispositioned same day"]}
+ ]},
+ {ph:"M4 — Compensation & Variable Pay", par:true, items:[
+  {id:"M4-1",t:"Comp plan template, eligibility rules, guidelines, budgets",layer:"CMP",oneway:false,
+   pre:["Comp policy, merit matrix & budgets supplied by Komatsu (owner) — GONXT configures, never sets values","Currency handling per country incl. NAD distinct from ZAR (EC-21)"],
+   post:["Worksheet calculates correctly for edge personas (mid-year hire, LOA, transfer)","Budget rollup reconciles to Komatsu file"]},
+  {id:"M4-2",t:"Variable pay: bonus plans, business goals, employee history",layer:"CMP",oneway:false,
+   pre:["Bonus plan rules signed; proration bases agreed (EC-05 future hires, EC-11 transfers)","Employee history import reconciled"],
+   post:["Bonus calc matches Komatsu parallel spreadsheet on sample of 25","Rounding & currency verified per country"]},
+  {id:"M4-3",t:"LAUNCH worksheets to planners",layer:"CMP",oneway:true,
+   pre:["One-way door: post-manager-input rollback impossible — Komatsu approver initials","SoD verified: comp-maintain ≠ comp-approve (C-RBP-01)"],
+   post:["Worksheet count & hierarchy correct","Publish-to-EC path tested to pay component (not yet published)"]}
+ ]},
+ {ph:"M5 — Succession & Development (CDP)", par:true, items:[
+  {id:"M5-1",t:"Succession org chart, nomination method, talent pools, 9-box",layer:"TPL",oneway:false,
+   pre:["Nomination method (role-person vs position) decided — DP-M05, hard to reverse later","Talent fields (risk of loss, impact) RBP-restricted"],
+   post:["Nominations & 9-box render on test population","Sensitive talent data invisible to non-HR roles"]},
+  {id:"M5-2",t:"Career worksheet & development plan templates",layer:"TPL",oneway:false,
+   pre:["Development plan policy signed","Mentoring in scope? DP-M06"],
+   post:["Dev plan links to learning activities","Cycle tested end-to-end"]}
+ ]},
+ {ph:"M6 — Learning (LMS)", par:true, items:[
+  {id:"M6-1",t:"LMS system config baseline (NO Instance Sync — config workbook is the source of truth)",layer:"LMS",oneway:false,
+   pre:["Config workbook approved by Komatsu; every setting keyed manually per environment","Admin roles/domain structure per country designed"],
+   post:["Config workbook = system state verified page-by-page (two-person)","User connector EC→LMS scheduled & reconciled"]},
+  {id:"M6-2",t:"Items, curricula, assignment profiles (compliance training incl. mining/OHS)",layer:"LMS",oneway:false,
+   pre:["Statutory/compliance curricula list supplied by Komatsu SHEQ — not consultant-interpreted","Assignment profile logic peer-reviewed"],
+   post:["Auto-assignment fires correctly on test hires per country/site","Completion & expiry reporting proven (J-SOX training control evidence)"]},
+  {id:"M6-3",t:"LMS notifications, catalogues, libraries + pt_PT localisation",layer:"LMS",oneway:false,
+   pre:["Notification matrix signed","Portuguese labels loaded"],
+   post:["End-user test per persona incl. no-email workforce path (EC-14)"]}
+ ]},
+ {ph:"M7 — Time Tracking", par:true, items:[
+  {id:"M7-1",t:"Time Tracking scope & device strategy (DP-M07: clock terminals ECC/3rd-party vs SF TT)",layer:"PROV",oneway:false,
+   pre:["Komatsu decision on clocking landscape recorded (mine-site terminals!)","Overlap with Time Off profiles mapped"],
+   post:["Decision Register closed; architecture updated"]},
+  {id:"M7-2",t:"Time recording profiles, valuation rules, overtime per country",layer:"MDF",oneway:false,
+   pre:["Overtime/shift statutory parameters supplied & signed per country (BCEA ZA etc.) — configured verbatim","Payroll interface impact assessed with ECC team"],
+   post:["Valuation test: standard, overtime, Sunday, public-holiday scenarios per country","Time sheet→payroll extract reconciles"]}
+ ]},
+ {ph:"M8 — Benefits", par:true, items:[
+  {id:"M8-1",t:"Benefits objects: medical aid, retirement funds, allowances per country",layer:"MDF",oneway:false,
+   pre:["Benefit catalogue + provider files supplied by Komatsu","Eligibility rules signed; POPIA handling for dependants"],
+   post:["Enrolment cycle test per country","Provider interface/report format accepted by Komatsu"]}
+ ]},
+ {ph:"M9 — Full-suite integration, reporting & gate", par:true, items:[
+  {id:"M9-1",t:"Cross-module thread test (hire→onboard→goals→perf→comp→learn)",layer:"INT",oneway:false,
+   pre:["All module phases M1–M8 approved or formally descoped","Thread scripts per country prepared"],
+   post:["Four country threads pass end-to-end","Defects triaged; evidence filed"]},
+  {id:"M9-2",t:"Suite-wide RBP re-baseline + SoD report R-08 v2",layer:"RBP",oneway:false,
+   pre:["Module roles merged into role matrix; Komatsu re-signs access model"],
+   post:["R-08 v2 clean across all modules","Quarterly access-review scope extended"]},
+  {id:"M9-3",t:"Full-suite Check Tool + evidence pack; wave go-live gate",layer:"MDF",oneway:false,
+   pre:["Check Tool run per module","J-SOX evidence pack updated"],
+   post:["Steering minuted wave go/no-go","Hypercare scope extended per Runbook"]}
+ ]}
+];
+
+// ---------- State ----------
+const KEY='gonxt_cp_state_v2';
+let mem={}; let usingFallback=false; let current='DEV';
+function blank(){const s={};["DEV","TEST","PROD"].forEach(i=>{s[i]={tasks:{},log:[]};});return s;}
+let state=blank();
+
+async function load(){
+  try{const r=await window.storage.get(KEY); if(r&&r.value){state=JSON.parse(r.value);} }
+  catch(e){ usingFallback=true; }
+  render();
+}
+let saveTimer=null;
+function save(){
+  document.getElementById('saveState').textContent='saving…';
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(async ()=>{
+    try{ if(!usingFallback){await window.storage.set(KEY,JSON.stringify(state));}
+      document.getElementById('saveState').textContent=usingFallback?'in-memory only':'saved';
+    }catch(e){ usingFallback=true; document.getElementById('saveState').textContent='in-memory only'; }
+  },400);
+}
+function T(id){ if(!state[current].tasks[id]){state[current].tasks[id]={status:'PENDING',pre:{},post:{},snap:{},exec:{},dec:{},override:null};} return state[current].tasks[id]; }
+function log(taskId,action,who,detail){
+  state[current].log.push({ts:new Date().toISOString(),instance:current,task:taskId,action,who:who||'',detail:detail||''});
+}
+function flat(){ return CATALOG.flatMap(p=>p.items); }
+function isApproved(it){ const t=state[current].tasks[it.id]; return t&&(t.status==='APPROVED'||!!t.override); }
+function wave1Done(){ return CATALOG.filter(p=>!p.par).flatMap(p=>p.items).every(isApproved); }
+function priorApproved(idx){
+  const all=flat(); const item=all[idx];
+  const phase=CATALOG.find(p=>p.items.some(x=>x.id===item.id));
+  if(phase && phase.par){
+    // Parallel module phase: requires Wave 1 complete + earlier tasks within the SAME phase approved
+    const myIdx=phase.items.findIndex(x=>x.id===item.id);
+    return wave1Done() && phase.items.slice(0,myIdx).every(isApproved);
+  }
+  return all.slice(0,idx).every(isApproved);
+}
+
+// ---------- Actions ----------
+function togglePre(id,i,ck){ const t=T(id); t.pre[i]=ck; save(); render(); }
+function togglePost(id,i,ck){ const t=T(id); t.post[i]=ck; save(); render(); }
+function markPrevalidated(id,item){ const t=T(id); if(item.pre.some((_,i)=>!t.pre[i])){alert('Complete every pre-flight check first.');return;}
+  t.status='PREVALIDATED'; log(id,'PRE-VALIDATED','', 'Pre-flight checklist complete'); save(); render(); }
+function captureSnap(id){ const t=T(id);
+  const ref=val(id,'snapRef'), cnt=val(id,'snapCount'), ct=val(id,'snapCT'), who=val(id,'snapWho');
+  if(!ref||!who){alert('Snapshot reference and initials are required.');return;}
+  t.snap={ref,count:cnt,checkTool:ct,who,ts:new Date().toISOString()};
+  t.status='SNAPSHOT'; log(id,'SNAPSHOT CAPTURED',who,`ref=${ref}; rows=${cnt||'n/a'}; CheckTool=${ct||'n/a'}`); save(); render(); }
+function markExecuted(id,item){ const t=T(id); const who=val(id,'execWho');
+  if(!who){alert('Builder initials required.');return;}
+  if(item.oneway){ const appr=val(id,'onewayAppr'); if(!appr){alert('ONE-WAY DOOR: Komatsu approver initials required before execution (CC-03).');return;} t.exec.onewayApprover=appr; log(id,'ONE-WAY APJIDOKAL',appr,'Komatsu approver recorded pre-execution'); }
+  t.exec.who=who; t.exec.ts=new Date().toISOString(); t.status='EXECUTED';
+  log(id,'EXECUTED',who,''); save(); render(); }
+function markPostvalidated(id,item){ const t=T(id); if(item.post.some((_,i)=>!t.post[i])){alert('Complete every post-validation check first.');return;}
+  t.status='POSTVALIDATED'; log(id,'POST-VALIDATED','', 'After-checks complete'); save(); render(); }
+function approve(id){ const t=T(id); const who=val(id,'apprWho');
+  if(!who){alert('Reviewer initials required.');return;}
+  if(t.exec.who && who.trim().toLowerCase()===t.exec.who.trim().toLowerCase()){alert('Segregation of duties: reviewer must differ from builder.');return;}
+  t.dec={who,ts:new Date().toISOString(),outcome:'APPROVED'}; t.status='APPROVED';
+  log(id,'APPROVED',who,''); save(); render(); }
+function rollback(id,item){ const t=T(id); const reason=val(id,'rbReason'), who=val(id,'apprWho')||val(id,'execWho');
+  if(!reason){alert('A rollback reason is required for the audit log.');return;}
+  t.dec={who,ts:new Date().toISOString(),outcome:'ROLLEDBACK',reason}; t.status='ROLLEDBACK';
+  log(id,'ROLLED BACK',who,reason+' | Procedure: '+ROLLBACK[item.layer]); save(); render();
+  alert('Rolled back. Layer procedure:\n\n'+ROLLBACK[item.layer]); }
+function retry(id){ const t=T(id); t.status='PENDING'; t.pre={}; t.post={}; t.exec={}; t.dec={};
+  log(id,'RESET FOR RETRY','', 'Prior rollback retained in log'); save(); render(); }
+function overrideSeq(id){ const reason=prompt('Sequence override — reason (logged as J-SOX exception):'); if(!reason)return;
+  const who=prompt('Your initials:'); if(!who)return;
+  T(id).override={reason,who,ts:new Date().toISOString()}; log(id,'SEQUENCE OVERRIDE',who,reason); save(); render(); }
+function switchInstance(v){ current=v; render(); }
+function resetInstance(){ if(!confirm('Reset ALL checkpoints for '+current+'? The audit log is kept.'))return;
+  const keep=state[current].log; state[current]={tasks:{},log:keep}; log('*','INSTANCE RESET','', current+' checkpoints cleared'); save(); render(); }
+function val(id,f){ const el=document.getElementById(id+'_'+f); return el?el.value.trim():''; }
+
+// ---------- Export ----------
+function download(name,text,mime){ const b=new Blob([text],{type:mime}); const a=document.createElement('a');
+  a.href=URL.createObjectURL(b); a.download=name; a.click(); URL.revokeObjectURL(a.href); }
+function exportJSON(){ download('gonxt_audit_'+current+'_'+Date.now()+'.json', JSON.stringify(state[current],null,2),'application/json'); }
+function exportCSV(){ const rows=[['timestamp','instance','task','action','who','detail']];
+  state[current].log.forEach(l=>rows.push([l.ts,l.instance,l.task,l.action,l.who,(l.detail||'').replace(/"/g,"'")]));
+  const csv=rows.map(r=>r.map(c=>'"'+String(c)+'"').join(',')).join('\n');
+  download('gonxt_audit_'+current+'.csv',csv,'text/csv'); }
+
+// ---------- Render ----------
+function render(){
+  document.getElementById('logInst').textContent=current;
+  const wrap=document.getElementById('phases'); wrap.innerHTML='';
+  const all=flat(); let idxGlobal=0;
+  let approved=0,rolled=0,inflight=0,pending=0,overrides=0;
+  CATALOG.forEach((ph,pi)=>{
+    const sect=document.createElement('div'); sect.className='phase';
+    const done=ph.items.filter(it=>T(it.id).status==='APPROVED').length;
+    sect.innerHTML=`<button class="phase-hd" onclick="this.nextElementSibling.hidden=!this.nextElementSibling.hidden">
+      <span><span class="eyebrow mono">${ph.par?'MODULE — parallel after Wave 1':String(pi).padStart(2,'0')+' — Phase gate'}</span><h2>${ph.ph}</h2></span>
+      <span class="phase-count mono">${done}/${ph.items.length} approved ▾</span></button>`;
+    const body=document.createElement('div'); body.className='tasks';
+    ph.items.forEach(item=>{
+      const gIdx=all.findIndex(x=>x.id===item.id);
+      const t=T(item.id); const s=t.status;
+      if(s==='APPROVED')approved++; else if(s==='ROLLEDBACK')rolled++; else if(s==='PENDING')pending++; else inflight++;
+      if(t.override)overrides++;
+      const locked = s==='PENDING' && gIdx>0 && !priorApproved(gIdx) && !t.override;
+      const card=document.createElement('div'); card.className='task'+(locked?' locked':'');
+      let html=`<div class="task-top"><div><h3>${item.id} · ${item.t}</h3>
+        <div class="badges" style="margin-top:5px">
+          <span class="badge mono">Layer ${item.layer}</span>
+          ${item.oneway?'<span class="badge oneway mono">ONE-WAY DOOR</span>':''}
+          ${t.override?'<span class="badge oneway mono">SEQ OVERRIDE</span>':''}
+        </div></div>
+        <span class="st st-${s} mono">${s.replace('PREVALIDATED','PRE-VALIDATED').replace('POSTVALIDATED','POST-VALIDATED').replace('ROLLEDBACK','ROLLED BACK')}</span></div>`;
+      if(locked){ html+=`<div class="callout warn" style="margin-top:10px"><b>Locked by sequence.</b> Earlier tasks are not yet approved. Wave-1 (EC core P0–P10) gates all module phases; inside a module phase, tasks run in order. Module phases run in parallel with each other.
+        <div class="btnrow"><button class="act" onclick="overrideSeq('${item.id}')">Override sequence (logged exception)</button></div></div>`;
+        card.innerHTML=html; body.appendChild(card); return; }
+      // Pre-flight
+      html+=`<div class="sect"><div class="lbl mono">1 · Pre-flight</div>`;
+      item.pre.forEach((p,i)=>{ html+=`<label class="chk"><input type="checkbox" ${t.pre[i]?'checked':''} ${s!=='PENDING'?'disabled':''} onchange="togglePre('${item.id}',${i},this.checked)"><span>${p}</span></label>`; });
+      if(s==='PENDING') html+=`<div class="btnrow"><button class="act primary" onclick='markPrevalidated("${item.id}",CAT("${item.id}"))'>Confirm pre-flight complete</button></div>`;
+      html+=`</div>`;
+      // Snapshot
+      if(s==='PREVALIDATED'||s==='SNAPSHOT'||s==='EXECUTED'||s==='POSTVALIDATED'||s==='APPROVED'||s==='ROLLEDBACK'){
+        html+=`<div class="sect"><div class="lbl mono">2 · Before snapshot</div>`;
+        if(t.snap.ref){ html+=`<div class="meta">Captured ${t.snap.ts} by ${t.snap.who} — ref <b>${t.snap.ref}</b>${t.snap.count?(' · rows '+t.snap.count):''}${t.snap.checkTool?(' · Check Tool '+t.snap.checkTool):''}</div>`; }
+        else { html+=`<div class="grid2">
+          <div class="fld"><label for="${item.id}_snapRef">Export / job / Git ref *</label><input type="text" id="${item.id}_snapRef" placeholder="e.g. EXP-2026-0912-03 or git a1b2c3"></div>
+          <div class="fld"><label for="${item.id}_snapCount">Row count</label><input type="text" id="${item.id}_snapCount" placeholder="e.g. 1,482"></div>
+          <div class="fld"><label for="${item.id}_snapCT">Check Tool run ID</label><input type="text" id="${item.id}_snapCT"></div>
+          <div class="fld"><label for="${item.id}_snapWho">Initials *</label><input type="text" id="${item.id}_snapWho"></div></div>
+          <div class="btnrow"><button class="act primary" onclick="captureSnap('${item.id}')">Capture snapshot</button></div>`; }
+        html+=`</div>`;
+      }
+      // Execute
+      if(s==='SNAPSHOT'||s==='EXECUTED'||s==='POSTVALIDATED'||s==='APPROVED'||s==='ROLLEDBACK'){
+        html+=`<div class="sect"><div class="lbl mono">3 · Execute</div>`;
+        if(t.exec.who){ html+=`<div class="meta">Executed ${t.exec.ts} by ${t.exec.who}${t.exec.onewayApprover?(' · Komatsu one-way apjidokal: '+t.exec.onewayApprover):''}</div>`; }
+        else { html+=`<div class="grid2"><div class="fld"><label for="${item.id}_execWho">Builder initials *</label><input type="text" id="${item.id}_execWho"></div>`;
+          if(item.oneway) html+=`<div class="fld"><label for="${item.id}_onewayAppr">Komatsu approver initials * (one-way door)</label><input type="text" id="${item.id}_onewayAppr"></div>`;
+          html+=`</div><div class="btnrow"><button class="act primary" onclick='markExecuted("${item.id}",CAT("${item.id}"))'>Mark executed in tenant</button></div>`; }
+        html+=`</div>`;
+      }
+      // Post-validation
+      if(s==='EXECUTED'||s==='POSTVALIDATED'||s==='APPROVED'||s==='ROLLEDBACK'){
+        html+=`<div class="sect"><div class="lbl mono">4 · Post-validation</div>`;
+        item.post.forEach((p,i)=>{ html+=`<label class="chk"><input type="checkbox" ${t.post[i]?'checked':''} ${s!=='EXECUTED'?'disabled':''} onchange="togglePost('${item.id}',${i},this.checked)"><span>${p}</span></label>`; });
+        if(s==='EXECUTED') html+=`<div class="btnrow"><button class="act primary" onclick='markPostvalidated("${item.id}",CAT("${item.id}"))'>Confirm post-validation</button></div>`;
+        html+=`</div>`;
+      }
+      // Decision
+      if(s==='POSTVALIDATED'||s==='EXECUTED'){
+        html+=`<div class="sect"><div class="lbl mono">5 · Decision</div><div class="grid2">
+          <div class="fld"><label for="${item.id}_apprWho">Reviewer initials (≠ builder)</label><input type="text" id="${item.id}_apprWho"></div>
+          <div class="fld"><label for="${item.id}_rbReason">Rollback reason (if rolling back)</label><input type="text" id="${item.id}_rbReason"></div></div>
+          <div class="btnrow">
+            ${s==='POSTVALIDATED'?`<button class="act approve" onclick="approve('${item.id}')">Approve checkpoint</button>`:''}
+            <button class="act danger" onclick='rollback("${item.id}",CAT("${item.id}"))'>Roll back</button></div>
+          <div class="callout"><b>Layer rollback procedure:</b> ${ROLLBACK[item.layer]}</div></div>`;
+      }
+      if(s==='APPROVED'){ html+=`<div class="meta">Approved ${t.dec.ts} by ${t.dec.who}</div>`; }
+      if(s==='ROLLEDBACK'){ html+=`<div class="callout warn"><b>Rolled back</b> ${t.dec.ts} — ${t.dec.reason||''}</div>
+        <div class="btnrow"><button class="act" onclick="retry('${item.id}')">Reset task for retry</button></div>`; }
+      card.innerHTML=html; body.appendChild(card);
+    });
+    sect.appendChild(body); wrap.appendChild(sect);
+  });
+  const total=all.length;
+  document.getElementById('barFill').style.width=(approved/total*100)+'%';
+  stApproved.textContent=approved; stRolled.textContent=rolled; stInflight.textContent=inflight;
+  stPending.textContent=pending; stOverride.textContent=overrides;
+  const rail=document.getElementById('msRail');
+  const today=new Date();
+  rail.innerHTML=MILESTONES.map(ms=>{
+    const st=msStatus(ms);
+    const days=Math.ceil((new Date(ms.date)-today)/86400000);
+    const dd=st==='ACHIEVED'?'achieved':(days>=0?('T-'+days+'d'):(Math.abs(days)+'d over'));
+    return `<div class="ms"><span><b>${ms.id}</b> · ${ms.t}</span><span class="d">${ms.date} · <span class="ms-${st.split(' ')[0]}">${st}</span> · ${dd}</span></div>`;
+  }).join('');
+  const lb=document.getElementById('logBox');
+  lb.innerHTML=state[current].log.slice().reverse().map(l=>`<div>${l.ts} · ${l.task} · <b>${l.action}</b>${l.who?(' · '+l.who):''}${l.detail?(' — '+l.detail):''}</div>`).join('')||'<div>No entries yet for '+current+'. Every action taken here is written to this log.</div>';
+}
+function CAT(id){ return flat().find(x=>x.id===id); }
+window.CAT=CAT;
+load();
+</script>
+</body>
+</html>

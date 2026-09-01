@@ -1,0 +1,58 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -e packages/jidoka-core -e packages/jidoka-adapters -e packages/jidoka-os -e packages/jidoka-compiler -e services/api -e services/agent pytest httpx
+      # Every package that has tests, including adapters and agent. A suite the pipeline does not
+      # run is a suite that is already broken and nobody has noticed yet.
+      - run: python -m pytest packages/jidoka-core/tests packages/jidoka-os/tests packages/jidoka-adapters/tests packages/jidoka-compiler/tests services/api/tests services/agent/tests -q
+
+  web:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: apps/web } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: npm, cache-dependency-path: apps/web/package-lock.json }
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run build
+
+  edge:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: deploy/cloudflare } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: npm install --no-audit --no-fund
+      - run: npx tsc --noEmit
+      - run: node src/routing.check.mjs
+      # Validates wrangler.toml itself — a bad binding or a missing env var fails here, on a PR,
+      # instead of half-publishing the production hostname on merge.
+      - run: mkdir -p ../../apps/web/dist && npx wrangler deploy --env production --dry-run --outdir /tmp/wr
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: npm, cache-dependency-path: apps/web/package-lock.json }
+      # The same install as the python job: services/api depends on jidoka-compiler, so a shorter
+      # list here fails at pip, not at a test, and reads like an unrelated breakage.
+      - run: pip install -e packages/jidoka-core -e packages/jidoka-adapters -e packages/jidoka-os -e packages/jidoka-compiler -e services/api uvicorn
+      - run: npm ci
+        working-directory: apps/web
+      - run: npx playwright install --with-deps chromium
+        working-directory: apps/web
+      # The console's whole claim is that every gate is reachable and every refusal is legible.
+      # That is only true if a browser walks it, so the browser walk is a merge gate, not a nicety.
+      - run: npx playwright test
+        working-directory: apps/web

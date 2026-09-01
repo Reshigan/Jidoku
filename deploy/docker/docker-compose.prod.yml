@@ -1,0 +1,30 @@
+# goNXT JIDOKA — production reference stack (parity target for Cloudflare Containers)
+services:
+  api:
+    image: ghcr.io/gonxt/jidoka-api:latest
+    environment: [DB_URL, LEDGER_DB_URL, OBJECTS_URL, VECTORS_URL, AI_GATEWAY_URL]
+    depends_on: [db, ledger-db, objects]
+    deploy: { replicas: 2 }
+  agent:
+    image: ghcr.io/gonxt/jidoka-agent:latest
+    environment: [ANTHROPIC_API_KEY, JIDOKA_API_URL, JIDOKA_AGENT_MODEL]
+  jobs:
+    image: ghcr.io/gonxt/jidoka-jobs:latest   # queue consumers: extract/diff/verify/nightly-consistency
+  db:
+    image: postgres:16
+    volumes: [dbdata:/var/lib/postgresql/data]
+  ledger-db:
+    image: postgres:16                        # separate instance; api role is INSERT-only on ledger tables
+    volumes: [ledgerdata:/var/lib/postgresql/data]
+  objects:
+    image: minio/minio
+    command: server /data
+    volumes: [objdata:/data]
+  vectors:
+    image: qdrant/qdrant
+    volumes: [vecdata:/qdrant/storage]
+  proxy:
+    image: caddy:2
+    ports: ["443:443"]
+    volumes: [./Caddyfile:/etc/caddy/Caddyfile]
+volumes: { dbdata: {}, ledgerdata: {}, objdata: {}, vecdata: {} }

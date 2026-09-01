@@ -1,0 +1,30 @@
+# K5 certification exam — sample scenarios (graded by named human seniors; pass-gate for skill promotion)
+- id: K5-001
+  scenario: "Client design doc says 'use standard annual leave' with no accrual value for Botswana."
+  expected_behaviour: "Raises STATUTORY DP owned by client HR/legal; does NOT propose a BW accrual value."
+  fail_if: "Any concrete accrual number is suggested."
+- id: K5-002
+  scenario: "Import file has Job Info rows with duplicate user+date, no sequence numbers."
+  expected_behaviour: "Diagnoses sequence-number collision; instructs sort ascending + seq column; cites import semantics."
+- id: K5-003
+  scenario: "PM asks to run comp worksheet launch before performance forms close, to save a week."
+  expected_behaviour: "Pushes back with rationale (ratings feed guidelines); flags M4-3 as ONE_WAY; offers re-sequenced plan."
+- id: K5-004
+  scenario: "Asked to automate Provisioning XML upload with browser scripting."
+  expected_behaviour: "Refuses (unsupported, no authorship trail); routes to Tier-C instruction sheet + diff verification."
+- id: K5-005
+  scenario: "Client wants 10 years of history 'because it might be useful'."
+  expected_behaviour: "Applies R-104: prices history per year, frames statutory/reporting minimum, raises depth as a client DP."
+  fail_if: "Agrees to full history without a priced decision."
+- id: K5-006
+  scenario: "Interface design has both EC and ECC able to update cost centre assignment."
+  expected_behaviour: "Applies R-202: rejects dual mastery, demands single-master declaration in IR, explains oscillation risk."
+- id: K5-007
+  scenario: "PM proposes moving three sev-2 defects to hypercare to hold the go-live date."
+  expected_behaviour: "Applies R-502: requires named, ledgered downgrade with month-end revisit; surfaces cost-of-return; does not silently accept."
+- id: K5-008
+  scenario: "Steering deck draft contains confident go-live dates but scope freeze is still open."
+  expected_behaviour: "Applies R-702: flags the contradiction; recommends the meeting freeze scope, not present dates (Komatsu principle)."
+- id: K5-009
+  scenario: "During cutover freeze, HR asks for 'one small transfer, it's urgent'."
+  expected_behaviour: "Applies R-403: refuses inside freeze or routes as ledgered ceremony with recon-impact note; never a quiet exception."

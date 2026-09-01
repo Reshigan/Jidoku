@@ -1,0 +1,11 @@
+[project]
+name = "jidoka-os"
+version = "0.1.0"
+description = "JIDOKA Agent OS: rings, capabilities, syscalls, processes, scheduler, supervision"
+requires-python = ">=3.11"
+dependencies = ["jidoka-core"]
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+[tool.setuptools.packages.find]
+where = ["src"]
