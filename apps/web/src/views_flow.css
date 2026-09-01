@@ -1,0 +1,91 @@
+/* Decisions + Landscape — the two screens' own layout. app.css is shared by four parallel
+   rebuilds, so anything only these views need lives here. Palette and type are BRAND.md's;
+   nothing new is invented. */
+
+/* A screen head that also carries the screen's constants, so the strip under the title is
+   information rather than the 900px of nothing the audit found between a label and a pill. */
+.fl-strip { margin-bottom: 8px; }
+
+/* ---- decisions ---- */
+
+/* The queue is a column of stations, not a grid of cards: a blocked decision is a blocked
+   station on the line, and it reads down the way the line does. */
+.fl-dp { display: grid; gap: 8px; }
+
+/* The consequence line. An open decision hard-blocks planning (invariant 2) — that has to be
+   visible on the card, not implied by the panel it sits in. */
+.fl-blocks {
+  display: flex; gap: 8px; align-items: baseline;
+  font-size: 12px; color: #E3A008;
+}
+.fl-blocks .fl-blocks-k {
+  font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: #5C6675; flex: none;
+}
+
+/* What this decision still needs, one requirement per row with its own lamp. ONE_WAY needs two
+   distinct approvers, STATUTORY needs an evidence reference — different gates, shown as such. */
+.fl-needs { display: grid; gap: 3px; }
+.fl-need { display: flex; gap: 7px; align-items: baseline; font-size: 12px; color: #9AA5B5; }
+.fl-need::before {
+  content: ""; width: 7px; height: 7px; border-radius: 50%; flex: none;
+  background: #28313E; transform: translateY(-1px);
+}
+.fl-need.is-met { color: #7C8798; }
+.fl-need.is-met::before { background: #3FB950; }
+.fl-need.is-open::before { background: #E3A008; }
+
+.fl-q { font-family: "Archivo Narrow", sans-serif; font-size: 17px; line-height: 1.25; color: #E6EAF0; }
+
+/* ---- landscape ---- */
+
+/* Systems as a dense ledger of rows: id, what it runs, where it lands, and whether it can be
+   written to at all. The write column is the invariant made visible. */
+.fl-sys { display: grid; gap: 1px; background: #28313E; }
+.fl-sys-row {
+  display: grid; grid-template-columns: minmax(120px, 1.1fr) minmax(90px, 1fr) minmax(90px, 1fr) auto;
+  gap: 10px; align-items: baseline; background: #151A22; padding: 8px 10px;
+  border-left: 3px solid #28313E;
+}
+.fl-sys-row.is-locked { border-left-color: #E5484D; }
+.fl-sys-row.is-writable { border-left-color: #3FB950; }
+.fl-sys-id { font-family: "JetBrains Mono", monospace; font-size: 12.5px; color: #E6EAF0; }
+.fl-sys-v { font-size: 12px; color: #9AA5B5; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.fl-sys-v.mono { font-family: "JetBrains Mono", monospace; font-size: 11px; color: #7C8798; }
+.fl-sys-why { grid-column: 1 / -1; font-size: 11.5px; color: #7C8798; margin-top: 2px; }
+
+@media (max-width: 720px) {
+  .fl-sys-row { grid-template-columns: 1fr auto; }
+}
+
+/* The edge label sat on top of the destination node at narrow widths. Give the edge room of its own
+   and put the label above the line rather than across it. */
+.fl-routes .flow-edge { min-width: 108px; }
+.fl-routes .flow-edge-label { top: -14px; background: #0E1116; padding: 0 6px; }
+
+/* --- boards with nothing to share the row with ---
+   .page > .board.fill pins content to the top so a short panel is never stretched into a banner
+   beside a tall one. When the board is one panel (Decisions with an empty queue) or two panels that
+   are the whole screen (Landscape), there is no such pairing to protect and the rule leaves the
+   board ending mid-glass. The attribute carries the specificity, so this holds whatever order the
+   bundler emits the two stylesheets in. */
+/* Scoped to .page > so it outweighs app.css's `.page > .board.fill { align-content: start }`
+   on specificity — equal specificity would leave this at the mercy of stylesheet order, and
+   the bundler emits the view sheets first. */
+.page > .board.fill[data-fill="stretch"] { align-content: stretch; }
+
+/* An empty decision queue is the good state. It reads as one by saying what would fill it — the
+   gates of invariant 5, which a card would otherwise be carrying. Rules, not cards: there is no
+   decision here to draw. */
+.fl-quiet { display: flex; flex-direction: column; gap: 14px; }
+.fl-quiet-rule { display: flex; flex-direction: column; gap: 8px; }
+.fl-quiet-list {
+  margin: 0; padding: 0; list-style: none;
+  display: flex; flex-direction: column; gap: 1px;
+  max-width: 68ch;
+}
+.fl-quiet-list li {
+  background: #151A22;
+  border-left: 2px solid #28313E;
+  padding: 8px 10px;
+  font-size: 12.5px; color: #9AA5B5; line-height: 1.5;
+}

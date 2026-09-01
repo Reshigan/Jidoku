@@ -1,0 +1,113 @@
+/* Line + Work — only what these two screens need beyond the shared primitives.
+   Lives here rather than in app.css because app.css is shared and three views are being rebuilt
+   at once; a merge conflict in the stylesheet would take every screen down, not one. */
+
+/* --- Line: lanes as parallel runs ---
+   One grid, so the name column, the meter and the lamp line up down the panel. The middle column
+   is the meter and it is the one that stretches: that is what fills the space the old
+   "label ... pill" row left empty, and it fills it with the number the operator wanted anyway. */
+.lanes { display: grid; gap: 1px; background: var(--line, #28313E); }
+.lane-row {
+  display: grid;
+  grid-template-columns: 96px minmax(120px, 1fr) minmax(0, 2fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 9px 10px;
+  background: var(--floor2, #151A22);
+  border-left: 2px solid transparent;
+}
+.lane-row[data-lamp="run"]  { border-left-color: #3FB950; }
+.lane-row[data-lamp="call"] { border-left-color: #E3A008; }
+.lane-row[data-lamp="stop"] { border-left-color: #E5484D; }
+.lane-name {
+  font-family: "Archivo Narrow", sans-serif; font-size: 14px; font-weight: 600;
+  letter-spacing: .02em; text-transform: uppercase;
+}
+/* Long step wording truncates rather than reflowing the row — BRAND's long-text rule, and the
+   full sentence stays reachable in the title. */
+.lane-at { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (max-width: 900px) {
+  .lane-row { grid-template-columns: 1fr auto; row-gap: 6px; }
+  .lane-at { grid-column: 1 / -1; white-space: normal; }
+}
+
+/* --- Work: the station card ---
+   Title, tier and stage pill on one baseline, then the run. The pill was previously pushed to the
+   far right of the card by a space-between row, which is the same dead-middle fault at card scale. */
+.station-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.station-head .pill { margin-left: auto; }
+
+/* The per-station track is a compact restatement of the shared Track: same shape, smaller, because
+   five gates have to fit inside a card that already carries a title and a button row. */
+.station-track { margin: 8px 0 2px; }
+.station-track .track-stop { padding: 16px 6px 2px; }
+.station-track .track-label { font-size: 10px; letter-spacing: .06em; }
+.station-track .track-idx { display: none; }
+.station-track .track-dot { width: 9px; height: 9px; top: -5.5px; left: 6px; }
+
+/* A locked station must look shut, not merely faint: every gate is drawn blocked and the labels
+   go to the dim ink, so "you cannot start this yet" reads before the sentence saying so. */
+.station[data-locked="true"] .station-track .track-label { color: #5C6675; }
+
+/* --- Line: the single-lane panel ---
+   A grid of one row stretched to the panel height reads as a banner, not a row. So the rows keep
+   their natural height (auto) and the opened station list takes the last track and the slack. */
+.lanes[data-sparse="true"] { grid-template-rows: auto 1fr; }
+.lane-open {
+  background: var(--floor2, #151A22);
+  padding: 12px 12px 10px;
+  display: flex; flex-direction: column; gap: 8px;
+  min-height: 0;
+}
+.lane-stations { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.lane-stations li {
+  display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: baseline;
+  padding: 7px 10px 7px 8px;
+  background: var(--floor3, #1C222C);
+  border-left: 2px solid transparent;
+}
+/* Same lamp vocabulary as the station cards on the Work board — one station, one colour, both screens. */
+.lane-stations li[data-lamp="run"]  { border-left-color: #3FB950; }
+.lane-stations li[data-lamp="call"] { border-left-color: #E3A008; }
+.lane-stations li[data-lamp="stop"] { border-left-color: #E5484D; }
+.lane-stations li[data-lamp="blue"] { border-left-color: #2B50E2; }
+.lane-station-what { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lane-station-at { font-size: 11.5px; white-space: nowrap; }
+
+/* --- Work: a board with one phase panel ---
+   .page > .board.fill pins its content to the top, which is right when several panels share the
+   row: a short panel must not stretch into a banner. With one panel there is no row to share and
+   the rule leaves the panel ending mid-glass above 400px of nothing. data-fill opts that single
+   panel back into claiming the height — the attribute carries the specificity, so this holds
+   whatever order the bundler emits the two stylesheets in. */
+/* Scoped to .page > so it outweighs app.css's `.page > .board.fill { align-content: start }`
+   on specificity — equal specificity would leave this at the mercy of stylesheet order, and
+   the bundler emits the view sheets first. */
+.page > .board.fill[data-fill="stretch"] { align-content: stretch; }
+
+/* The run in order, taking the slack under the station cards. Rules, not cards: this is a list of
+   what comes next, and drawing it as cards would restate the cards above it in the same shape. */
+.lane-order {
+  border-top: 1px solid var(--line, #28313E);
+  padding: 10px 10px 12px;
+  display: flex; flex-direction: column; gap: 7px;
+}
+.lane-order-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.lane-order-list li {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: baseline;
+  padding: 6px 10px 6px 8px;
+  background: var(--floor3, #1C222C);
+  border-left: 2px solid transparent;
+}
+/* Same lamp vocabulary as the cards above — one station, one colour, wherever it is drawn. */
+.lane-order-list li[data-lamp="run"]  { border-left-color: #3FB950; }
+.lane-order-list li[data-lamp="call"] { border-left-color: #E3A008; }
+.lane-order-list li[data-lamp="stop"] { border-left-color: #E5484D; }
+.lane-order-list li[data-lamp="blue"] { border-left-color: #2B50E2; }
+/* The station the floor reaches next is the one thing an operator scans this list for. */
+.lane-order-list li[data-next] { background: var(--floor2, #151A22); }
+.lane-order-list li[data-next] .lane-order-at { color: #E6EAF0; }
+.lane-order-idx { font-family: "JetBrains Mono", monospace; font-size: 11px; color: #5C6675; }
+.lane-order-what { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lane-order-at { font-size: 11.5px; white-space: nowrap; }

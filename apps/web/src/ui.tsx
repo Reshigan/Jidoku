@@ -67,7 +67,7 @@ function Mark() {
   );
 }
 
-export const VIEWS = ["Line", "Work", "Configure", "Decisions", "Intent", "Landscape", "Ledger", "Evidence", "Milestones"] as const;
+export const VIEWS = ["Line", "Work", "Configure", "Decisions", "Intent", "Landscape", "Memory", "Ledger", "Evidence", "Milestones"] as const;
 export type ViewName = (typeof VIEWS)[number];
 
 /**
@@ -134,15 +134,21 @@ export function Pill({ lamp, children }: { lamp?: string; children: ReactNode })
 
 export function Section(props: {
   title: string; note?: string; lamp?: string; status?: string; children: ReactNode;
+  /** Extra panel classes — `grow` to take the screen's slack, `scrolls` to keep the header fixed
+      while the body scrolls. A long ledger must not push its own title off the top of the glass. */
+  className?: string;
+  /** Controls that belong to the panel, set against its header rather than floating above it. */
+  actions?: ReactNode;
 }) {
   return (
-    <section className="sec">
+    <section className={props.className ? `sec ${props.className}` : "sec"}>
       <div className="sec-head">
         <h2>{props.title}</h2>
         {props.note && <span className="mut">{props.note}</span>}
         {props.lamp && props.status && <Pill lamp={props.lamp}>{props.status}</Pill>}
+        {props.actions && <span className="sec-actions">{props.actions}</span>}
       </div>
-      {props.children}
+      <div className="body">{props.children}</div>
     </section>
   );
 }

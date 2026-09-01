@@ -1,0 +1,24 @@
+/* Layout for Configure only. app.css is shared and is being edited by other rebuilds in parallel,
+   so anything here exists purely to make this screen legible at full height. */
+
+/* One target per row: identity, connector, arming, controls — read left to right in the order the
+   platform actually requires them. v1 put the system id at the far left and the Arm button at the
+   far right of a 1100px card with nothing between; that gap is where an operator loses track of
+   whether a live write is even reachable. */
+.cfg-targets { display: flex; flex-direction: column; gap: 1px; background: var(--line); }
+.cfg-target {
+  background: var(--floor-2);
+  display: grid;
+  grid-template-columns: minmax(140px, 0.8fr) minmax(220px, 1.2fr) minmax(240px, 1.4fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 14px;
+  border-left: 3px solid var(--line);
+}
+.cfg-target[data-armed="true"] { border-left-color: var(--stop); }
+.cfg-target[data-armed="false"] { border-left-color: var(--run); }
+.cfg-sys { font-family: var(--display); font-size: 16px; letter-spacing: .02em; }
+.cfg-say { font-size: 12.5px; color: var(--ink-mut); }
+.cfg-gate { display: flex; flex-direction: column; gap: 3px; }
+.cfg-gate .eyebrow { font-size: 10px; }
+.cfg-actions { display: flex; gap: 6px; align-items: center; justify-content: flex-end; }

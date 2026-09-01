@@ -18,6 +18,10 @@ for (const r of ["approver", "auditor"]) await page.getByRole("button", { name: 
 await page.getByRole("button", { name: "Enter the console" }).click();
 await page.waitForTimeout(800);
 
+// Pick the fullest engagement, else every screen shows an empty state and reviews nothing.
+const EID = process.env.SHOT_EID;
+if (EID) { await page.selectOption("header select", EID); await page.waitForTimeout(800); }
+
 for (const [i, v] of ["Line", "Work", "Configure", "Decisions", "Intent", "Landscape", "Ledger", "Evidence", "Milestones"].entries()) {
   await page.getByRole("tab", { name: new RegExp(`^${v}`) }).click();
   await page.waitForTimeout(500);

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { VIEWS } from "../src/ui";
 
 /* These walk the console the way a person does: sign in, then reach every capability the
    platform exposes through the interface alone. No request is made behind the UI's back. */
@@ -43,15 +44,17 @@ test("the console loads without a console error and shows the sign-in", async ({
 
 test("every view is reachable, and by number key", async ({ page }) => {
   await signIn(page, "nav.tester");
-  const names = ["Line", "Work", "Configure", "Decisions", "Intent", "Landscape", "Ledger", "Evidence", "Milestones"];
-  for (const n of names) {
+  // Driven off VIEWS itself: a second copy of the list here is what silently goes stale the
+  // next time a view is inserted in the middle.
+  for (const n of VIEWS) {
     await view(page, n).click();
     await expect(page.locator(".page")).not.toBeEmpty();
   }
-  await page.keyboard.press("1");
-  await expect(view(page, "Line")).toHaveAttribute("aria-selected", "true");
-  await page.keyboard.press("9");
-  await expect(view(page, "Milestones")).toHaveAttribute("aria-selected", "true");
+  for (const [i, n] of VIEWS.entries()) {
+    if (i >= 10) break;                       // only the first ten have a number key
+    await page.keyboard.press(i === 9 ? "0" : String(i + 1));
+    await expect(view(page, n)).toHaveAttribute("aria-selected", "true");
+  }
 });
 
 test("journey: open an engagement, register the landscape, see the write lock", async ({ page }) => {

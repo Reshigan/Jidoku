@@ -3,15 +3,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ApiError, platform, setSession, getSession,
-  type DecisionPoint, type EngagementDetail, type EngagementSummary, type Evidence,
-  type ArmedTarget, type Connector, type ExecutionResult, type StepTransport,
-  type IRRecordView, type Landscape, type LedgerEntry, type Plan,
+  type Claim, type DecisionPoint, type EngagementDetail, type EngagementSummary, type Evidence,
+  type ArmedTarget, type Connector, type ExecutionResult, type MemoryView as Memory,
+  type StepTransport, type IRRecordView, type Landscape, type LedgerEntry, type Plan,
 } from "./api";
 import { LINE_STOP, LINE_RESUME, buildLanes, lineStop, milestones, type Lane, type Station } from "./derive";
 import { AndonRail, Empty, Field, Modal, Skeleton, VIEWS, type ViewName } from "./ui";
 import {
   ConfigureView, DecisionsView, EvidenceView, IntentView, LandscapeView, LedgerView, LineView,
-  MilestonesView, WorkView,
+  MemoryView, MilestonesView, WorkView,
 } from "./views";
 import "./app.css";
 
@@ -28,11 +28,12 @@ type Data = {
   schemaVersion: string;
   landscape: Landscape | null;
   evidence: Evidence | null;
+  memory: Memory | null;
 };
 
 const EMPTY: Data = {
   detail: null, plan: null, planBlock: null, entries: null, chainBroken: null, dps: null,
-  irGaps: {}, records: null, schemaVersion: "", landscape: null, evidence: null,
+  irGaps: {}, records: null, schemaVersion: "", landscape: null, evidence: null, memory: null,
 };
 
 export default function App() {
@@ -45,7 +46,7 @@ export default function App() {
   const [busy, setBusy] = useState<string | null>(null);
   const [view, setView] = useState<ViewName>("Line");
   const [refusal, setRefusal] = useState<{ title: string; text: string } | null>(null);
-  const [dialog, setDialog] = useState<null | { kind: string; station?: Station; dp?: DecisionPoint }>(null);
+  const [dialog, setDialog] = useState<null | { kind: string; station?: Station; dp?: DecisionPoint; claim?: Claim }>(null);
   // Execution state is per-session, not per-engagement history: the ledger is the record of what
   // happened, this is only what this operator has run since opening the screen.
   const [armed, setArmed] = useState<ArmedTarget[]>([]);
@@ -53,6 +54,8 @@ export default function App() {
   const [results, setResults] = useState<Record<string, ExecutionResult>>({});
   const [transports, setTransports] = useState<Record<string, StepTransport>>({});
   const [snapshots, setSnapshots] = useState<Record<string, number>>({});
+  // A time query is this operator's question, not engagement state — it is cleared with the view.
+  const [asOf, setAsOf] = useState<{ as_of: string; claims: Claim[] } | null>(null);
 
   const signedIn = !!who && roles.length > 0;
   const can = (c: string) =>
@@ -91,13 +94,14 @@ export default function App() {
         return null;
       }
     };
-    const [detail, ledger, dps, ir, landscape, schema] = await Promise.all([
+    const [detail, ledger, dps, ir, landscape, schema, memory] = await Promise.all([
       soft(() => platform.detail(id)),
       soft(() => platform.ledger(id)),
       soft(() => platform.decisions(id)),
       soft(() => platform.ir(id)),
       soft(() => platform.landscape(id)),
       soft(() => platform.schema()),
+      soft(() => platform.memory(id)),
     ]);
 
     // The plan is allowed to be blocked; that is information, not an error.
@@ -129,7 +133,7 @@ export default function App() {
       irGaps: dps?.ir_gaps ?? ir?.open_decision_points ?? {},
       records: ir?.records ?? null,
       schemaVersion: ir?.schema ?? schema?.version ?? "",
-      landscape, evidence: null,
+      landscape, evidence: null, memory,
     });
   }, []);
 
@@ -148,12 +152,14 @@ export default function App() {
   }, []);
   useEffect(() => { if (signedIn && eid) load(eid); }, [signedIn, eid, load]);
 
-  // Keyboard 1–8 select a view, as the brand asks.
+  // Number keys select a view, as the brand asks. There are ten views and only nine digits that
+  // read as ordinals, so 0 is the tenth — the same place it sits on the row.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      const n = Number(e.key);
-      if (n >= 1 && n <= VIEWS.length) setView(VIEWS[n - 1]);
+      if (!/^[0-9]$/.test(e.key)) return;
+      const n = e.key === "0" ? 10 : Number(e.key);
+      if (n <= VIEWS.length) setView(VIEWS[n - 1]);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -194,6 +200,7 @@ export default function App() {
     setResults({});
     setSnapshots({});
     setTransports({});
+    setAsOf(null);
   }, [eid]);
 
   /* Someone else's arming is the case that matters: this operator never sees it happen, so the
@@ -215,6 +222,19 @@ export default function App() {
     if (!eid) return;
     setBusy(s.step.key);
     await guard("Approval refused", () => platform.approve(eid, { task: s.step.key }));
+    setBusy(null);
+    await after();
+  };
+
+  /* Re-checking is a hash comparison the server makes against the evidence it is handed. The
+     console does not hold that evidence — the claim's source does — so it sends the source
+     reference and lets the server decide. A claim whose ground has moved comes back stale, which
+     is the gate reporting, not a failure. */
+  const recheck = async (claim: Claim) => {
+    if (!eid) return;
+    setBusy(claim.id);
+    await guard("That belief could not be re-checked",
+      () => platform.recheckClaim(eid, claim.id, claim.source_ref));
     setBusy(null);
     await after();
   };
@@ -374,6 +394,25 @@ export default function App() {
                 <LandscapeView landscape={d.landscape} writable={writable}
                                onRegister={() => setDialog({ kind: "registerSystem" })} />
               )}
+              {view === "Memory" && (
+                <MemoryView memory={d.memory} asOf={asOf} busy={busy}
+                            writable={writable}
+                            canPromote={can("approve") && !offline && !stopped}
+                            onForm={() => setDialog({ kind: "formClaim" })}
+                            onClearAsOf={() => setAsOf(null)}
+                            onAsOf={async (when) => {
+                              const out = await guard("That moment could not be read back",
+                                () => platform.memoryAsOf(eid, when));
+                              if (out) setAsOf(out);
+                            }}
+                            onAct={(claim, action) => {
+                              // Re-check is deterministic and needs nothing from a person, so it
+                              // runs. Correction and promotion both need typed input, and
+                              // promotion needs a named approver, so both open a dialog.
+                              if (action === "recheck") void recheck(claim);
+                              else setDialog({ kind: action === "correct" ? "correctClaim" : "promoteClaim", claim });
+                            }} />
+              )}
               {view === "Ledger" && <LedgerView entries={d.entries} chainBroken={d.chainBroken} />}
               {view === "Evidence" && (
                 <EvidenceLoader eid={eid} evidence={d.evidence} guard={guard}
@@ -402,7 +441,7 @@ export default function App() {
       )}
 
       {dialog && (
-        <Dialogs kind={dialog.kind} eid={eid ?? ""} dp={dialog.dp} halt={halt} who={who}
+        <Dialogs kind={dialog.kind} eid={eid ?? ""} dp={dialog.dp} claim={dialog.claim} halt={halt} who={who}
                  onClose={() => setDialog(null)} guard={guard}
                  onDone={async (created) => {
                    setDialog(null);
@@ -488,7 +527,7 @@ function EvidenceLoader(props: {
 
 /* ---------------- every write the platform accepts ---------------- */
 function Dialogs(props: {
-  kind: string; eid: string; who: string; dp?: DecisionPoint; halt?: LedgerEntry | null;
+  kind: string; eid: string; who: string; dp?: DecisionPoint; claim?: Claim; halt?: LedgerEntry | null;
   onClose: () => void; onDone: (created?: string) => void;
   guard: <T,>(t: string, fn: () => Promise<T>) => Promise<T | null>;
 }) {
@@ -714,6 +753,98 @@ function Dialogs(props: {
         </Modal>
       );
     }
+    /* ---- memory (ADR-0010) ---- */
+
+    case "formClaim":
+      return (
+        <Modal title="Record a belief" onClose={props.onClose}>
+          <p className="mut">
+            A belief arrives unchecked and stays that way until something re-checks it against its
+            source. It is stored with what it was read from, so it can go stale on its own rather
+            than quietly drifting.
+          </p>
+          <Field label="Subject" value={a} onChange={setA} required placeholder="payroll.cycle"
+                 hint="What this belief is about." />
+          <Field label="What we believe" value={b} onChange={setB} required textarea
+                 placeholder="Payroll runs monthly on the 25th." />
+          <Field label="Read from" value={c} onChange={setC} required placeholder="KOM-HR-WB-04"
+                 hint="The document or system this came out of. A belief with no source is refused." />
+          <Field label="The source as it read" value={dd} onChange={setDd} required textarea
+                 placeholder="Paste the passage this was formed from."
+                 hint="Kept as a hash, never as content. Staleness is a comparison against this." />
+          <div className="row" style={{ marginTop: 14 }}>
+            <button className="btn primary"
+                    disabled={!a.trim() || !b.trim() || !c.trim() || !dd.trim()}
+                    onClick={run("The belief was refused",
+                      () => platform.formClaim(eid, {
+                        subject: a, text: b, source_ref: c, evidence: dd,
+                      }))}>
+              Record it
+            </button>
+            <button className="btn ghost" onClick={props.onClose}>Cancel</button>
+          </div>
+        </Modal>
+      );
+
+    case "correctClaim": {
+      const cl = props.claim!;
+      return (
+        <Modal title="Correct a belief" onClose={props.onClose}>
+          <p className="mut">
+            The old belief is not erased. Its interval closes here and the new one takes over, so
+            reading back an earlier day still shows what was believed then.
+          </p>
+          <div className="verbatim calm">{cl.text}</div>
+          <Field label="What we believe now" value={a} onChange={setA} required textarea />
+          <Field label="Read from" value={b} onChange={setB} required placeholder={cl.source_ref}
+                 hint="The source for the corrected belief." />
+          <Field label="The source as it reads" value={c} onChange={setC} required textarea
+                 hint="What the new belief was formed from." />
+          <div className="row" style={{ marginTop: 14 }}>
+            <button className="btn primary" disabled={!a.trim() || !b.trim() || !c.trim()}
+                    onClick={run("The correction was refused",
+                      () => platform.correctClaim(eid, cl.id, { text: a, source_ref: b, evidence: c }))}>
+              Replace it
+            </button>
+            <button className="btn ghost" onClick={props.onClose}>Cancel</button>
+          </div>
+        </Modal>
+      );
+    }
+
+    case "promoteClaim": {
+      const cl = props.claim!;
+      // The approver is typed rather than assumed. The server refuses a self-approval anyway, but a
+      // console that quietly filled in the signed-in name would be inviting one.
+      const self = a.trim() && a.trim() === cl.actor;
+      return (
+        <Modal title="Promote into shared knowledge" onClose={props.onClose}>
+          <p className="mut">
+            This belief leaves the engagement. Once it is shared knowledge every later engagement
+            reads it and nothing recalls it, which is why it needs a named person who is not the one
+            who formed it.
+          </p>
+          <div className="verbatim calm">{cl.text}</div>
+          <ul className="mem-quiet-list" style={{ marginTop: 12 }}>
+            <li>Formed by <span className="mono">{cl.actor}</span> — that name may not approve this.</li>
+            <li>Shapes may cross; client values never. The gate refuses a claim carrying one rather
+                than stripping it out, and it says which value stopped it.</li>
+          </ul>
+          <Field label="Approved by" value={a} onChange={setA} required
+                 placeholder="A named person, not the builder"
+                 hint={self ? "That is the person who formed it. The gate will refuse this." : undefined} />
+          <div className="row" style={{ marginTop: 14 }}>
+            <button className="btn primary" disabled={!a.trim() || !!self}
+                    onClick={run("The promotion was refused",
+                      () => platform.promoteClaim(eid, cl.id, a.trim()))}>
+              Approve the crossing
+            </button>
+            <button className="btn ghost" onClick={props.onClose}>Cancel</button>
+          </div>
+        </Modal>
+      );
+    }
+
     default:
       return null;
   }

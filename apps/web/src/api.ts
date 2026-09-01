@@ -233,6 +233,28 @@ export type Evidence = {
   manifest_sha256: string;
 };
 
+/** A belief with its receipt attached — ADR-0010. Never a bare sentence: `source_ref` is what it
+    was grounded in, and `status` is a hash comparison against that source, not an opinion. */
+export type Claim = {
+  id: string;
+  subject: string;
+  text: string;
+  status: "TRUSTED" | "STALE" | "UNVERIFIED";
+  source_ref: string;
+  confidence: number;
+  actor: string;
+  valid_from: string;
+  valid_to: string | null;
+  supersedes: string | null;
+};
+
+export type MemoryView = {
+  project: Claim[];
+  system: Claim[];
+  counts: Record<Claim["status"], number>;
+  stale: Claim[];
+};
+
 /** The signed-in operator. Empty roles means the API is running with auth optional. */
 export type Session = { subject: string; roles: string[] };
 
@@ -382,6 +404,39 @@ const api2 = {
   transports: (eid: string) =>
     call<{ transports: StepTransport[] }>(`/engagements/${eid}/execution/transport`),
   schema: () => call<{ version: string; schema: Record<string, unknown> }>(`/schema/ir`),
+
+  /* ---- memory (ADR-0010) — every route is scoped by engagement, deliberately. There is no
+     call here that reads across engagements because the API publishes none. ---- */
+  memory: (eid: string) => call<MemoryView>(`/engagements/${eid}/memory`),
+  /** What was believed at a moment. Validity intervals make this a read, not a reconstruction. */
+  memoryAsOf: (eid: string, when: string) =>
+    call<{ as_of: string; claims: Claim[] }>(
+      `/engagements/${eid}/memory/as-of?when=${encodeURIComponent(when)}`,
+    ),
+  /** A claim without a source is refused by the domain, so the console always sends one. */
+  formClaim: (eid: string, body: { subject: string; text: string; source_ref: string; evidence: unknown }) =>
+    call<Claim>(`/engagements/${eid}/memory`, { method: "POST", body: JSON.stringify(body) }),
+  /** Deterministic: a hash comparison, no model call. Evidence omitted means the source is gone,
+      which the server reads as stale — that is a real answer, not a missing argument. */
+  recheckClaim: (eid: string, claimId: string, evidence: unknown) =>
+    call<{ status: Claim["status"]; claim: Claim }>(
+      `/engagements/${eid}/memory/${claimId}/recheck`,
+      { method: "POST", body: JSON.stringify({ evidence }) },
+    ),
+  /** Supersede, never overwrite: the prior belief keeps its place with a closed interval. */
+  correctClaim: (eid: string, claimId: string,
+                 body: { text: string; source_ref: string; evidence: unknown }) =>
+    call<{ superseded: string; claim: Claim }>(
+      `/engagements/${eid}/memory/${claimId}/correct`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+  /** The scrubber gate — the only flow that crosses a tenant boundary. The server refuses a
+      self-approval or a client value with a 422; the console quotes that refusal, never invents it. */
+  promoteClaim: (eid: string, claimId: string, approver: string) =>
+    call<{ promoted: Claim }>(`/engagements/${eid}/memory/${claimId}/promote`, {
+      method: "POST",
+      body: JSON.stringify({ approver }),
+    }),
 };
 
 /** One client surface. Typed by construction, so a missing endpoint is a compile error. */

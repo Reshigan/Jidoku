@@ -122,7 +122,7 @@ Three provenance chains, no fourth category of statement permitted.
 
 ## 08 — IMPLEMENTATION MAPPING
 
-Graph + belief ledger → new `jidoka-knowledge` package (claims/supersession over the core ledger primitive).
+Graph + belief ledger → `jidoka-knowledge` (BUILT: claims/supersession over the core ledger primitive; two-tier project/system stores, deterministic staleness, scrubber gate — see docs/adr/0010).
 Consistency propagation → artefact registry + F1.2 rendered-views + nightly drift service (E6 extension).
 Design engine → agent service: constraint extractor, option/twin runner, rationale validator, red-team pass
 (second agent instance, grammar-armed). Authority gradient → already structural (tool-set exclusion, DP engine,

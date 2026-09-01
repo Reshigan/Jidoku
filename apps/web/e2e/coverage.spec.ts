@@ -122,6 +122,39 @@ test("the console reaches every endpoint the API publishes", async ({ page, requ
   await page.getByRole("button", { name: /^(Advance transport|Move to )/ }).first().click();
   await dismissScrim(page);
 
+  // Memory: form a belief, re-check it, correct it, and offer it for promotion (ADR-0010).
+  await page.getByRole("tab", { name: /^Memory/ }).click();
+  await page.getByRole("button", { name: "Record a belief" }).click();
+  await page.getByLabel("Subject").fill("cost-centres");
+  await page.getByLabel(/^What we believe required/).fill("Cost centres are mastered upstream and replicated read-only");
+  await page.getByLabel("Read from").fill("design:CO-01");
+  await page.getByLabel("The source as it read").fill("mastered upstream, replicated read-only");
+  await page.getByRole("button", { name: "Record it" }).click();
+  await dismissScrim(page);
+
+  await page.getByRole("button", { name: "Re-check it" }).first().click();
+  await dismissScrim(page);
+
+  // As-of: what was believed on a given day, answered from the validity intervals.
+  await page.getByLabel("As of date").fill(new Date().toISOString().slice(0, 10));
+  await page.getByRole("button", { name: "Read it back" }).click();
+  await dismissScrim(page);
+  const back = page.getByRole("button", { name: "Back to now" });
+  if (await back.count()) await back.click();
+
+  await page.getByRole("button", { name: "Correct it" }).first().click();
+  await page.getByLabel("What we believe now").fill("Cost centres are mastered upstream; local edits are rejected");
+  await page.getByLabel("Read from").fill("design:CO-01");
+  await page.getByLabel("The source as it reads").fill("mastered upstream, local edits rejected");
+  await page.getByRole("button", { name: "Replace it" }).click();
+  await dismissScrim(page);
+
+  // Promotion crosses the tenant boundary. Refused or accepted, the path is what is asserted here.
+  await page.getByRole("button", { name: /^Promote to shared knowledge/ }).first().click();
+  await page.getByLabel("Approved by").fill("q.approver");
+  await page.getByRole("button", { name: "Approve the crossing" }).click();
+  await dismissScrim(page);
+
   // Phase advance, ledger, evidence
   await page.getByRole("tab", { name: /^Line/ }).click();
   await page.getByRole("button", { name: /^Advance to/ }).first().click();
@@ -147,6 +180,8 @@ function templated(p: string): string {
   return p
     .replace(/^\/engagements\/[^/]+\/decisions\/[^/]+\/resolve$/, "/engagements/{eid}/decisions/{dp_id}/resolve")
     .replace(/^\/engagements\/[^/]+\/execution\/arm\/[^/]+$/, "/engagements/{eid}/execution/arm/{system_id}")
+    .replace(/^\/engagements\/[^/]+\/memory\/[^/]+\/(recheck|correct|promote)$/,
+             (_m, act) => `/engagements/{eid}/memory/{claim_id}/${act}`)
     .replace(/^\/engagements\/[^/]+(\/.*)?$/, (_m, rest) => `/engagements/{eid}${rest ?? ""}`)
     .replace(/^\/engagements\/\{eid\}$/, "/engagements/{eid}");
 }

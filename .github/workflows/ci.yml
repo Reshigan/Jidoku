@@ -7,10 +7,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: pip install -e packages/jidoka-core -e packages/jidoka-adapters -e packages/jidoka-os -e packages/jidoka-compiler -e services/api -e services/agent pytest httpx
+      - run: pip install -e packages/jidoka-core -e packages/jidoka-adapters -e packages/jidoka-os -e packages/jidoka-insight -e packages/jidoka-knowledge -e packages/jidoka-compiler -e services/api -e services/agent pytest httpx
       # Every package that has tests, including adapters and agent. A suite the pipeline does not
       # run is a suite that is already broken and nobody has noticed yet.
-      - run: python -m pytest packages/jidoka-core/tests packages/jidoka-os/tests packages/jidoka-adapters/tests packages/jidoka-compiler/tests services/api/tests services/agent/tests -q
+      - run: python -m pytest packages/jidoka-core/tests packages/jidoka-os/tests packages/jidoka-adapters/tests packages/jidoka-insight/tests packages/jidoka-knowledge/tests packages/jidoka-compiler/tests services/api/tests services/agent/tests -q
 
   web:
     runs-on: ubuntu-latest
@@ -47,7 +47,7 @@ jobs:
         with: { node-version: "22", cache: npm, cache-dependency-path: apps/web/package-lock.json }
       # The same install as the python job: services/api depends on jidoka-compiler, so a shorter
       # list here fails at pip, not at a test, and reads like an unrelated breakage.
-      - run: pip install -e packages/jidoka-core -e packages/jidoka-adapters -e packages/jidoka-os -e packages/jidoka-compiler -e services/api uvicorn
+      - run: pip install -e packages/jidoka-core -e packages/jidoka-adapters -e packages/jidoka-os -e packages/jidoka-insight -e packages/jidoka-knowledge -e packages/jidoka-compiler -e services/api uvicorn
       - run: npm ci
         working-directory: apps/web
       - run: npx playwright install --with-deps chromium

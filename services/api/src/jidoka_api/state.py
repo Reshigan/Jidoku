@@ -17,6 +17,7 @@ from jidoka_core.ledger import Ledger
 from jidoka_core.lifecycle import PHASES
 from jidoka_core.registry import SystemRecord, SystemRegistry
 from jidoka_core.repository import Repository, open_repository
+from jidoka_knowledge import Claim, ProjectStore, SystemStore
 
 
 class PersistentLedger(Ledger):
@@ -44,6 +45,8 @@ class Engagement:
     ledger: Ledger = None
     registry: SystemRegistry = field(default_factory=SystemRegistry)
     decisions: DecisionEngine = None
+    # Project memory: this engagement's beliefs, on the same ledger as its config (ADR-0010).
+    memory: ProjectStore = None
     repo: Repository | None = None
     # system_id -> connector. Never persisted: a connector holds live credentials, and a restart
     # must unbind every one of them rather than reload a write path nobody re-authorised.
@@ -54,6 +57,19 @@ class Engagement:
             self.ledger = Ledger()
         if self.decisions is None:
             self.decisions = DecisionEngine(self.ledger)
+        if self.memory is None:
+            self.memory = ProjectStore(self.engagement_id, ledger=self.ledger)
+
+    def bind_ledger(self, ledger) -> None:
+        """Swap in the persistent ledger, carrying every component that writes to it.
+
+        __post_init__ builds a throwaway in-memory Ledger; the store replaces it once the repo is
+        known. Rebinding component-by-component at each call site is how one of them gets missed,
+        so every writer is re-pointed here, once.
+        """
+        self.ledger = ledger
+        self.decisions = DecisionEngine(ledger)
+        self.memory = ProjectStore(self.engagement_id, ledger=ledger)
 
     # --- persistence mirrors: called after a mutation that core has already accepted -------------
     def persist_header(self) -> None:
@@ -72,6 +88,11 @@ class Engagement:
     def persist_dps(self) -> None:
         if self.repo:
             self.repo.save_dps(self.engagement_id, [_dp_to_dict(d) for d in self.decisions.dps.values()])
+
+    def persist_memory(self) -> None:
+        if self.repo:
+            # all(), not current(): a closed interval is history, and history is the point.
+            self.repo.save_claims(self.engagement_id, [c.to_dict() for c in self.memory.all()])
 
 
 def _ir_to_dict(r: IRRecord) -> dict:
@@ -94,8 +115,7 @@ class Store:
 
     def create(self, eid: str, name: str, client: str) -> Engagement:
         e = Engagement(eid, name, client, repo=self.repo)
-        e.ledger = PersistentLedger(self.repo, eid)
-        e.decisions = DecisionEngine(e.ledger)
+        e.bind_ledger(PersistentLedger(self.repo, eid))
         self._cache[eid] = e
         e.persist_header()
         return e
@@ -115,12 +135,13 @@ class Store:
         ledger = PersistentLedger(self.repo, eid)
         # Replay stored entries directly: re-appending would re-hash and duplicate the chain.
         ledger.entries = self.repo.load_ledger(eid)
-        e.ledger = ledger
-        e.decisions = DecisionEngine(ledger)
+        e.bind_ledger(ledger)
         for d in self.repo.load_dps(eid):
             e.decisions.dps[d["dp_id"]] = DecisionPoint(
                 d["dp_id"], d["dp_type"], d["question"], d["owner"],
                 d.get("options") or [], d.get("resolution"))
+        for raw in self.repo.load_claims(eid):
+            e.memory._claims.append(Claim.from_dict(raw))
         raw_ir, e.open_dps = self.repo.load_ir(eid)
         e.ir = [IRRecord(**r) for r in raw_ir]
         systems, paths = self.repo.load_systems(eid)

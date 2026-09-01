@@ -1,0 +1,115 @@
+/* Memory — the two-tier belief screen's own layout. Palette and type are BRAND.md's; nothing new
+   is invented here. The one colour rule this sheet exists to hold: a stale claim is never red.
+   Red is failure, and a belief whose evidence moved is uncertainty a person can close. */
+
+.mem-strip { margin-bottom: 8px; }
+
+/* ---- project memory ---- */
+
+/* The claim's own subject, set against its badge in the chain node's title row. */
+.mem-subject { font-size: 12px; color: #9AA5B5; }
+
+.mem-claim { display: flex; flex-direction: column; gap: 8px; }
+
+/* The belief itself, in the display face: it is the sentence the screen exists to show, so it
+   outranks its own metadata rather than sitting level with it. */
+.mem-text {
+  font-family: "Archivo Narrow", sans-serif;
+  font-size: 16px; line-height: 1.3; color: #E6EAF0;
+}
+
+/* What the badge means, said as a consequence. Amber where a person still has to act on it. */
+.mem-why { font-size: 12px; line-height: 1.5; color: #7C8798; }
+.chain-node .lamp-call ~ .chain-content .mem-why { color: #C79A3A; }
+
+/* Actions. Re-check and correct sit together; promotion is pushed to the far end because it is
+   the only one that leaves the engagement — a ceremony, not a sibling button. */
+.mem-acts { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+.mem-acts-gap { flex: 1; min-width: 12px; }
+
+/* Promotion reads as the boundary crossing it is: the brand thread, and a rule separating it
+   from the two in-engagement actions. Not primary — it must not look like the obvious next click. */
+.mem-promote {
+  border-color: rgba(74, 107, 240, .45);
+  color: #a9bcff;
+  background: rgba(43, 80, 226, .1);
+  padding-left: 14px;
+}
+.mem-promote:hover:not(:disabled) {
+  background: rgba(43, 80, 226, .22);
+  border-color: #4A6BF0;
+  color: #fff;
+}
+
+/* ---- system memory ---- */
+
+/* Visually distinct from project memory: a flat ledger of shapes on the brand thread, not a
+   chain of stations. Nothing here is stale-able, because nothing here points at a client. */
+.mem-sys { display: grid; gap: 1px; background: #28313E; }
+.mem-sys-row {
+  display: grid; grid-template-columns: minmax(90px, auto) 1fr; gap: 4px 10px;
+  background: #151A22; padding: 9px 11px;
+  border-left: 3px solid #2B50E2;
+}
+.mem-sys-sub { font-size: 11px; color: #7C8798; align-self: baseline; }
+.mem-sys-text { font-size: 13px; line-height: 1.45; color: #D6DDE7; }
+.mem-sys-by { grid-column: 2; font-size: 11px; }
+
+@media (max-width: 720px) {
+  .mem-sys-row { grid-template-columns: 1fr; }
+  .mem-sys-by { grid-column: 1; }
+}
+
+/* ---- as-of ---- */
+
+/* A time query is a control strip, not a panel: it sits between the banner and the board and
+   collapses to nothing when unused, so it never costs the board its height. */
+.mem-asof {
+  display: flex; flex-direction: column; gap: 8px;
+  background: #151A22; border: 1px solid #28313E;
+  padding: 8px 10px; margin-bottom: 8px;
+}
+.mem-asof-ask { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mem-asof-ask input[type="date"] {
+  background: #0E1116; border: 1px solid #28313E; color: #E6EAF0;
+  font-family: "JetBrains Mono", monospace; font-size: 12px;
+  padding: 5px 8px; color-scheme: dark;
+}
+.mem-asof-note { font-size: 11.5px; flex: 1; min-width: 200px; }
+.mem-asof-out { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid #28313E; padding-top: 8px; }
+.mem-asof-list { display: grid; gap: 1px; background: #28313E; }
+.mem-asof-row {
+  display: grid; grid-template-columns: minmax(90px, auto) 1fr; gap: 10px;
+  background: #0E1116; padding: 6px 9px;
+  font-size: 12px; color: #9AA5B5;
+}
+
+/* ---- empty states ----
+   Both panels teach rather than apologise, the way the decisions queue does. Rules, not cards:
+   there is no belief here to draw. */
+.mem-quiet { display: flex; flex-direction: column; gap: 14px; }
+.mem-quiet-rule { display: flex; flex-direction: column; gap: 8px; }
+.mem-quiet-list {
+  margin: 0; padding: 0; list-style: none;
+  display: flex; flex-direction: column; gap: 1px;
+  max-width: 68ch;
+}
+.mem-quiet-list li {
+  background: #151A22;
+  border-left: 2px solid #28313E;
+  padding: 8px 10px;
+  font-size: 12.5px; color: #9AA5B5; line-height: 1.5;
+}
+/* The value that must never cross, shown as the literal it is. */
+.mem-quiet-list .mono { color: #E6EAF0; font-size: 12px; }
+
+/* Scoped to `.page >` so it outweighs app.css's `.page > .board.fill { align-content: start }`
+   on specificity — equal specificity would leave this at the mercy of stylesheet order, and the
+   bundler emits the view sheets first. Without it the two panels stop mid-glass. */
+.page > .board.fill[data-fill="stretch"] { align-content: stretch; }
+
+/* The system panel's list is short and its body is tall; without this the rule beneath the list
+   floats mid-panel and leaves a void under it. The list keeps its size, the note takes the foot. */
+.sec:has(> .body > .mem-sys-wrap) > .body { display: flex; flex-direction: column; }
+.mem-sys-wrap { display: flex; flex-direction: column; flex: 1; gap: 10px; }
+.mem-sys-note { margin-top: auto; font-size: 12px; border-top: 1px solid #28313E; padding-top: 10px; }

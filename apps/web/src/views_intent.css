@@ -1,0 +1,32 @@
+/* Intent + Ledger only. app.css is shared by every screen and is being edited in parallel, so
+   anything that exists solely for these two views lives here. Palette values are BRAND.md's. */
+
+/* ---- Intent ---- */
+
+/* The invariant, drawn on the row: a record with no signer is held, and the eye should not have to
+   travel to the "Signed by" column to learn that. Green edge = executable, red = not. */
+.intent-tbl tbody tr[data-signed="true"]  > td:first-child { box-shadow: inset 2px 0 0 #3FB950; }
+.intent-tbl tbody tr[data-signed="false"] > td:first-child { box-shadow: inset 2px 0 0 #E5484D; }
+.intent-tbl .unsigned { color: #E5484D; }
+
+/* An open record's gap line sits between its provenance strip and the verbatim intent. */
+.intent-gap { font-size: 12px; padding: 8px 0 2px; color: #E3A008; }
+
+/* ---- Ledger ---- */
+
+/* Table wide, chain narrow: the table is the record and the chain is its proof, and the proof reads
+   as a column. Below the board's breakpoint they simply stack. */
+.ledger-board { grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); }
+@media (max-width: 1100px) { .ledger-board { grid-template-columns: minmax(0, 1fr); } }
+
+/* The claimed link and the entry's own hash, side by side — the comparison the chain is asserting,
+   put where an operator can actually make it. */
+.link-pair { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.link-leg { display: flex; align-items: baseline; gap: 5px; min-width: 0; }
+.link-k {
+  font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: #5C6675;
+}
+.link-arrow { font-size: 12px; }
+.link-arrow.ok { color: #3FB950; }
+.link-arrow.bad { color: #E5484D; }
+.link-note { font-size: 11px; color: #E5484D; display: flex; align-items: baseline; gap: 5px; }

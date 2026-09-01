@@ -6,7 +6,8 @@ is what stops the agent teaching itself from an unsigned draft."""
 import pathlib
 from dataclasses import dataclass
 
-from .exam import ExamResult, grade, load_results, load_scenarios  # re-exported for callers
+from .exam import (PASS_THRESHOLD, ExamResult, grade, load_results,
+                   load_scenarios)  # re-exported for callers
 
 AGENT_ROOT = pathlib.Path(__file__).resolve().parents[2]
 SKILLS_DIR = AGENT_ROOT / "skills"
@@ -43,3 +44,31 @@ def load_skills(skills_dir: pathlib.Path | str = SKILLS_DIR,
 def promoted_prompt(skills: list[Skill]) -> str:
     """The only path from a skill file into SYSTEM. Unpromoted skills contribute nothing."""
     return "\n\n".join(s.text for s in skills if s.promoted)
+
+
+def gate_status(skills: list[Skill]) -> dict:
+    """What the promotion gate is currently withholding, and why.
+
+    An empty promoted_prompt() is indistinguishable from having no skills at all, which is how a
+    library sits unused for months without anyone noticing. This makes the gate's state legible:
+    every skill, whether it sat the exam, and what is blocking it.
+    """
+    out = []
+    for s in skills:
+        if s.exam is None:
+            blocked = "never sat the K5 exam"
+        elif s.exam.ungraded:
+            blocked = f"{len(s.exam.ungraded)} scenario(s) ungraded"
+        elif getattr(s.exam, "autofailed", ()):
+            blocked = f"autocheck overturned: {', '.join(s.exam.autofailed)}"
+        elif s.exam.failed:
+            blocked = f"failed {', '.join(s.exam.failed)}"
+        elif not s.exam.passed:
+            blocked = f"scored {s.exam.score:.0%}, below the {PASS_THRESHOLD:.0%} K5 threshold"
+        else:
+            blocked = None
+        out.append({"name": s.name, "promoted": s.promoted, "blocked_by": blocked,
+                    "score": s.exam.score if s.exam else None})
+    return {"skills": out,
+            "promoted": [x["name"] for x in out if x["promoted"]],
+            "withheld": [x["name"] for x in out if not x["promoted"]]}

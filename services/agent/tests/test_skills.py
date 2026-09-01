@@ -56,3 +56,14 @@ def test_consultant_system_prompt_uses_the_gate():
     assert p.startswith("You are JIDOKA's K5 senior SAP consultant")
     # no results recorded in-repo yet -> nothing is injected
     assert p == consultant.SYSTEM
+
+
+def test_gate_status_names_what_is_withheld_and_why():
+    """An empty promoted_prompt must be legible as a gate, not mistaken for an empty library."""
+    from jidoka_agent.skills import gate_status, load_skills
+    status = gate_status(load_skills())
+    assert status["skills"], "the skill library should not be empty"
+    # Nothing is promoted without a recorded exam pass, and every withholding states its reason.
+    for s in status["skills"]:
+        assert s["promoted"] or s["blocked_by"]
+    assert set(status["promoted"]) | set(status["withheld"]) == {s["name"] for s in status["skills"]}

@@ -30,6 +30,8 @@ class Repository(Protocol):
     def load_systems(self, eid: str) -> tuple[list[dict], list]: ...
     def save_dps(self, eid: str, dps: list[dict]) -> None: ...
     def load_dps(self, eid: str) -> list[dict]: ...
+    def save_claims(self, eid: str, claims: list[dict]) -> None: ...
+    def load_claims(self, eid: str) -> list[dict]: ...
 
 
 class InMemoryRepository:
@@ -41,6 +43,7 @@ class InMemoryRepository:
         self._ir: dict[str, tuple[list[dict], dict]] = {}
         self._systems: dict[str, tuple[list[dict], list]] = {}
         self._dps: dict[str, list[dict]] = {}
+        self._claims: dict[str, list[dict]] = {}
 
     def save_engagement(self, eid: str, name: str, client: str, phase: str) -> None:
         self._eng[eid] = {"engagement_id": eid, "name": name, "client": client, "phase": phase}
@@ -77,6 +80,12 @@ class InMemoryRepository:
 
     def load_dps(self, eid: str) -> list[dict]:
         return [dict(d) for d in self._dps.get(eid, [])]
+
+    def save_claims(self, eid: str, claims: list[dict]) -> None:
+        self._claims[eid] = [dict(c) for c in claims]
+
+    def load_claims(self, eid: str) -> list[dict]:
+        return [dict(c) for c in self._claims.get(eid, [])]
 
 
 _SCHEMA = """
@@ -189,6 +198,13 @@ class SqliteRepository:
 
     def load_dps(self, eid: str) -> list[dict]:
         return self._get_blob(eid, "dps", [])
+
+    def save_claims(self, eid: str, claims: list[dict]) -> None:
+        # Superseded claims are written too: closing an interval is not deleting a belief.
+        self._put_blob(eid, "claims", claims)
+
+    def load_claims(self, eid: str) -> list[dict]:
+        return self._get_blob(eid, "claims", [])
 
 
 def open_repository(db_url: str | None) -> Repository:

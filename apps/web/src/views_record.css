@@ -1,0 +1,59 @@
+/* Layout for Evidence + Milestones only. app.css is shared by every screen and is being edited by
+   other rebuilds, so anything that exists purely to make these two views fill the glass lives here. */
+
+/* ---- Milestones ----
+   The audit measured this screen at ~78% dead space with one row of data. Layout CSS alone did not
+   fix it and could not: a list of four one-line cards cannot fill 950px however it is stretched.
+   The fix is representational — the run of milestones is drawn as a run, and each milestone gets
+   the evidence that earned it (or the count of what is still missing) underneath. */
+.ms-run { padding: 6px 2px 2px; }
+
+/* One row per milestone, filling the panel's slack. Each row carries its own ratio, so there is no
+   label-left / pill-right void: the middle of the row is the meter, which is the actual claim. */
+.ms-list { display: flex; flex-direction: column; gap: 1px; background: var(--line); }
+.ms-row {
+  background: var(--floor2);
+  display: grid;
+  grid-template-columns: 44px minmax(160px, 1.1fr) minmax(180px, 1fr) minmax(220px, 1.6fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 14px;
+  border-left: 3px solid var(--line);
+  flex: 1;
+  min-height: 56px;
+}
+.ms-row[data-earned="true"] { border-left-color: var(--run); }
+.ms-row[data-earned="false"] { border-left-color: var(--call); }
+.ms-row[data-earned="blocked"] { border-left-color: var(--line); opacity: .72; }
+.ms-idx { font-family: var(--mono); font-size: 18px; color: var(--dim); letter-spacing: .04em; }
+.ms-name { font-family: var(--display); font-size: 16px; letter-spacing: .02em; }
+.ms-say { font-size: 12.5px; color: var(--ink-mut); }
+
+/* ---- Evidence ----
+   Proof is a pairing: an artefact and the claim it backs. Rendered as two columns so neither half
+   can drift to an opposite edge of the screen with nothing between them. */
+.ev-proofs { display: flex; flex-direction: column; gap: 1px; background: var(--line); }
+.ev-proof {
+  background: var(--floor2);
+  display: grid;
+  grid-template-columns: minmax(200px, 260px) 1fr;
+  gap: 16px;
+  align-items: baseline;
+  padding: 10px 12px;
+}
+.ev-proof-claim { font-size: 12.5px; color: var(--ink-mut); }
+.ev-proof-art { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ev-proof-art .eyebrow { font-size: 10px; }
+
+/* --- Milestones at n = 1 ---
+   .ms-row carries flex:1 for the many-milestone case, where the rows share the panel between them.
+   With one row that same rule stretches a single 56px row to the full panel and it reads as a
+   banner. So the sparse list stops stretching the row and gives the slack to the note under it. */
+.ms-list[data-sparse="true"] { display: grid; grid-template-rows: auto 1fr; }
+.ms-list[data-sparse="true"] .ms-row { flex: none; }
+.ms-open {
+  background: var(--floor2);
+  padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.ms-open-say { margin: 0; font-size: 13px; color: var(--ink-mut); max-width: 62ch; line-height: 1.55; }
