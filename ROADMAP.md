@@ -30,7 +30,7 @@
 - [ ] Terraform for Access/R2/Queues/DO; GH Actions -> GHCR -> wrangler
 ## E10 Knowledge & Skill Factory
 - [ ] K1 tenant-truth extractor -> graph (nightly)
-- [ ] K2 corpus pipeline: release-aware chunks, citation IDs, validity windows (gate: DP-K01 legal review)
+- [ ] K2 corpus pipeline: release-aware chunks, citation IDs, validity windows (gate: DP-K01 legal review — shut in code, `jidoka_knowledge.corpus.require_open`; brief at docs/decisions/DP-K01.md)
 - [ ] Vectorize retrieval with citation-required answers; citation-coverage metric on dashboard
 - [ ] Skill Factory: elicitation tooling, engagement mining, senior sign-off flow, K5 exam gate
 ## E11 Advanced concepts (docs/JIDOKA_ADVANCED_CONCEPTS.md)

@@ -82,7 +82,7 @@ retrieval is release-aware (a 1H2025 answer must not ground a 2H2026 build). ⚠
 at scale):** SAP documentation is copyrighted and Notes are S-user-gated. Position to validate with counsel and
 the partner agreement: ingestion for internal retrieval under partner/customer entitlement, citations point to
 SAP sources, **no redistribution of SAP content to third parties, ever** — JIDOKA sells judgment grounded in the
-corpus, not the corpus. This DP gates the SaaS knowledge feature; do not hand-wave it.
+corpus, not the corpus. This DP gates the SaaS knowledge feature; do not hand-wave it. It is enforced, not aspirational: `jidoka_knowledge.corpus.require_open()` refuses every gated corpus while the decision is open, with no override, and `test_corpus_gate.py` proves it. The brief to send counsel is docs/decisions/DP-K01.md, generated from the same record.
 
 **K3 — Practitioner knowledge (curated, low-trust).** Community posts, blogs, conference material. Tier T3:
 advisory signal only, never the sole basis for any claim, always provenance-tagged. Curation is editorial, human,
