@@ -35,6 +35,8 @@ DOCUMENTS = {
     "config-rationale": "Configuration Rationale — every configured value, and who signed for it.",
     "solution-design": "Solution Design — scope, landscape, and object-by-object design.",
     "decision-register": "Decision Register — every decision point, its owner and its resolution.",
+    "verification-report": "Verification Report — signed intent checked against live state, "
+                           "with every unexplained difference and who must answer for it.",
 }
 
 
@@ -360,10 +362,83 @@ def decision_register(engagement) -> str:
     return "\n".join(out + _footer(engagement))
 
 
+def verification_report(engagement) -> str:
+    """What was checked, what matched, what drifted, and what has never been looked at.
+
+    Nobody writes this test plan. The expected result for every object IS its signed intent, so
+    the plan cannot test the wrong thing and cannot go stale — and the results column is read off
+    the ledger, where verification runs already wrote it. A difference is not a red cell here: it
+    is an open decision point with a named owner, listed below, blocking the plan (ADR-0013).
+    """
+    title, subtitle = "Verification Report", DOCUMENTS["verification-report"]
+    records = [_as_dict(r) for r in _records(engagement)]
+    if not records:
+        return _no_ir_yet(engagement, title, subtitle)
+
+    def _key(rec):
+        return f"{rec.get('product')}:{rec.get('object')}:{_code(rec)}"
+
+    # Latest verification verdict per record, straight off the ledger.
+    last: dict[str, dict] = {}
+    for e in _ledger_entries(engagement):
+        if e.get("action") in ("VERIFIED", "DRIFT_DETECTED"):
+            last[e.get("task")] = e
+
+    out = _header(engagement, title, subtitle)
+    out += ["## What is checked", "",
+            "The expected state below is not authored by a tester — it is the engagement's signed "
+            "intent, per object. Settled fields are asserted verbatim against the live system; "
+            "fields still behind an open decision point are not asserted, because JIDOKA does not "
+            "test a value nobody has decided.", ""]
+    rows = []
+    for rec in sorted(records, key=_key):
+        intent = rec.get("intent") or {}
+        settled = [f for f, v in sorted(intent.items()) if not isinstance(v, dict)]
+        rows.append([rec.get("object"), f"`{_code(rec)}`", f"`{rec.get('system_binding')}`",
+                     ", ".join(f"`{f}`" for f in settled) or "—"])
+    out += _table(["Object", "Code", "System", "Asserted fields"], rows)
+    out.append("")
+
+    out += ["## Last verification", ""]
+    rows, never = [], []
+    for rec in sorted(records, key=_key):
+        e = last.get(_key(rec))
+        if e is None:
+            never.append(rec)
+            continue
+        verdict = "match" if e.get("action") == "VERIFIED" else f"**{e.get('status', 'DRIFT')}**"
+        rows.append([rec.get("object"), f"`{_code(rec)}`", verdict, e.get("ts", "—"),
+                     e.get("detail", "")])
+    out += _table(["Object", "Code", "Result", "When", "Detail"], rows) or            ["*No verification has been run on this engagement.*"]
+    out.append("")
+    if never and rows:
+        out += ["**Never verified** — these objects have signed intent but no verification entry "
+                "on the ledger. Absence of a check is a finding, not a pass:", ""]
+        out += _table(["Object", "Code"], [[r.get("object"), f"`{_code(r)}`"] for r in never])
+        out.append("")
+
+    drift_dps = [d for d in _decisions(engagement)
+                 if d.dp_id.startswith("DP-DRIFT-") and getattr(d, "resolution", None) is None]
+    out += ["## Unexplained differences", ""]
+    if drift_dps:
+        out += [f"{len(drift_dps)} drift decision point(s) are open. JIDOKA neither re-applies "
+                "over an ununderstood change nor adopts an unsigned one; each difference below "
+                "waits for its named owner to choose.", ""]
+        out += _table(["Decision point", "Question", "Owner"],
+                      [[f"`{d.dp_id}`", d.question, d.owner]
+                       for d in sorted(drift_dps, key=lambda d: d.dp_id)])
+    else:
+        out.append("No unexplained differences are open.")
+    out.append("")
+
+    return "\n".join(out + _footer(engagement))
+
+
 RENDERERS = {
     "config-rationale": config_rationale,
     "solution-design": solution_design,
     "decision-register": decision_register,
+    "verification-report": verification_report,
 }
 
 

@@ -199,3 +199,51 @@ def test_a_record_held_as_a_dict_projects_the_same_as_a_dataclass():
                ("object", "product", "system_binding", "intent", "tier", "source", "country",
                 "depends_on", "external_code")}
     assert config_rationale(Eng(ir=[as_dict])) == config_rationale(Eng(ir=[rec]))
+
+
+# --- verification report ----------------------------------------------------------------------------
+
+def test_the_test_plan_is_the_signed_intent_not_an_authored_expectation():
+    from jidoka_compiler.project import verification_report
+    doc = verification_report(Eng(ir=[_rec()]))
+    assert "## What is checked" in doc
+    assert "`externalCode`" in doc and "`name`" in doc
+    assert "not authored by a tester" in doc
+
+
+def test_an_undecided_field_is_not_asserted():
+    from jidoka_compiler.project import verification_report
+    rec = _rec(intent={"externalCode": "ZA01",
+                       "accrualDays": {"decision_point": "DP-07", "value": None}})
+    doc = verification_report(Eng(ir=[rec]))
+    assert "`accrualDays`" not in doc
+
+
+def test_a_never_verified_engagement_says_so_rather_than_showing_green():
+    from jidoka_compiler.project import verification_report
+    doc = verification_report(Eng(ir=[_rec()]))
+    assert "No verification has been run" in doc
+
+
+def test_ledger_verdicts_reach_the_report_and_unchecked_objects_are_named():
+    from jidoka_compiler.project import verification_report
+    e = Eng(ir=[_rec(), _rec(external_code="ZA02",
+                             intent={"externalCode": "ZA02", "name": "Kruger BW"})])
+    e.ledger.append("SuccessFactors:LegalEntity:ZA01", "VERIFIED", "verifier",
+                    "live state matches signed intent")
+    doc = verification_report(e)
+    assert "match" in doc
+    assert "Never verified" in doc and "`ZA02`" in doc
+
+
+def test_open_drift_decisions_appear_with_their_owner():
+    from jidoka_compiler.project import verification_report
+    dp = _dp(dp_id="DP-DRIFT-SuccessFactors:LegalEntity:ZA01", dp_type="DESIGN",
+             question="Live disagrees with signed intent on: name", owner="T. Mabaso")
+    e = Eng(ir=[_rec()], dps=[dp])
+    e.ledger.append("SuccessFactors:LegalEntity:ZA01", "DRIFT_DETECTED", "verifier",
+                    "live values differ from signed intent on: name", status="DRIFT")
+    doc = verification_report(e)
+    assert "## Unexplained differences" in doc
+    assert "DP-DRIFT-" in doc and "T. Mabaso" in doc
+    assert "**DRIFT**" in doc
