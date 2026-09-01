@@ -418,6 +418,12 @@ label { display: grid; gap: 6px; }
 
 .scroll-x { overflow-x: auto; }
 
+/* A table is the one block here with a floor width it will not go below, so on a narrow screen it
+   pushes the whole page sideways and the andon rail scrolls off with it. Given every table lives in
+   a panel body, one rule holds all four call sites: the body takes the overflow, the page does not.
+   Keyboard-reachable because a scroll container with content wider than itself is focusable. */
+.sec > .body:has(> .tbl), .sec > .body:has(> .scroll-x > .tbl) { overflow-x: auto; }
+
 /* Hashes: long, truncated, full value in the title attribute. */
 .hash {
   font-family: var(--mono);
@@ -543,23 +549,53 @@ footer {
 
 /* ---------- responsive: the rail becomes a bottom bar ---------- */
 @media (max-width: 760px) {
+  /* The rail becomes a bottom bar, and a bottom bar cannot hold ten labelled destinations: at 390px
+     that was 370px of lamps ending past the viewport, so Ledger, Evidence and Milestones were
+     unreachable — the audit trail and the evidence store, missing, on a platform whose argument is
+     that nothing goes unrecorded. Scrolling them into reach is the wrong fix: BRAND is explicit that
+     the rail is "always visible, never scrolled away", and a stopped line turns every lamp red, so a
+     lamp you have to swipe to is a lamp that cannot alarm you.
+
+     The glass is what carries state; the label is the part that does not fit. So the labels go, all
+     ten lamps stay lit and reachable, and the name is read out by the accessible name that is still
+     on every button. The cord leaves the row entirely and spans the bar above the lamps — it is the
+     one control that must be hit without aiming, which is exactly what it was losing here. */
   .rail {
     inset: auto 0 0 0;
     width: auto;
-    height: 66px;
-    flex-direction: row;
+    height: auto;
+    flex-direction: column;
+    align-items: stretch;
     border-right: none;
     border-top: 1px solid var(--line);
-    padding: 6px 10px;
-    gap: 8px;
+    padding: 6px 10px calc(6px + env(safe-area-inset-bottom));
+    gap: 6px;
   }
-  .rail-mark { width: 22px; height: 30px; }
-  .rail-lamps { flex-direction: row; gap: 2px; }
-  .lamp { padding: 6px 7px; font-size: 8px; }
-  .cord { width: auto; padding: 8px 12px; }
-  .cord::before { display: none; }
-  .main { margin-left: 0; padding-bottom: 66px; }
+  .rail-mark, .rail-spacer { display: none; }
+  .rail-lamps { flex-direction: row; gap: 2px; justify-content: space-between; }
+  .lamp {
+    flex: 1 1 0; min-width: 0; padding: 0;
+    /* 44px of target for a thumb; the glass sits centred in it. */
+    min-height: 44px; place-content: center; gap: 0;
+  }
+  .lamp-label {
+    /* Off-canvas, not display:none — the button keeps its accessible name, so a screen reader still
+       announces "Ledger" on a bar that shows only glass. */
+    position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip-path: inset(50%); white-space: nowrap;
+  }
+  .glass { width: 13px; height: 13px; }
+  .cord { width: 100%; min-height: 44px; padding: 8px 12px; grid-auto-flow: column; }
+  .main { margin-left: 0; padding-bottom: 124px; }
   .page, .topbar { padding-left: 16px; padding-right: 16px; }
+  /* Desktop padding on a touch target is a 26px button. Every control clears 44px here. */
+  .btn, select, input, textarea { min-height: 44px; }
+}
+
+/* A touch device is not a screen size: a laptop with a touchscreen needs the same targets. */
+@media (pointer: coarse) {
+  .btn, select, input, textarea { min-height: 44px; }
+  .cord { min-height: 44px; }
 }
 
 /* ---------- reduced motion: all animation disabled ---------- */

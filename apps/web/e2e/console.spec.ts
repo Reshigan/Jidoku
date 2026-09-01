@@ -237,3 +237,18 @@ test("the session survives a reload, an expired one does not, and sign out clear
   await page.getByRole("button", { name: "Sign out" }).click();
   expect(await page.evaluate(() => sessionStorage.getItem("jidoka.session"))).toBeNull();
 });
+
+/* The rail is the one element BRAND says is never scrolled away, so a viewport that pushes a lamp
+   off it is a defect and not a small one: at 390px the Ledger, Evidence and Milestones tabs were
+   past the right edge, unclickable, on a platform whose argument is the audit trail. */
+test("every lamp on the rail is reachable on a phone, and nothing pushes the page sideways", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signIn(page, "a.builder", ["approver", "auditor"]);
+  for (const tab of await page.getByRole("tab").all()) {
+    await tab.click({ timeout: 3000 });
+    const slop = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(slop, `${await tab.getAttribute("title")} overflows`).toBeLessThanOrEqual(1);
+  }
+});

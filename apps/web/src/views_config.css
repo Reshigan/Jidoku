@@ -7,7 +7,7 @@
    whether a live write is even reachable. */
 .cfg-targets { display: flex; flex-direction: column; gap: 1px; background: var(--line); }
 .cfg-target {
-  background: var(--floor-2);
+  background: var(--floor2);
   display: grid;
   grid-template-columns: minmax(140px, 0.8fr) minmax(220px, 1.2fr) minmax(240px, 1.4fr) auto;
   gap: 14px;
@@ -22,3 +22,16 @@
 .cfg-gate { display: flex; flex-direction: column; gap: 3px; }
 .cfg-gate .eyebrow { font-size: 10px; }
 .cfg-actions { display: flex; gap: 6px; align-items: center; justify-content: flex-end; }
+
+/* Those four minmax floors add up to more than a phone is wide, so the row could not narrow and
+   pushed the page sideways instead — 453px of it. Below the floor the row stops being four columns
+   and becomes what it reads as anyway: identity, then what it says, then the gate, then the act. */
+@media (max-width: 900px) {
+  .cfg-target { grid-template-columns: 1fr; gap: 8px; }
+  .cfg-actions { justify-content: flex-start; flex-wrap: wrap; }
+}
+
+/* The Steps table has seven columns and will not fold; it gets its own scroller so the panel — and
+   with it the rail — stays put. The other three tables are direct panel children and app.css holds
+   them. */
+.tblwrap { overflow-x: auto; }

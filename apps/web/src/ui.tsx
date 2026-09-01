@@ -97,7 +97,7 @@ export function AndonRail(props: {
             title={`${v} — press ${i + 1}`}
           >
             <span className="glass" />
-            {v}
+            <span className="lamp-label">{v}</span>
           </button>
         ))}
       </div>
