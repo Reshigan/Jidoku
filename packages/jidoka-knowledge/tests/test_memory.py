@@ -100,3 +100,22 @@ def test_timestamps_are_parseable_and_sort_chronologically():
         datetime.strptime(s, "%Y-%m-%dT%H:%M:%S.%fZ")      # malformed stamp raises here
     assert stamps == sorted(stamps)                        # lexical order == chronological order
     assert len({len(s) for s in stamps}) == 1              # fixed width, or sorting lies
+
+
+def test_resolve_reads_evidence_from_the_source_not_the_caller():
+    """A recheck the caller supplies evidence for is not a check. Resolution is by scheme."""
+    from jidoka_knowledge import resolve, recheck, Unresolvable, TRUSTED, STALE
+    body = {"object": "A_CostCenter", "rows": 12}
+    c = Claim("cc", "mastered upstream", "ir:S4:A_CostCenter", evidence_hash(body), "agent")
+
+    sources = {"ir": lambda ref: body}
+    assert recheck(c, resolve(c, sources)) == TRUSTED
+    sources = {"ir": lambda ref: {"object": "A_CostCenter", "rows": 13}}   # ground moved
+    assert recheck(c, resolve(c, sources)) == STALE
+
+    # An unreadable source is not a drifted one, and must not be reported as one.
+    try:
+        resolve(Claim("d", "x", "design:PY-02", "h", "agent"), sources)
+        assert False, "expected Unresolvable"
+    except Unresolvable:
+        pass

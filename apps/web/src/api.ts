@@ -416,12 +416,12 @@ const api2 = {
   /** A claim without a source is refused by the domain, so the console always sends one. */
   formClaim: (eid: string, body: { subject: string; text: string; source_ref: string; evidence: unknown }) =>
     call<Claim>(`/engagements/${eid}/memory`, { method: "POST", body: JSON.stringify(body) }),
-  /** Deterministic: a hash comparison, no model call. Evidence omitted means the source is gone,
-      which the server reads as stale — that is a real answer, not a missing argument. */
-  recheckClaim: (eid: string, claimId: string, evidence: unknown) =>
+  /** Deterministic: the server re-reads the claim's source and compares hashes, no model call.
+      The console sends no evidence on purpose — it does not hold the source, and a caller that
+      supplied the evidence would be answering the question it asked. */
+  recheckClaim: (eid: string, claimId: string) =>
     call<{ status: Claim["status"]; claim: Claim }>(
-      `/engagements/${eid}/memory/${claimId}/recheck`,
-      { method: "POST", body: JSON.stringify({ evidence }) },
+      `/engagements/${eid}/memory/${claimId}/recheck`, { method: "POST" },
     ),
   /** Supersede, never overwrite: the prior belief keeps its place with a closed interval. */
   correctClaim: (eid: string, claimId: string,

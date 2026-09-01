@@ -226,15 +226,15 @@ export default function App() {
     await after();
   };
 
-  /* Re-checking is a hash comparison the server makes against the evidence it is handed. The
-     console does not hold that evidence — the claim's source does — so it sends the source
-     reference and lets the server decide. A claim whose ground has moved comes back stale, which
-     is the gate reporting, not a failure. */
+  /* Re-checking names the belief and nothing else. The server re-reads the source the claim was
+     formed from and compares hashes; the console holds no evidence and must not supply any, or
+     it would be answering the question it asked. A belief whose ground has moved comes back
+     stale, which is the gate reporting, not a failure. */
   const recheck = async (claim: Claim) => {
     if (!eid) return;
     setBusy(claim.id);
     await guard("That belief could not be re-checked",
-      () => platform.recheckClaim(eid, claim.id, claim.source_ref));
+      () => platform.recheckClaim(eid, claim.id));
     setBusy(null);
     await after();
   };

@@ -4,9 +4,9 @@ Read docs/adr/0010-two-tier-evidence-grounded-memory.md before changing anything
 """
 from .claim import Claim, evidence_hash, TRUSTED, STALE, UNVERIFIED
 from .store import ProjectStore, SystemStore
-from .staleness import recheck, recheck_live, sweep, supersede
+from .staleness import recheck, recheck_live, resolve, sweep, supersede, Unresolvable
 from .scrubber import promote, screen, PromotionRefused
 
 __all__ = ["Claim", "evidence_hash", "TRUSTED", "STALE", "UNVERIFIED",
            "ProjectStore", "SystemStore", "recheck", "recheck_live", "sweep",
-           "supersede", "promote", "screen", "PromotionRefused"]
+           "supersede", "promote", "screen", "PromotionRefused", "resolve", "Unresolvable"]

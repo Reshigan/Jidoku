@@ -50,7 +50,8 @@ def test_concurrent_engagements_do_not_share_memory():
 def test_stale_claim_is_flagged_and_kept():
     eid = _eng()
     cid = _form(eid).json()["id"]
-    moved = c.post(f"/engagements/{eid}/memory/{cid}/recheck", json={"evidence": {"record": "CC-99"}})
+    # Nothing in intent answers to ir:CC-01, so the ground this belief stood on is gone.
+    moved = c.post(f"/engagements/{eid}/memory/{cid}/recheck")
     assert moved.json()["status"] == "STALE"
     listing = c.get(f"/engagements/{eid}/memory").json()
     assert len(listing["stale"]) == 1                    # flagged, not deleted
@@ -110,8 +111,47 @@ def test_memory_survives_rehydration():
     from jidoka_api.state import STORE
     eid = _eng()
     cid = _form(eid).json()["id"]
-    c.post(f"/engagements/{eid}/memory/{cid}/recheck", json={"evidence": {"record": "MOVED"}})
+    c.post(f"/engagements/{eid}/memory/{cid}/recheck")
     STORE._cache.clear()                       # cold process: rehydrate from the repository
     back = c.get(f"/engagements/{eid}/memory").json()
     assert [x["id"] for x in back["project"]] == [cid]
     assert back["project"][0]["status"] == "STALE"     # durable uncertainty survives the restart
+
+
+def test_recheck_reads_the_source_and_ignores_caller_supplied_evidence():
+    """The console cannot vote on whether its own belief is still true.
+
+    A claim grounded in an IR object is TRUSTED while that object stands and STALE once it moves,
+    regardless of what the caller sends — earlier this route hashed the caller's argument, so
+    pressing "Re-check it" marked every verified belief stale.
+    """
+    from jidoka_knowledge import evidence_hash
+    from jidoka_api.state import STORE
+    eid = _eng()
+    e = STORE.get(eid)
+
+    class _R:                                   # the shape read_ir reads
+        object, system_binding, intent, tier = "A_CostCenter", "S4", {"len": 4}, "A"
+    e.ir.append(_R())
+    ground = {"object": "A_CostCenter", "system_binding": "S4", "intent": {"len": 4}, "tier": "A"}
+
+    r = c.post(f"/engagements/{eid}/memory", json={
+        "subject": "cc", "text": "four digits", "source_ref": "ir:S4:A_CostCenter",
+        "evidence": ground})
+    cid = r.json()["id"]
+
+    # A lie in the body must not change the verdict.
+    got = c.post(f"/engagements/{eid}/memory/{cid}/recheck", json={"evidence": {"any": "rubbish"}})
+    assert got.json()["status"] == "TRUSTED"
+
+    _R.intent = {"len": 6}                      # the ground moves
+    assert c.post(f"/engagements/{eid}/memory/{cid}/recheck").json()["status"] == "STALE"
+
+
+def test_a_source_nobody_can_read_is_not_reported_as_drift():
+    """409, not STALE: "unreadable" and "moved" are different facts about a belief."""
+    eid = _eng()
+    cid = c.post(f"/engagements/{eid}/memory", json={
+        "subject": "payroll", "text": "monthly", "source_ref": "design:PY-02",
+        "evidence": {"doc": "PY-02"}}).json()["id"]
+    assert c.post(f"/engagements/{eid}/memory/{cid}/recheck").status_code == 409

@@ -4,8 +4,8 @@ Every route here is scoped by {eid}. There is deliberately no route that reads a
 engagements: cross-project reach is absent from the API rather than filtered out of it.
 """
 from fastapi import APIRouter, Depends, HTTPException
-from jidoka_knowledge import (Claim, SystemStore, evidence_hash, recheck, supersede,
-                              promote, PromotionRefused, STALE, TRUSTED, UNVERIFIED)
+from jidoka_knowledge import (Claim, SystemStore, evidence_hash, recheck, resolve, supersede,
+                              promote, PromotionRefused, Unresolvable, STALE, TRUSTED, UNVERIFIED)
 from pydantic import BaseModel
 
 from ..auth import Identity, require
@@ -67,19 +67,46 @@ def form_claim(eid: str, body: ClaimIn, identity: Identity = Depends(require("wr
     return _claim_out(claim)
 
 
-class RecheckIn(BaseModel):
-    evidence: dict | list | str | None = None
+def _sources(e) -> dict:
+    """Readers that can fetch a claim's evidence back, keyed by the scheme in its source_ref.
+
+    Deliberately server-side. If the caller supplied the evidence, a re-check would be answering
+    the question it was asked to verify, and every claim would report whatever the client said.
+    Only schemes backed by something the platform actually holds appear here.
+    """
+    def read_ir(ref: str):
+        """ir:<object> or ir:<system>:<object>, read out of the engagement's own signed intent.
+
+        Returns None when the object is no longer in intent. That is the same answer as "the
+        source is gone", and here the two genuinely coincide: intent is the source, so an object
+        absent from it has no ground left to compare against.
+        """
+        parts = ref.split(":")
+        system, name = (parts[1], parts[2]) if len(parts) > 2 else (None, parts[1])
+        for r in e.ir:
+            if r.object == name and (system is None or r.system_binding == system):
+                return {"object": r.object, "system_binding": r.system_binding,
+                        "intent": r.intent, "tier": r.tier}
+        return None
+    return {"ir": read_ir}
 
 
 @router.post("/{claim_id}/recheck")
-def recheck_claim(eid: str, claim_id: str, body: RecheckIn,
-                  identity: Identity = Depends(require("read"))):
-    """Deterministic re-check: hash comparison, no model call. Stale claims keep their badge."""
+def recheck_claim(eid: str, claim_id: str, identity: Identity = Depends(require("read"))):
+    """Deterministic re-check: the server re-reads the source and compares hashes. No model call.
+
+    Takes no evidence from the caller by design. A source nobody can read back is reported as
+    such (409) rather than as drift — an unreadable source and a moved one are different facts.
+    """
     e = get_or_404(eid)
     claim = e.memory.get(claim_id)
     if claim is None:
         raise HTTPException(404, "claim not found")
-    status = recheck(claim, body.evidence)
+    try:
+        evidence = resolve(claim, _sources(e))
+    except Unresolvable as ex:
+        raise HTTPException(409, str(ex))
+    status = recheck(claim, evidence)
     e.persist_memory()          # the badge is part of the belief, not a view over it
     return {"status": status, "claim": _claim_out(claim)}
 

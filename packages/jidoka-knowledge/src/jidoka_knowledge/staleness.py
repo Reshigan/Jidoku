@@ -54,3 +54,25 @@ def supersede(store, claim: Claim, text: str, evidence, source_ref: str, actor: 
                   source_hash=evidence_hash(evidence), actor=actor, supersedes=claim.id)
     fresh.status = TRUSTED
     return store.add(fresh)
+
+
+class Unresolvable(Exception):
+    """The source a claim names cannot be read back, so no comparison is possible."""
+
+
+def resolve(claim: Claim, sources) -> object:
+    """Read back the evidence a claim was formed from, by the scheme in its source_ref.
+
+    A re-check is only deterministic if the evidence comes from the source rather than from the
+    caller: a client that supplies its own evidence is answering the question it was asked to
+    verify. So the caller names a resolver per scheme and the domain does the reading.
+
+    Raises Unresolvable when no resolver claims the scheme, which is deliberately not the same
+    answer as STALE — "the ground moved" and "nobody can see the ground" are different facts, and
+    collapsing them makes an unreadable source look like a drifted one.
+    """
+    scheme = claim.source_ref.split(":", 1)[0]
+    fn = sources.get(scheme)
+    if fn is None:
+        raise Unresolvable(f"nothing can read back a {scheme!r} source")
+    return fn(claim.source_ref)
