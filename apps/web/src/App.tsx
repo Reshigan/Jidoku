@@ -14,6 +14,7 @@ import {
   MemoryView, MilestonesView, WorkView,
 } from "./views";
 import { DocumentsView } from "./views_document";
+import { VerifyView } from "./views_verify";
 import { DP_KINDS, SYSTEM_ROLES, kindWords, roleLabel } from "./viewkit";
 import "./app.css";
 
@@ -397,6 +398,13 @@ export default function App() {
                                  await refreshArmed();
                                  await after();
                                }} />
+              )}
+              {view === "Verify" && (
+                <VerifyView eid={eid}
+                            canVerify={can("write") && !offline && !stopped && !d.chainBroken}
+                            canAllocate={can("write") && !offline && !stopped}
+                            onRefusal={(title, text) => setRefusal({ title, text })}
+                            onChanged={after} />
               )}
               {view === "Decisions" && (
                 <DecisionsView dps={d.dps} irGaps={d.irGaps} writable={writable}

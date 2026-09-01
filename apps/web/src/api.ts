@@ -265,6 +265,24 @@ export type MemoryView = {
 };
 
 /** The signed-in operator. Empty roles means the API is running with auth optional. */
+
+export type DriftFindingView = {
+  key: string; status: "DRIFT" | "MISSING"; system: string;
+  fields: Record<string, { intent: unknown; live: unknown }>;
+  decision_point: string;
+};
+export type VerificationRun = {
+  verified: string[];
+  drift: DriftFindingView[];
+  skipped: { key: string; reason: string }[];
+  planning_blocked: boolean;
+};
+export type NumberRangeView = {
+  range_id: string; object_type: string; prefix: string;
+  start: number; end: number; width: number; next_free: string | null;
+};
+export type NumberingSnapshot = { ranges: NumberRangeView[]; allocated: Record<string, string> };
+
 export type Session = { subject: string; roles: string[] };
 
 const STORE_KEY = "jidoka.session";
@@ -466,6 +484,24 @@ const api2 = {
       method: "POST",
       body: JSON.stringify({ approver }),
     }),
+  /* ---- verification & number ranges (ADR-0013, ADR-0014) ---- */
+  /** Read the live systems and compare them to signed intent. Reading only — a drift raises a
+      blocking decision point on the server; the console never reconciles anything. */
+  verify: (eid: string) =>
+    call<VerificationRun>(`/engagements/${eid}/verification`, { method: "POST" }),
+  numbering: (eid: string) => call<NumberingSnapshot>(`/engagements/${eid}/numbering`),
+  registerRange: (eid: string, body: {
+    range_id: string; object_type: string; prefix: string; start: number; end: number; width?: number;
+  }) =>
+    call<{ registered: string; governs: string; codes: string }>(
+      `/engagements/${eid}/numbering/ranges`, { method: "POST", body: JSON.stringify(body) },
+    ),
+  /** A collision comes back 409 with the holder's name in it. The console quotes it verbatim. */
+  allocateCode: (eid: string, object_type: string, code?: string) =>
+    call<{ allocated: string; object_type: string }>(
+      `/engagements/${eid}/numbering/allocate`,
+      { method: "POST", body: JSON.stringify({ object_type, code: code || null }) },
+    ),
 };
 
 /** One client surface. Typed by construction, so a missing endpoint is a compile error. */

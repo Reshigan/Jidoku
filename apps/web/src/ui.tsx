@@ -67,7 +67,7 @@ function Mark() {
   );
 }
 
-export const VIEWS = ["Line", "Work", "Configure", "Decisions", "Intent", "Landscape", "Memory", "Ledger", "Evidence", "Documents", "Milestones"] as const;
+export const VIEWS = ["Line", "Work", "Configure", "Verify", "Decisions", "Intent", "Landscape", "Memory", "Ledger", "Evidence", "Documents", "Milestones"] as const;
 export type ViewName = (typeof VIEWS)[number];
 
 /**
