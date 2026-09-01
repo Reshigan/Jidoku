@@ -5,12 +5,12 @@
 
 /* The invariant, drawn on the row: a record with no signer is held, and the eye should not have to
    travel to the "Signed by" column to learn that. Green edge = executable, red = not. */
-.intent-tbl tbody tr[data-signed="true"]  > td:first-child { box-shadow: inset 2px 0 0 #3FB950; }
-.intent-tbl tbody tr[data-signed="false"] > td:first-child { box-shadow: inset 2px 0 0 #E5484D; }
-.intent-tbl .unsigned { color: #E5484D; }
+.intent-tbl tbody tr[data-signed="true"]  > td:first-child { box-shadow: inset 2px 0 0 var(--run); }
+.intent-tbl tbody tr[data-signed="false"] > td:first-child { box-shadow: inset 2px 0 0 var(--stop); }
+.intent-tbl .unsigned { color: var(--stop); }
 
 /* An open record's gap line sits between its provenance strip and the verbatim intent. */
-.intent-gap { font-size: 12px; padding: 8px 0 2px; color: #E3A008; }
+.intent-gap { font-size: 12px; padding: 8px 0 2px; color: var(--call); }
 
 /* ---- Ledger ---- */
 
@@ -24,9 +24,9 @@
 .link-pair { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .link-leg { display: flex; align-items: baseline; gap: 5px; min-width: 0; }
 .link-k {
-  font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: #5C6675;
+  font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-dim);
 }
 .link-arrow { font-size: 12px; }
-.link-arrow.ok { color: #3FB950; }
-.link-arrow.bad { color: #E5484D; }
-.link-note { font-size: 11px; color: #E5484D; display: flex; align-items: baseline; gap: 5px; }
+.link-arrow.ok { color: var(--run); }
+.link-arrow.bad { color: var(--stop); }
+.link-note { font-size: 11px; color: var(--stop); display: flex; align-items: baseline; gap: 5px; }

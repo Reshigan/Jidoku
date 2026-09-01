@@ -281,3 +281,49 @@ test("a focused input still shows a focus ring", async ({ page }) => {
   await box.focus();
   expect(await box.evaluate((el) => getComputedStyle(el).outlineStyle)).not.toBe("none");
 });
+
+/* Contrast is the one design rule that is a defect rather than a preference, and it regressed here
+   once already: --ink-dim sat at 3.18:1 on --floor3 while every one of its consumers was 9-11px
+   label text, so the smallest type in the console was also the least legible. Asserted across every
+   view because the failing values were view-local — a token sweep that only checks Line proves
+   nothing about Memory. */
+test("no text in any view falls below its WCAG AA contrast floor", async ({ page }) => {
+  await signIn(page, "a.builder", ["approver", "auditor"]);
+  const failures: string[] = [];
+  for (const tab of await page.getByRole("tab").all()) {
+    const view = (await tab.getAttribute("title"))?.split(" ")[0] ?? "?";
+    await tab.click();
+    const bad = await page.evaluate(() => {
+      const lum = (r: number, g: number, b: number) => {
+        const f = (x: number) => { x /= 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; };
+        return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+      };
+      const parse = (s: string) => (s.match(/[\d.]+/g) ?? []).map(Number);
+      /* Walk up for the first opaque ancestor: a tinted pill over a panel over the floor means the
+         element's own background is a wash that tells you nothing on its own. */
+      const bgOf = (el: Element): number[] => {
+        let e: Element | null = el;
+        while (e) {
+          const v = parse(getComputedStyle(e).backgroundColor);
+          if (v.length >= 3 && (v[3] === undefined || v[3] > 0.8)) return v;
+          e = e.parentElement;
+        }
+        return [14, 17, 22];
+      };
+      const out: string[] = [];
+      for (const el of document.querySelectorAll("*")) {
+        if (!el.textContent?.trim() || el.children.length) continue;
+        const cs = getComputedStyle(el);
+        if (cs.visibility === "hidden" || !el.getClientRects().length) continue;
+        const size = parseFloat(cs.fontSize);
+        const need = size >= 24 || (parseInt(cs.fontWeight) >= 700 && size >= 18.66) ? 3 : 4.5;
+        const [l1, l2] = [lum(...(parse(cs.color).slice(0, 3) as [number, number, number])), lum(...(bgOf(el).slice(0, 3) as [number, number, number]))];
+        const cr = (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+        if (cr < need) out.push(`"${el.textContent.trim().slice(0, 24)}" ${cr.toFixed(2)}:1 needs ${need}`);
+      }
+      return out;
+    });
+    failures.push(...bad.map((b) => `${view}: ${b}`));
+  }
+  expect(failures, failures.join("\n")).toHaveLength(0);
+});

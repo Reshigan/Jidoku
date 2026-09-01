@@ -6,19 +6,19 @@
    One grid, so the name column, the meter and the lamp line up down the panel. The middle column
    is the meter and it is the one that stretches: that is what fills the space the old
    "label ... pill" row left empty, and it fills it with the number the operator wanted anyway. */
-.lanes { display: grid; gap: 1px; background: var(--line, #28313E); }
+.lanes { display: grid; gap: 1px; background: var(--line, var(--line)); }
 .lane-row {
   display: grid;
   grid-template-columns: 96px minmax(120px, 1fr) minmax(0, 2fr) auto;
   gap: 12px;
   align-items: center;
   padding: 9px 10px;
-  background: var(--floor2, #151A22);
+  background: var(--floor2, var(--floor2));
   border-left: 2px solid transparent;
 }
-.lane-row[data-lamp="run"]  { border-left-color: #3FB950; }
-.lane-row[data-lamp="call"] { border-left-color: #E3A008; }
-.lane-row[data-lamp="stop"] { border-left-color: #E5484D; }
+.lane-row[data-lamp="run"]  { border-left-color: var(--run); }
+.lane-row[data-lamp="call"] { border-left-color: var(--call); }
+.lane-row[data-lamp="stop"] { border-left-color: var(--stop); }
 .lane-name {
   font-family: "Archivo Narrow", sans-serif; font-size: 14px; font-weight: 600;
   letter-spacing: .02em; text-transform: uppercase;
@@ -48,14 +48,14 @@
 
 /* A locked station must look shut, not merely faint: every gate is drawn blocked and the labels
    go to the dim ink, so "you cannot start this yet" reads before the sentence saying so. */
-.station[data-locked="true"] .station-track .track-label { color: #5C6675; }
+.station[data-locked="true"] .station-track .track-label { color: var(--ink-dim); }
 
 /* --- Line: the single-lane panel ---
    A grid of one row stretched to the panel height reads as a banner, not a row. So the rows keep
    their natural height (auto) and the opened station list takes the last track and the slack. */
 .lanes[data-sparse="true"] { grid-template-rows: auto 1fr; }
 .lane-open {
-  background: var(--floor2, #151A22);
+  background: var(--floor2, var(--floor2));
   padding: 12px 12px 10px;
   display: flex; flex-direction: column; gap: 8px;
   min-height: 0;
@@ -64,14 +64,14 @@
 .lane-stations li {
   display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: baseline;
   padding: 7px 10px 7px 8px;
-  background: var(--floor3, #1C222C);
+  background: var(--floor3, var(--floor3));
   border-left: 2px solid transparent;
 }
 /* Same lamp vocabulary as the station cards on the Work board — one station, one colour, both screens. */
-.lane-stations li[data-lamp="run"]  { border-left-color: #3FB950; }
-.lane-stations li[data-lamp="call"] { border-left-color: #E3A008; }
-.lane-stations li[data-lamp="stop"] { border-left-color: #E5484D; }
-.lane-stations li[data-lamp="blue"] { border-left-color: #2B50E2; }
+.lane-stations li[data-lamp="run"]  { border-left-color: var(--run); }
+.lane-stations li[data-lamp="call"] { border-left-color: var(--call); }
+.lane-stations li[data-lamp="stop"] { border-left-color: var(--stop); }
+.lane-stations li[data-lamp="blue"] { border-left-color: var(--blue); }
 .lane-station-what { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lane-station-at { font-size: 11.5px; white-space: nowrap; }
 
@@ -89,7 +89,7 @@
 /* The run in order, taking the slack under the station cards. Rules, not cards: this is a list of
    what comes next, and drawing it as cards would restate the cards above it in the same shape. */
 .lane-order {
-  border-top: 1px solid var(--line, #28313E);
+  border-top: 1px solid var(--line, var(--line));
   padding: 10px 10px 12px;
   display: flex; flex-direction: column; gap: 7px;
 }
@@ -97,17 +97,17 @@
 .lane-order-list li {
   display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: baseline;
   padding: 6px 10px 6px 8px;
-  background: var(--floor3, #1C222C);
+  background: var(--floor3, var(--floor3));
   border-left: 2px solid transparent;
 }
 /* Same lamp vocabulary as the cards above — one station, one colour, wherever it is drawn. */
-.lane-order-list li[data-lamp="run"]  { border-left-color: #3FB950; }
-.lane-order-list li[data-lamp="call"] { border-left-color: #E3A008; }
-.lane-order-list li[data-lamp="stop"] { border-left-color: #E5484D; }
-.lane-order-list li[data-lamp="blue"] { border-left-color: #2B50E2; }
+.lane-order-list li[data-lamp="run"]  { border-left-color: var(--run); }
+.lane-order-list li[data-lamp="call"] { border-left-color: var(--call); }
+.lane-order-list li[data-lamp="stop"] { border-left-color: var(--stop); }
+.lane-order-list li[data-lamp="blue"] { border-left-color: var(--blue); }
 /* The station the floor reaches next is the one thing an operator scans this list for. */
-.lane-order-list li[data-next] { background: var(--floor2, #151A22); }
-.lane-order-list li[data-next] .lane-order-at { color: #E6EAF0; }
-.lane-order-idx { font-family: "JetBrains Mono", monospace; font-size: 11px; color: #5C6675; }
+.lane-order-list li[data-next] { background: var(--floor2, var(--floor2)); }
+.lane-order-list li[data-next] .lane-order-at { color: var(--ink); }
+.lane-order-idx { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--ink-dim); }
 .lane-order-what { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lane-order-at { font-size: 11.5px; white-space: nowrap; }
