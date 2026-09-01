@@ -13,6 +13,7 @@ import {
   ConfigureView, DecisionsView, EvidenceView, IntentView, LandscapeView, LedgerView, LineView,
   MemoryView, MilestonesView, WorkView,
 } from "./views";
+import { DP_KINDS, SYSTEM_ROLES, kindWords, roleLabel } from "./viewkit";
 import "./app.css";
 
 /** Everything the console holds about one engagement. Loaded together, refreshed together. */
@@ -630,7 +631,7 @@ function Dialogs(props: {
               <span className="eyebrow">Role</span>
               <select value={c} onChange={(x) => setC(x.target.value)}>
                 <option value="">Choose…</option>
-                {["TARGET", "SOURCE_LEGACY", "TWIN", "SANDBOX"].map((r) => <option key={r}>{r}</option>)}
+                {SYSTEM_ROLES.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}
               </select>
             </label>
             <label className="field">
@@ -718,7 +719,7 @@ function Dialogs(props: {
             <span className="eyebrow">Kind</span>
             <select value={b} onChange={(x) => setB(x.target.value)}>
               <option value="">Choose…</option>
-              {["DESIGN", "STATUTORY", "ONE_WAY", "SEQUENCE", "COMMERCIAL"].map((r) => <option key={r}>{r}</option>)}
+              {DP_KINDS.map((r) => <option key={r} value={r}>{kindWords(r)}</option>)}
             </select>
           </label>
           <Field label="Question" value={c} onChange={setC} required textarea

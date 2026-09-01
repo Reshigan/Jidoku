@@ -223,3 +223,19 @@ export const STATUS_NAME: Record<string, string> = {
 /* Falls back to `sentence`, which roleLabel already uses for the same purpose — one rule for what
    an untranslated enum looks like, so two screens cannot disagree about it. */
 export const statusName = (s: string) => STATUS_NAME[s] ?? sentence(s);
+
+/** A decision's kind, as a plain description of the gate rather than the enum. BRAND.md: never
+    name an internal in the UI. Lives here, not in the Decisions view, because the raise-a-decision
+    form offers the same five and a second copy is how two screens start disagreeing. */
+export const DP_KINDS = ["DESIGN", "STATUTORY", "ONE_WAY", "SEQUENCE", "COMMERCIAL"] as const;
+export const KIND_WORDS: Record<string, string> = {
+  ONE_WAY: "One way — no undo",
+  STATUTORY: "Statutory",
+  SEQUENCE: "Order of work",
+  COMMERCIAL: "Commercial",
+  DESIGN: "Design",
+};
+export const kindWords = (t: string) => KIND_WORDS[t] ?? sentence(t);
+
+/** The four roles a registered system may hold, in the order the registry lists them. */
+export const SYSTEM_ROLES = ["TARGET", "SOURCE_LEGACY", "TWIN", "SANDBOX"] as const;

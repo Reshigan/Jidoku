@@ -660,14 +660,15 @@ footer {
 .cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 @media (max-width: 560px) { .cols2 { grid-template-columns: 1fr; } }
 
-.signin { display: grid; place-items: center; min-height: 60vh; }
+/* Sign-in is the whole page, not a card stranded at the top of one. */
+.signin { display: grid; place-items: center; min-height: 74vh; }
 .signin h1 { margin: 0; }
 .signin p { max-width: 46ch; }
 
 .station .title {
-  font-family: "Archivo Narrow", system-ui, sans-serif; font-weight: 600; font-size: 14px;
+  font-family: var(--display); font-weight: 600; font-size: 14px;
 }
-.station .key { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 10.5px; color: var(--dim); margin-top: 2px; }
+.station .key { font-family: var(--mono); font-size: 10.5px; color: var(--ink-dim); margin-top: 2px; }
 .tbl td.num, .figure { font-variant-numeric: tabular-nums; }
 
 /* ---- polish pass after the first visual review ---- */
@@ -677,8 +678,8 @@ footer {
 .topbar select {
   appearance: none;
   padding-right: 30px;
-  background-image: linear-gradient(45deg, transparent 50%, var(--dim) 50%),
-                    linear-gradient(135deg, var(--dim) 50%, transparent 50%);
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink-mut) 50%),
+                    linear-gradient(135deg, var(--ink-mut) 50%, transparent 50%);
   background-position: calc(100% - 16px) 47%, calc(100% - 11px) 47%;
   background-size: 5px 5px, 5px 5px;
   background-repeat: no-repeat;
@@ -690,8 +691,6 @@ footer { text-transform: none; letter-spacing: .16em; }
 /* An unlit rail lamp still marks where you are. */
 .lamp[aria-current="true"] .glass { box-shadow: 0 0 0 3px rgba(43, 80, 226, .28); }
 
-/* Sign-in is the whole page, not a card stranded at the top of one. */
-.signin { min-height: 74vh; display: grid; place-items: center; }
 
 
 /* ---- industrial density pass ----

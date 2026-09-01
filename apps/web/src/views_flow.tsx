@@ -3,7 +3,7 @@
    the barrel App.tsx imports from. */
 import type { DecisionPoint, Landscape, SystemRecord } from "./api";
 import { dpRelease } from "./derive";
-import { roleLabel } from "./viewkit";
+import { kindWords, roleLabel } from "./viewkit";
 import { Empty, Pill, Section, Skeleton } from "./ui";
 import { Facts, Flow, Meter, Track } from "./viz";
 import type { GraphNode, TrackStop } from "./viz";
@@ -234,17 +234,6 @@ function DPCard(props: { dp: DecisionPoint; writable: boolean; onResolve: (dp: D
   );
 }
 
-/** BRAND.md: never name an internal in the UI. The kind is a plain description of the gate. */
-function kindWords(t: string) {
-  switch (t) {
-    case "ONE_WAY": return "One way — no undo";
-    case "STATUTORY": return "Statutory";
-    case "SEQUENCE": return "Order of work";
-    case "COMMERCIAL": return "Commercial";
-    case "DESIGN": return "Design";
-    default: return t.replace(/_/g, " ").toLowerCase();
-  }
-}
 
 /* ---------------- 4 · Landscape ---------------- */
 

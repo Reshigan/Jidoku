@@ -25,7 +25,7 @@
 .ms-row[data-earned="true"] { border-left-color: var(--run); }
 .ms-row[data-earned="false"] { border-left-color: var(--call); }
 .ms-row[data-earned="blocked"] { border-left-color: var(--line); opacity: .72; }
-.ms-idx { font-family: var(--mono); font-size: 18px; color: var(--dim); letter-spacing: .04em; }
+.ms-idx { font-family: var(--mono); font-size: 18px; color: var(--ink-dim); letter-spacing: .04em; }
 .ms-name { font-family: var(--display); font-size: 16px; letter-spacing: .02em; }
 .ms-say { font-size: 12.5px; color: var(--ink-mut); }
 
