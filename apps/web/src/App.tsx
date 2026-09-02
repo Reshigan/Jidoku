@@ -570,6 +570,7 @@ function Dialogs(props: {
   const [creds, setCreds] = useState(false);
   const [promotes, setPromotes] = useState("");
   const [check, setCheck] = useState<string | null>(null);
+  const [justBound, setJustBound] = useState<string[]>([]);
   const { eid, guard, onDone } = props;
 
   const run = (title: string, fn: () => Promise<unknown>) => async () => {
@@ -791,7 +792,9 @@ function Dialogs(props: {
 
     case "harvest": {
       const systems = props.systems ?? [];
-      const bound = new Set((props.connectors ?? []).map((x) => x.system_id));
+      /* The parent's connector list refreshes on its own schedule; a reader bound from inside this
+         dialog must count immediately, or the read it enables stays disabled until you reopen. */
+      const bound = new Set([...(props.connectors ?? []).map((x) => x.system_id), ...justBound]);
       const picked = systems.find((x) => x.system_id === a);
       return (
         <Modal title="Learn from a system" onClose={props.onClose}>
@@ -827,7 +830,10 @@ function Dialogs(props: {
                         onClick={async () => {
                           const ok = await guard("The reader could not be bound",
                             () => platform.bindReader(eid, picked.system_id));
-                          if (ok) setCheck(`Reader bound to ${picked.system_id}.`);
+                          if (ok) {
+                            setJustBound((prev) => [...prev, picked.system_id]);
+                            setCheck(`Reader bound to ${picked.system_id}.`);
+                          }
                         }}>
                   Bind a read-only connector
                 </button>

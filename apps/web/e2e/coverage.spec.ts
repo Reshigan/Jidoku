@@ -155,6 +155,35 @@ test("the console reaches every endpoint the API publishes", async ({ page, requ
   await page.getByRole("button", { name: "Approve the crossing" }).click();
   await dismissScrim(page);
 
+  // Learn from a system: bind a reader (no write half) and harvest its own metadata (ADR-0012).
+  await page.getByRole("button", { name: /^Learn from a system/ }).click();
+  await page.getByLabel(/^System/).selectOption("KOM-SF-DEV");
+  const bindReader = page.getByRole("button", { name: "Bind a read-only connector" });
+  if (await bindReader.count()) await bindReader.click();
+  const readIt = page.getByRole("button", { name: "Read it", exact: true });
+  await expect(readIt).toBeEnabled();          // the reader binding lands before the read is offered
+  await readIt.click();
+  await dismissScrim(page);
+
+  // Verify: read the live systems against signed intent, then govern a number range and draw
+  // the next free code from it (ADR-0013, ADR-0014).
+  await page.getByRole("tab", { name: /^Verify/ }).click();
+  await page.getByRole("button", { name: /^(Run verification|Verify again)$/ }).click();
+  await dismissScrim(page);
+  await page.getByLabel("Range id").fill("TT-COV");
+  await page.getByLabel("Object type").fill("TimeType");
+  await page.getByLabel("Prefix").fill("TT_COV_");
+  await page.getByRole("button", { name: "Register range" }).click();
+  await dismissScrim(page);
+  await page.getByRole("button", { name: "Allocate next" }).first().click();
+  await dismissScrim(page);
+
+  // Documents: the pack is projected from signed intent, so opening it is the whole path.
+  await page.getByRole("tab", { name: /^Documents/ }).click();
+  await expect(page.locator(".doc-tab").first()).toBeVisible();
+  await page.locator(".doc-tab").nth(1).click();
+  await dismissScrim(page);
+
   // Phase advance, ledger, evidence
   await page.getByRole("tab", { name: /^Line/ }).click();
   await page.getByRole("button", { name: /^Advance to/ }).first().click();
@@ -180,6 +209,7 @@ function templated(p: string): string {
   return p
     .replace(/^\/engagements\/[^/]+\/decisions\/[^/]+\/resolve$/, "/engagements/{eid}/decisions/{dp_id}/resolve")
     .replace(/^\/engagements\/[^/]+\/execution\/arm\/[^/]+$/, "/engagements/{eid}/execution/arm/{system_id}")
+    .replace(/^\/engagements\/[^/]+\/documents\/[^/]+$/, "/engagements/{eid}/documents/{document}")
     .replace(/^\/engagements\/[^/]+\/memory\/[^/]+\/(recheck|correct|promote)$/,
              (_m, act) => `/engagements/{eid}/memory/{claim_id}/${act}`)
     .replace(/^\/engagements\/[^/]+(\/.*)?$/, (_m, rest) => `/engagements/{eid}${rest ?? ""}`)
