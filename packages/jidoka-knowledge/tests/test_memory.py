@@ -91,6 +91,18 @@ def test_promotion_carries_no_pointer_back_into_the_engagement():
     assert [e["action"] for e in led.entries] == ["PROMOTED"]
 
 
+def test_promoting_the_same_claim_twice_is_one_belief():
+    """Regression: re-running a promotion flow (e.g. an e2e seed against a reused db) must not
+    accumulate duplicate system claims."""
+    sysmem, led = SystemStore(), Ledger()
+    src = _claim()
+    first = promote(src, sysmem, "human", "agent", led)
+    second = promote(src, sysmem, "human", "agent", led)
+    assert second is first
+    assert len(sysmem.current()) == 1
+    assert [e["action"] for e in led.entries] == ["PROMOTED"]   # no second ledger entry either
+
+
 def test_timestamps_are_parseable_and_sort_chronologically():
     """String comparison drives as_of(), so the stamp must be real ISO and fixed-width."""
     from datetime import datetime

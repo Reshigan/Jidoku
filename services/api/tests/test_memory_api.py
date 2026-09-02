@@ -106,6 +106,18 @@ def test_promoted_shape_reaches_system_memory_without_client_pointer():
                for x in c.get(f"/engagements/{other}/memory").json()["system"])
 
 
+def test_repeated_promotion_of_a_shape_does_not_duplicate_it():
+    """Regression: shared knowledge listed the same shape once per promotion call, so re-running a
+    seeding flow against a live server filled the panel with identical rows."""
+    memory_router.SYSTEM_MEMORY._claims.clear()
+    a, b = _eng("Client A"), _eng("Client B")
+    for eid in (a, b, a):
+        cid = _form(eid).json()["id"]
+        assert c.post(f"/engagements/{eid}/memory/{cid}/promote",
+                      json={"approver": "bob"}).status_code == 200
+    assert len(c.get(f"/engagements/{a}/memory").json()["system"]) == 1
+
+
 def test_memory_survives_rehydration():
     """A belief that vanishes on restart is not memory. Claims persist with their badges."""
     from jidoka_api.state import STORE

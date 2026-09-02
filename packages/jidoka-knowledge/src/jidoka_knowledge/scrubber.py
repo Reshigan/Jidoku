@@ -53,6 +53,12 @@ def promote(claim: Claim, system_store, approver: str, builder: str, ledger=None
             "claim carries client values and must be rewritten as a shape: " + "; ".join(reasons)
         )
 
+    # Promotion is idempotent: the same shape crossing twice is one belief, not two. Without
+    # this, every re-run of a promotion flow appends another identical system claim.
+    existing = next((c for c in system_store.current(claim.subject) if c.text == claim.text), None)
+    if existing is not None:
+        return existing
+
     promoted = Claim(
         subject=claim.subject, text=claim.text,
         # The system claim is grounded in the promotion ceremony, not in the client's evidence:
