@@ -127,7 +127,10 @@ export function EvidenceView(props: {
                  note="Recomputed from history, not asserted from roles"
                  lamp={sod.length && sodHeld === sod.length ? "run" : sod.length ? "stop" : "idle"}
                  status={sod.length ? (sodHeld === sod.length ? "Held on every task" : "Violated") : "Nothing approved"}
-                 className="grow scrolls">
+                 /* One sentence cannot fill a row its neighbour sets the height of, and a panel
+                    stretched over nothing reads as "no more to see". Before anything is approved
+                    this panel sizes to its own content; once the table exists it takes the slack. */
+                 className={sod.length ? "grow scrolls" : ""}>
           {sod.length === 0 ? (
             <span className="mut">Nothing has been approved yet, so there is no separation to check.</span>
           ) : (
