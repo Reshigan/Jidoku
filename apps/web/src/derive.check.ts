@@ -1,5 +1,5 @@
 // ponytail: one runnable check for the only non-trivial logic in the app.
-// Run: npx tsx src/derive.check.ts  (or import from a scratch script)
+// Run: npm run check (bundled with esbuild, executed by node — CI runs this).
 import { buildLanes, lineStop, milestones } from "./derive";
 import type { LedgerEntry, Plan } from "./api";
 
@@ -35,6 +35,15 @@ assert(lanes[0].stations[0].stage === "approved", "approval lands the station on
 assert(lanes[0].stations[0].builder === "rg" && lanes[0].stations[0].approver === "kt", "builder and approver read back");
 assert(!lanes[0].stations[1].locked, "approving the earlier station unlocks the next");
 assert(lanes[0].lamp === "call", "a part-done lane calls for a person");
+
+// A dry run is work that wrote nothing. Regression: DRY_RUN had no stage, so a rehearsed station
+// stayed on "Snapshot taken" with an Execute button that looked broken — the operator's reading of
+// invariant 6 holding was "the screen is dead".
+lanes = buildLanes(plan, [e("A", "SNAPSHOT", "rg"), e("A", "DRY_RUN", "rg")]);
+assert(lanes[0].stations[0].stage === "rehearsed", "a dry run leaves the station rehearsed");
+assert(lanes[0].stations[0].builder === null, "a rehearsal names no builder: nothing was written");
+lanes = buildLanes(plan, [e("A", "SNAPSHOT", "rg"), e("A", "DRY_RUN", "rg"), e("A", "EXECUTED", "rg")]);
+assert(lanes[0].stations[0].stage === "executed", "a real write moves past an earlier rehearsal");
 
 // A rollback resets the run and stops the lane's lamp.
 lanes = buildLanes(plan, [e("A", "SNAPSHOT", "rg"), e("A", "EXECUTED", "rg"), e("A", "ROLLED_BACK", "kt")]);

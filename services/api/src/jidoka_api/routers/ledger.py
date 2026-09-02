@@ -10,17 +10,28 @@ from .plans import _plan_or_409
 router = APIRouter(prefix="/engagements/{eid}/ledger", tags=["ledger"])
 
 
+# Actions the kernel writes as proof that something happened. Invariants 4 and 6 read them back
+# as preconditions, so a caller that could post them could manufacture its own permission: forge a
+# SNAPSHOT and a live write passes the rollback gate having read nothing; forge an EXECUTED under
+# the approver's name and approve() locks that approver out of their own task.
+RESERVED_ACTIONS = frozenset({"SNAPSHOT", "EXECUTED", "APPROVED", "ARMED", "DISARMED",
+                              "ROLLED_BACK", "PHASE_ADVANCED", "DRY_RUN"})
+
+
 class Entry(BaseModel):
     task: str
     action: str
-    actor: str = ""
     detail: str = ""
+    # No actor field: the entry is signed by whoever is holding the token, never by whoever asks.
 
 
 @router.post("")
 def append(eid: str, body: Entry, identity: Identity = Depends(require("ledger_append"))):
     e = get_or_404(eid)
-    return e.ledger.append(body.task, body.action, body.actor or identity.subject, body.detail)
+    if body.action.upper() in RESERVED_ACTIONS:
+        raise HTTPException(403, f"{body.action} is written by the kernel when it does the work, "
+                                 f"not by a caller claiming it happened. Use the endpoint that performs it.")
+    return e.ledger.append(body.task, body.action, identity.subject, body.detail)
 
 
 class Approval(BaseModel):

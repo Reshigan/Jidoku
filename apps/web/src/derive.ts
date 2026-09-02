@@ -3,12 +3,14 @@
 import type { DecisionPoint, LedgerEntry, Plan, PlanStep } from "./api";
 
 /** Where a station sits on the Snapshot -> Execute -> Validate -> Approve run. */
-export type Stage = "waiting" | "snapshot" | "executed" | "validated" | "approved" | "rolledback";
+export type Stage =
+  "waiting" | "snapshot" | "rehearsed" | "executed" | "validated" | "approved" | "rolledback";
 
 /** Plain, human words for each stage. Never the internal token. */
 export const STAGE_WORDS: Record<Stage, string> = {
   waiting: "Not started",
   snapshot: "Snapshot taken",
+  rehearsed: "Rehearsed — nothing was written yet",
   executed: "Executed — waiting on a validator",
   validated: "Validated — waiting on a person to approve",
   approved: "Approved",
@@ -39,14 +41,19 @@ export type Lamp = "run" | "call" | "stop" | "idle";
 const ORDER: Record<Stage, number> = {
   waiting: 0,
   snapshot: 1,
-  executed: 2,
-  validated: 3,
-  approved: 4,
-  rolledback: 5,
+  rehearsed: 2,
+  executed: 3,
+  validated: 4,
+  approved: 5,
+  rolledback: 6,
 };
 
 const ACTION_STAGE: Record<string, Stage> = {
   SNAPSHOT: "snapshot",
+  // A dry run is work that happened and wrote nothing. Without a stage of its own the station
+  // sat on "Snapshot taken" with an Execute button that appeared to do nothing at all — the
+  // operator's only reading of that is a broken screen, when the truth is invariant 6 holding.
+  DRY_RUN: "rehearsed",
   EXECUTED: "executed",
   VALIDATED: "validated",
   APPROVED: "approved",

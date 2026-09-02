@@ -21,8 +21,10 @@ const GATES: { stage: Stage; label: string }[] = [
   { stage: "approved", label: "Approved" },
 ];
 
+/* Rehearsed sits at the Snapshot gate, not past it: a dry run is an attempt at the next gate, not
+   a crossing of it, and drawing it as progress would tell the operator a write happened. */
 const GATE_AT: Record<Stage, number> = {
-  waiting: 0, snapshot: 1, executed: 2, validated: 3, approved: 4, rolledback: 0,
+  waiting: 0, snapshot: 1, rehearsed: 1, executed: 2, validated: 3, approved: 4, rolledback: 0,
 };
 
 export function LineView(props: {
@@ -199,6 +201,10 @@ export function WorkView(props: {
   planBlock: string | null;
   writable: boolean;
   busy: string | null;
+  /** System ids with a connector bound. A snapshot reads live state, so a station whose system has
+      no reader cannot start — and the floor says which one is missing instead of offering a
+      button that only ever produces a refusal. */
+  bound: Set<string>;
   onStage: (s: Station, action: string, detail?: string) => void;
   onApprove: (s: Station) => void;
   onRollback: (s: Station) => void;
@@ -235,7 +241,7 @@ export function WorkView(props: {
                  lamp={lane.lamp} status={laneWord(lane.lamp)}>
           <div className="grid">
             {lane.stations.map((s) => (
-              <StationCard key={s.step.key} s={s} {...props} />
+              <StationCard key={s.step.key} s={s} {...props} bound={props.bound.has(s.step.system)} />
             ))}
           </div>
           {props.lanes.length === 1 && <LaneOrder lane={lane} />}
@@ -310,7 +316,7 @@ function stationTrack(s: Station): TrackStop[] {
 }
 
 function StationCard(props: {
-  s: Station; writable: boolean; busy: string | null;
+  s: Station; writable: boolean; busy: string | null; bound: boolean;
   onStage: (s: Station, action: string, detail?: string) => void;
   onApprove: (s: Station) => void;
   onRollback: (s: Station) => void;
@@ -342,17 +348,27 @@ function StationCard(props: {
       {!s.locked && (
         <div className="row">
           {s.stage === "waiting" && (
-            <button className="btn" disabled={off}
+            <button className="btn" disabled={off || !props.bound}
                     onClick={() => props.onStage(s, "SNAPSHOT", "before-snapshot captured")}>
               Take before-snapshot
             </button>
           )}
-          {/* Execution is refused without a snapshot, so the control does not exist until there is one. */}
-          {s.stage === "snapshot" && (
+          {s.stage === "waiting" && !props.bound && (
+            <span className="mut">Bind a connector to {s.step.system} on Configure first — a
+              snapshot has to read the live system.</span>
+          )}
+          {/* Execution is refused without a snapshot, so the control does not exist until there is one.
+              A rehearsed station offers it again: the run was real, it simply wrote nothing, and the
+              only thing standing between it and a live write is an arming on Configure. */}
+          {(s.stage === "snapshot" || s.stage === "rehearsed") && (
             <button className="btn primary" disabled={off}
                     onClick={() => props.onStage(s, "EXECUTED", s.step.action)}>
-              Execute
+              {s.stage === "rehearsed" ? "Run it again" : "Execute"}
             </button>
+          )}
+          {s.stage === "rehearsed" && (
+            <span className="mut">The rehearsal wrote nothing. Arm {s.step.system} for a live
+              write on Configure, then run it again.</span>
           )}
           {s.stage === "executed" && (
             <button className="btn" disabled={off}

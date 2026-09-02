@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from jidoka_api.auth import ROLE_PERMISSIONS, issue_token
 from jidoka_api.evidence import build_bundle, verify_bundle
 from jidoka_api.main import app
+from jidoka_api.routers.engagements import get_or_404
 from jidoka_api.state import Store
 from jidoka_core.repository import SqliteRepository, open_repository
 
@@ -33,11 +34,13 @@ def test_phase_advances_only_along_the_graph():
     assert c.get(f"/engagements/{eid}").json()["next_phases"] == ["BUILD"]
 
 
-def test_phase_advance_is_ledgered():
+def test_phase_advance_is_ledgered_under_the_caller_not_a_supplied_name():
     eid = _eng()
+    # "actor" is ignored: an entry naming someone who did not hold the token is a forged attestation.
     c.post(f"/engagements/{eid}/phase", json={"to": "SCOPE", "actor": "pm"})
     entries = c.get(f"/engagements/{eid}/ledger").json()["entries"]
-    assert [e for e in entries if e["action"] == "PHASE_ADVANCED"][0]["actor"] == "pm"
+    advanced = [e for e in entries if e["action"] == "PHASE_ADVANCED"][0]
+    assert advanced["actor"] != "pm" and advanced["actor"]
 
 
 def test_hypercare_is_terminal():
@@ -164,10 +167,27 @@ def test_evidence_detects_a_tampered_entry():
     assert out["verified"] is False and out["broken_at"] == 0
 
 
+def test_reserved_ledger_actions_cannot_be_forged_over_http():
+    """Regression: invariants 4 and 6 read SNAPSHOT/EXECUTED back as preconditions. A builder who
+    could post them could manufacture its own permission — forge a snapshot and a live write passes
+    the rollback gate having read nothing; forge an EXECUTED under the approver's name and that
+    approver is locked out of their own task."""
+    eid = _eng()
+    for action in ("SNAPSHOT", "EXECUTED", "APPROVED", "ARMED", "snapshot"):
+        r = c.post(f"/engagements/{eid}/ledger", json={"task": "T9", "action": action})
+        assert r.status_code == 403, f"{action} was accepted from a caller"
+    # A free-form annotation is still allowed, and is signed by the caller, not by whoever asks.
+    r = c.post(f"/engagements/{eid}/ledger",
+               json={"task": "T9", "action": "NOTED", "actor": "someone-else"})
+    assert r.status_code == 200 and r.json()["actor"] != "someone-else"
+    assert not any(e["action"] == "SNAPSHOT" for e in get_or_404(eid).ledger.entries)
+
+
 def test_evidence_attests_separation_of_duties():
     eid = _eng()
-    c.post(f"/engagements/{eid}/ledger", json={"task": "T2", "action": "SNAPSHOT", "actor": "bot"})
-    c.post(f"/engagements/{eid}/ledger", json={"task": "T2", "action": "EXECUTED", "actor": "alice"})
+    led = get_or_404(eid).ledger
+    led.append("T2", "SNAPSHOT", "bot")
+    led.append("T2", "EXECUTED", "alice")
     c.post(f"/engagements/{eid}/ledger/approve", json={"task": "T2", "reviewer": "bob"})
     sod = c.get(f"/engagements/{eid}/ledger/evidence").json()["separation_of_duties"][0]
     assert sod == {"task": "T2", "approved_by": "bob", "executed_by": ["alice"],

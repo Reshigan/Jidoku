@@ -47,7 +47,6 @@ def detail(eid: str, identity: Identity = Depends(require("read"))):
 
 class PhaseIn(BaseModel):
     to: str
-    actor: str = ""
 
 
 @router.post("/{eid}/phase")
@@ -60,5 +59,5 @@ def advance_phase(eid: str, body: PhaseIn, identity: Identity = Depends(require(
         raise HTTPException(409, str(ex))
     frm, e.phase = e.phase, body.to
     e.persist_header()
-    e.ledger.append("ENGAGEMENT", "PHASE_ADVANCED", body.actor or identity.subject, f"{frm} -> {body.to}")
+    e.ledger.append("ENGAGEMENT", "PHASE_ADVANCED", identity.subject, f"{frm} -> {body.to}")
     return {"engagement_id": eid, "phase": e.phase, "from": frm}

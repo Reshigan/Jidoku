@@ -51,6 +51,15 @@ class TestTierMap(unittest.TestCase):
                     "TimeType", "TimeAccount", "WorkSchedule", "PerPerson"):
             self.assertEqual(TIER_MAP[obj], "A")
 
+    def test_readable_but_not_writable_entities_are_never_tier_a(self):
+        """Regression: TIER_MAP is built from ENTITY_SETS, so anything listed there is claimed
+        writable. These five answer a GET but are derived or written through a parent — listing
+        one would have the executor upsert against a URL SF rejects, or worse, accepts."""
+        for obj in ("TimeAccountDetail", "EmployeeTimeSheet", "WorkScheduleDay", "Holiday",
+                    "PicklistOption"):
+            self.assertNotIn(obj, ENTITY_SETS, f"{obj} is not a write target")
+            self.assertIn(TIER_MAP[obj], ("B", "C"), f"{obj} claims a write path it does not have")
+
     def test_key_fields_only_describe_known_entities(self):
         for obj in KEY_FIELDS:
             self.assertIn(obj, ENTITY_SETS)

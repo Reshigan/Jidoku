@@ -25,19 +25,12 @@ test("the console reaches every endpoint the API publishes", async ({ page, requ
     seen.add(`${r.method()} ${templated(u.pathname)}`);
   });
 
-  await page.goto("/");
-  await page.getByLabel("Name").fill("coverage.tester");
-  // Role buttons are toggles and "builder" is pre-picked; clicking the others must not drop it,
-  // or this tester loses register_system, execute and arm.
-  for (const r of ["reviewer", "approver", "auditor"]) {
-    const btn = page.getByRole("button", { name: r, exact: true });
-    if (!((await btn.getAttribute("class")) || "").includes("primary")) await btn.click();
-  }
-  await page.getByRole("button", { name: "Enter the console" }).click();
+  await signInAs(page, "coverage.tester");
 
   await page.getByRole("button", { name: "New engagement" }).click();
   await page.getByLabel("Client").fill("Komatsu");
-  await page.getByLabel("Name").fill(`Coverage ${Date.now()}`);
+  const eng = `Coverage ${Date.now()}`;
+  await page.getByLabel("Name").fill(eng);
   await page.getByRole("button", { name: "Open it" }).click();
 
   // Landscape
@@ -67,7 +60,7 @@ test("the console reaches every endpoint the API publishes", async ({ page, requ
   await page.getByRole("tab", { name: /^Intent/ }).click();
   await page.getByRole("button", { name: "Load intent" }).click();
   const records = JSON.stringify([{
-    object: "PayComponent", product: "SuccessFactors", system_binding: "KOM-SF-DEV", tier: "A",
+    object: "FOPayComponent", product: "SuccessFactors", system_binding: "KOM-SF-DEV", tier: "A",
     intent: { code: "BASIC" }, source: { workbook: "w.xlsx", signed_by: "x", date: "2026-01-01" },
   }, {
     object: "A_CostCenter", product: "S4HANA", system_binding: "KOM-S4-DEV", tier: "A",
@@ -91,7 +84,22 @@ test("the console reaches every endpoint the API publishes", async ({ page, requ
   await page.getByRole("textbox", { name: /^Decision/ }).fill("By legal entity");
   await page.getByRole("button", { name: "Record the decision" }).click();
 
-  // Work: a full run, then an approval attempt (refused — same person executed it)
+  // Work: a full run, then an approval attempt (refused — same person executed it). The connector
+  // is bound first: a snapshot reads the live system, so the floor cannot start without a reader.
+  await page.getByRole("tab", { name: /^Configure/ }).click();
+  await page.getByRole("button", { name: "Bind connector" }).first().click();
+  await dismissScrim(page);
+
+  // A builder may not spend its own arming (invariant 7), so an unarmed execute is a rehearsal and
+  // never reaches VALIDATED or APPROVED. A second identity arms the target and hands it back.
+  await signInAs(page, "coverage.armer");
+  await page.getByLabel("Engagement").selectOption({ label: `Komatsu — ${eng}` });
+  await page.getByRole("tab", { name: /^Configure/ }).click();
+  await page.getByRole("button", { name: "Arm for live" }).first().click();
+  await dismissScrim(page);
+  await signInAs(page, "coverage.tester");
+  await page.getByLabel("Engagement").selectOption({ label: `Komatsu — ${eng}` });
+
   await page.getByRole("tab", { name: /^Work/ }).click();
   await page.getByRole("button", { name: "Take before-snapshot" }).first().click();
   await page.getByRole("button", { name: "Execute", exact: true }).first().click();
@@ -104,8 +112,6 @@ test("the console reaches every endpoint the API publishes", async ({ page, requ
   // spend its own arming) — the point here is that each endpoint has a path, not the SoD split,
   // which services/api/tests owns.
   await page.getByRole("tab", { name: /^Configure/ }).click();
-  await page.getByRole("button", { name: "Bind connector" }).first().click();
-  await dismissScrim(page);
   await page.getByRole("button", { name: "Snapshot" }).first().click();
   await dismissScrim(page);
   await page.getByRole("button", { name: /^(Dry run|Write for real)$/ }).first().click();
@@ -198,6 +204,21 @@ test("the console reaches every endpoint the API publishes", async ({ page, requ
 /** A refusal modal is a success here — it means the gate fired. Clear it and keep walking.
     Scrims stack: a refusal can open over a dialog that has its own scrim, so clear until none
     is left rather than assuming a single match. */
+/** Sign in holding every role. Role buttons are toggles and "builder" is pre-picked; clicking the
+ *  others must not drop it, or the identity loses register_system, execute and arm. */
+async function signInAs(page: import("@playwright/test").Page, who: string) {
+  // A session persists across a reload, so switching identity means signing out, not navigating.
+  const out = page.getByRole("button", { name: "Sign out" });
+  if (await out.isVisible().catch(() => false)) await out.click();
+  else await page.goto("/");
+  await page.getByLabel("Name").fill(who);
+  for (const r of ["reviewer", "approver", "auditor"]) {
+    const btn = page.getByRole("button", { name: r, exact: true });
+    if (!((await btn.getAttribute("class")) || "").includes("primary")) await btn.click();
+  }
+  await page.getByRole("button", { name: "Enter the console" }).click();
+}
+
 async function dismissScrim(page: import("@playwright/test").Page) {
   await page.waitForTimeout(500);
   for (let i = 0; i < 4 && await page.locator(".scrim").count(); i++) {

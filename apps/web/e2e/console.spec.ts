@@ -7,7 +7,10 @@ import { VIEWS } from "../src/ui";
 const ROLES = ["builder", "reviewer", "approver", "auditor"];
 
 async function signIn(page: Page, who: string, roles: string[] = ROLES) {
-  await page.goto("/");
+  // A session persists across a reload, so switching identity means signing out, not navigating.
+  const out = page.getByRole("button", { name: "Sign out" });
+  if (await out.isVisible().catch(() => false)) await out.click();
+  else await page.goto("/");
   await page.getByLabel("Name").fill(who);
   // "builder" starts selected; click only the roles whose current state is wrong.
   for (const r of ROLES) {
@@ -27,6 +30,14 @@ async function newEngagement(page: Page, client: string, name: string) {
   await expect(page.locator(".scrim")).toHaveCount(0);
   // Opening an engagement selects it.
   await expect(page.locator(".head h1")).toHaveText(name);
+}
+
+/** Re-select an engagement after signing in as someone else: sign-in lands on whichever engagement
+ *  the list happens to hold first, and a second identity has to get back to the one under test. */
+async function openEngagement(page: Page, name: string) {
+  const sel = page.getByLabel("Engagement");
+  await sel.selectOption({ label: `Komatsu — ${name}` });
+  await expect(sel.locator("option:checked")).toHaveText(`Komatsu — ${name}`);
 }
 
 /** The tallest gap between a panel's body and the content in it, in pixels — for panels that did
@@ -109,7 +120,7 @@ test("journey: load signed intent, check it first, then plan the work", async ({
 
   await page.getByRole("button", { name: "Load intent" }).click();
   const records = JSON.stringify([{
-    object: "PayComponent", product: "SuccessFactors", system_binding: "KOM-SF-DEV",
+    object: "FOPayComponent", product: "SuccessFactors", system_binding: "KOM-SF-DEV",
     tier: "A", intent: { code: "BASIC", name: "Basic Salary" },
     source: { workbook: "KOM-COMP-01.xlsx", signed_by: "komatsu.hr", date: "2026-02-02" },
   }]);
@@ -117,7 +128,7 @@ test("journey: load signed intent, check it first, then plan the work", async ({
   await page.getByRole("button", { name: "Check it" }).click();
   await expect(page.locator(".verbatim")).toContainText("check clean");
   await page.getByRole("button", { name: "Load it" }).click();
-  await expect(page.getByText("PayComponent")).toBeVisible();
+  await expect(page.getByText("FOPayComponent")).toBeVisible();
 
   await view(page, "Work").click();
   await expect(page.getByText("Take before-snapshot").first()).toBeVisible();
@@ -150,14 +161,39 @@ test("journey: separation of duties refuses the executor's own approval, verbati
   await signIn(page, "solo.operator");
   const name = `SoD ${Date.now()}`;
   await newEngagement(page, "Komatsu", name);
+  // The target has to exist before a connector can reach it, and a connector has to exist before
+  // the floor can take a before-snapshot: a snapshot reads the live system.
+  await view(page, "Landscape").click();
+  await page.getByRole("button", { name: "Register a system" }).click();
+  await page.getByLabel("System id").fill("KOM-SF-DEV");
+  await page.getByLabel("Product").fill("SuccessFactors");
+  await page.getByLabel("Role").selectOption("TARGET");
+  await page.getByLabel("Environment").selectOption("DEV");
+  await page.getByRole("checkbox").check();
+  await page.getByRole("button", { name: "Register", exact: true }).click();
+
   await view(page, "Intent").click();
   await page.getByRole("button", { name: "Load intent" }).click();
   await page.getByLabel("Records (JSON array)").fill(JSON.stringify([{
-    object: "PayComponent", product: "SuccessFactors", system_binding: "KOM-SF-DEV", tier: "A",
+    object: "FOPayComponent", product: "SuccessFactors", system_binding: "KOM-SF-DEV", tier: "A",
     intent: { code: "BASIC" }, source: { workbook: "w.xlsx", signed_by: "x", date: "2026-01-01" },
   }]));
   await page.getByRole("button", { name: "Load it" }).click();
 
+  // A snapshot reads the live system, so the reader has to exist before the floor can start.
+  await view(page, "Configure").click();
+  await page.getByRole("button", { name: "Bind connector" }).first().click();
+
+  // Arming is spent by someone other than the person who executes (invariant 7), so a second
+  // identity arms the target. Without this the run is a rehearsal and writes nothing, and the
+  // SoD refusal this test exists for is never reached.
+  await signIn(page, "arming.approver");
+  await openEngagement(page, name);
+  await view(page, "Configure").click();
+  await page.getByRole("button", { name: "Arm for live" }).first().click();
+
+  await signIn(page, "solo.operator");
+  await openEngagement(page, name);
   await view(page, "Work").click();
   await page.getByRole("button", { name: "Take before-snapshot" }).first().click();
   await page.getByRole("button", { name: "Execute", exact: true }).first().click();

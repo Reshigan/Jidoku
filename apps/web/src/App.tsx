@@ -69,13 +69,18 @@ export default function App() {
   const writable = can("write") && !offline;
 
   /* Every write goes through here, so the double-click guard goes here too rather than onto each of
-     the twenty buttons that would each forget it. Approve fired ten times is ten ledger entries. */
-  const inFlight = useRef(false);
+     the twenty buttons that would each forget it. Approve fired ten times is ten ledger entries.
+     The guard is per-action, not global: a second click on the *same* action is a double-click and
+     is dropped, but two different writes must not cancel each other. A global lock silently threw
+     away whichever write lost the race — a button that did nothing and said nothing, which is how
+     an operator learns to distrust the screen. */
+  const inFlight = useRef(new Set<string>());
 
   /* One place turns an ApiError into a visible refusal, so no view ever invents a message. */
-  const guard = useCallback(async <T,>(title: string, fn: () => Promise<T>): Promise<T | null> => {
-    if (inFlight.current) return null;
-    inFlight.current = true;
+  const guard = useCallback(async <T,>(title: string, fn: () => Promise<T>,
+                                       key = title): Promise<T | null> => {
+    if (inFlight.current.has(key)) return null;
+    inFlight.current.add(key);
     try {
       const out = await fn();
       setOffline(false);
@@ -93,7 +98,7 @@ export default function App() {
       setRefusal({ title, text: e.detail || e.message });
       return null;
     } finally {
-      inFlight.current = false;
+      inFlight.current.delete(key);
     }
   }, []);
 
@@ -224,14 +229,27 @@ export default function App() {
   /* Someone else's arming is the case that matters: this operator never sees it happen, so the
      badge is re-read from the server every time the screen is opened, not only when they arm. */
   useEffect(() => {
-    if (view === "Configure") void refreshArmed();
+    // Work needs it too: a station cannot snapshot a system with no reader bound, and the floor
+    // has to say so on the button rather than let the operator find out from a refusal.
+    if (view === "Configure" || view === "Work") void refreshArmed();
   }, [view, refreshArmed]);
 
+  /* A station moves by doing the work, never by claiming it. SNAPSHOT, EXECUTED and ROLLED_BACK are
+     what invariants 4 and 6 read back as preconditions, so the console asks the endpoint that
+     performs the act and lets the server write its own attestation. Only VALIDATED — a person
+     saying they read it back — is an annotation, and it is signed by whoever is holding the token. */
   const stage = async (s: Station, action: string, detail = "") => {
     if (!eid) return;
-    setBusy(s.step.key);
+    const key = s.step.key;
+    const perform: Record<string, () => Promise<unknown>> = {
+      SNAPSHOT: () => platform.snapshot(eid, key),
+      EXECUTED: () => platform.execute(eid, key),
+      ROLLED_BACK: () => platform.rollback(eid, key, detail),
+    };
+    setBusy(key);
     await guard("The platform refused that step",
-      () => platform.appendLedger(eid, { task: s.step.key, action, detail }));
+      perform[action] ?? (() => platform.appendLedger(eid, { task: key, action, detail })),
+      `${key}:${action}`);
     setBusy(null);
     await after();
   };
@@ -333,6 +351,7 @@ export default function App() {
               )}
               {view === "Work" && (
                 <WorkView lanes={lanes} planBlock={d.planBlock} busy={busy}
+                          bound={new Set(connectors.map((c) => c.system_id))}
                           writable={writable && !stopped && !d.chainBroken}
                           onStage={stage} onApprove={approve}
                           onRollback={(s) => stage(s, "ROLLED_BACK", "rolled back from the console")} />

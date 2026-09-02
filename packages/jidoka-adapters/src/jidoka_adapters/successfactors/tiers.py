@@ -10,14 +10,21 @@ THE HONESTY NOTE (mirrors s4hana's): in SF the *instances* are frequently Tier A
   - MDF object instances (an object's records) are writable via their generated entity set, but
     the MDF object *definition* (Configuration UI / Manage Data Object Definitions) is not —
     MDF_OBJECT_DEFINITION and the *_CONFIG_UI entries below are Tier C.
-  - PickListV2 / PicklistOption values are API-writable; the picklist's *binding* into a field
-    (Manage Business Configuration, the succession data model) is not — Tier B/C.
+  - A PickListV2 and its values are API-writable through the PickListV2 payload; an individual
+    PicklistOption is a child of that payload, not its own write target, and the picklist's
+    *binding* into a field (Manage Business Configuration, the succession data model) is not
+    writable at all — Tier B/C.
   - Position instances (Position) are Tier A; Position Management *settings* are Tier C.
   - EmpJob / EmpCompensation rows are Tier A; the event reason derivation rules and the
     workflow that gates them are business rules authored in the UI — Tier C.
   - Time account *instances* and time types are Tier A; the accrual rules that create them are
     UI-authored business rules — Tier C.
 Master data being writable is not permission to claim its configuration is.
+
+A readable entity set is not a writable one. TimeAccountDetail and EmployeeTimeSheet are derived
+by the accrual and valuation runs; WorkScheduleDay and Holiday are children written through their
+parent calendar. All four answer a GET, which is exactly what makes them easy to claim as Tier A
+by mistake, so they are declared below and deliberately excluded from ENTITY_SETS.
 
 Where the exact entity set name was not certain, the entity is deliberately Tier B or C.
 A wrong Tier-A URL is worse than an honest Tier C: the platform would try to write it.
@@ -70,22 +77,18 @@ ENTITY_SETS = {
     "Position": "Position",
     "PositionMatrixRelationship": "PositionMatrixRelationship",
 
-    # --- Picklists (values; the field binding is not Tier A) ---
+    # --- Picklists (the list and its values are written through PickListV2; an option is a
+    #     child of that payload, not an independently writable entity set) ---
     "PickListV2": "PickListV2",
-    "PicklistOption": "PicklistOption",
 
     # --- Time Off / Time Sheet (config objects with real MDF-backed entity sets) ---
     "TimeType": "TimeType",
     "TimeAccountType": "TimeAccountType",
     "TimeAccount": "TimeAccount",
-    "TimeAccountDetail": "TimeAccountDetail",
     "EmployeeTime": "EmployeeTime",
     "TimeProfile": "TimeProfile",
     "WorkSchedule": "WorkSchedule",
-    "WorkScheduleDay": "WorkScheduleDay",
     "HolidayCalendar": "HolidayCalendar",
-    "Holiday": "Holiday",
-    "EmployeeTimeSheet": "EmployeeTimeSheet",
     "TimeSheetEntry": "TimeSheetEntry",
 }
 
@@ -119,6 +122,14 @@ TIER_MAP = {
     # A custom MDF object's instances ARE writable, through the entity set SF generates from the
     # object's externalName (cust_<object>). That name is per-tenant, so it cannot be listed here:
     # register the concrete entity in ENTITY_SETS when the tenant's object definition is known.
+
+    # === Read-only or child-of-parent: a real entity set exists, but it is not a write target.
+    # These are the ones a tier_map most easily lies about, because a GET against them succeeds.
+    "TimeAccountDetail": "C",       # accrual/posting detail, derived by the accrual run
+    "EmployeeTimeSheet": "C",       # computed aggregate over TimeSheetEntry; write the entries
+    "WorkScheduleDay": "B",         # written through its WorkSchedule parent, or by import
+    "Holiday": "B",                 # written through its HolidayCalendar parent, or by import
+    "PicklistOption": "B",          # an option is a child of the PickListV2 payload
 
     # === B: no write API — a human loads a file (Import & Export Data / Data Migration template) ===
     "MDF_OBJECT_DEFINITION_EXPORT": "B",   # definition ships as a CSV a human imports; not writable

@@ -251,7 +251,7 @@ def test_an_object_with_no_declared_entity_set_is_a_refusal_not_a_server_error()
     eid = c.post("/engagements", json={"name": "Exec", "client": "Komatsu"}).json()["engagement_id"]
     _target(eid, "KOM-SF-DEV")
     c.post(f"/engagements/{eid}/ir", json=[{
-        "object": "PayComponent", "product": "SuccessFactors", "system_binding": "KOM-SF-DEV",
+        "object": "cust_NotADeclaredObject", "product": "SuccessFactors", "system_binding": "KOM-SF-DEV",
         "tier": "A", "intent": {"code": "BASIC"},
         "source": {"workbook": "w.xlsx", "signed_by": "Komatsu HR", "date": "2026-01-01"}}])
     key = _tier_a_step(eid)["key"]

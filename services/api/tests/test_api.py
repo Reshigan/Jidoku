@@ -1,6 +1,7 @@
 import json, pathlib
 from fastapi.testclient import TestClient
 from jidoka_api.main import app
+from jidoka_api.routers.engagements import get_or_404
 
 c = TestClient(app)
 IR = json.load(open(pathlib.Path(__file__).parents[3] / "packages/jidoka-core/tests/fixtures/komatsu_sample_ir.json"))
@@ -24,8 +25,10 @@ def test_open_dp_blocks_plan_with_409():
 
 def test_sod_enforced_over_http():
     eid = _eng()
-    c.post(f"/engagements/{eid}/ledger", json={"task": "T1", "action": "SNAPSHOT", "actor": "jidoka"})
-    c.post(f"/engagements/{eid}/ledger", json={"task": "T1", "action": "EXECUTED", "actor": "alice"})
+    # Seeded through the kernel, because that is the only thing that may write these actions.
+    led = get_or_404(eid).ledger
+    led.append("T1", "SNAPSHOT", "jidoka")
+    led.append("T1", "EXECUTED", "alice")
     assert c.post(f"/engagements/{eid}/ledger/approve", json={"task": "T1", "reviewer": "alice"}).status_code == 403
     assert c.post(f"/engagements/{eid}/ledger/approve", json={"task": "T1", "reviewer": "bob"}).status_code == 200
 
