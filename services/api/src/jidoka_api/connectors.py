@@ -41,10 +41,32 @@ class Connector:
 
 
 def _key_of(row: dict, payload: dict) -> str | None:
-    for f in ("externalCode", payload.get("key_field") or ""):
-        if f and f in row:
-            return f
-    return None
+    """The field that identifies this row, as the adapter declared it.
+
+    Guessing here is what made an upsert an insert: no S/4 entity is keyed by externalCode, so a
+    fallback guess never matched and every re-run appended a duplicate. The adapter knows the key
+    field and now says so in the payload; if it did not, refusing to match is the honest answer.
+    """
+    f = payload.get("key_field") or ""
+    return f if f and f in row else None
+
+
+def _read_back(fetch, system_id: str, payload: dict) -> list[dict]:
+    """Re-read the entity that was just written, so verify() sees the substrate rather than a hope.
+
+    Without this a live write returns no live_state, verify() is handed an empty list and reports
+    MISSING for a record that landed perfectly. A read that fails is not a failed write: the write
+    already happened and is on the ledger, so the read's failure downgrades the step to DRIFTED
+    through an empty state rather than throwing away the EXECUTED entry.
+    """
+    ops = payload.get("operations") or []
+    entity = (ops[0].get("entity") if ops else "") or payload.get("entity_set", "")
+    if not entity:
+        return []
+    try:
+        return list(fetch(system_id, entity))
+    except Exception:
+        return []
 
 
 def _mock(system_id: str) -> Connector:
@@ -126,18 +148,22 @@ def _live(system_id: str, product: str, base_url: str, secret_env: str) -> Conne
             return raw
 
         def apply_fn(payload):
-            # ponytail: SF's $batch rides the raw authenticated request; the adapter already
-            # built the operations. No retry layer — a failed write is a ledger event, not a
-            # silent second attempt against a customer's tenant.
-            from jidoka_adapters.s4hana.odata import build_batch
+            # SF's own loader, not S/4's: SF upserts POST to /odata/v2/upsert and name the entity
+            # in an X-Entity header, where S/4 posts to the entity's own URL. Borrowing S/4's
+            # builder produced a body SF rejects, and — worse — one whose reply was never parsed,
+            # so a half-landed changeset was reported as a clean success.
+            # No retry layer: a failed write is a ledger event, not a silent second attempt
+            # against a customer's tenant.
+            from jidoka_adapters.successfactors.loader import BatchError, BatchLoader
 
-            body = build_batch(payload["operations"], f"{client.base_url}/odata/v2")
-            status, _h, raw = client.request(
-                "POST", f"{client.base_url}/odata/v2/$batch",
-                {"Content-Type": "multipart/mixed; boundary=batch_jidoka"}, body.encode())
-            if status >= 400:
-                raise ConnectorError(f"{system_id}: $batch rejected with HTTP {status}.")
-            return {"status": "OK", "total_operations": len(payload["operations"])}
+            try:
+                out = BatchLoader(client).apply(payload["operations"], dry_run=False,
+                                                base_url=client.base_url)
+            except BatchError as exc:
+                raise ConnectorError(f"{system_id}: {exc}") from None
+            return {"status": out["status"], "total_operations": len(payload["operations"]),
+                    "failed_operations": len(out["errors"]), "errors": out["errors"],
+                    "live_state": _read_back(fetch, system_id, payload)}
     else:
         from jidoka_adapters.s4hana import SERVICES
         from jidoka_adapters.s4hana.odata import S4ODataClient
@@ -162,7 +188,14 @@ def _live(system_id: str, product: str, base_url: str, secret_env: str) -> Conne
                 raise ConnectorError(
                     f"{system_id}: no OData service is declared for {payload.get('entity_set')!r}. "
                     f"Refusing to guess a service URL.")
-            return client.batch(service, payload["operations"], dry_run=False)
+            out = client.batch(service, payload["operations"], dry_run=False)
+            # client.batch hands back the raw per-part replies. The executor's partial-batch guard
+            # reads a count, so the count is produced here — otherwise a changeset that half-landed
+            # verifies one record, finds it, and calls the whole step VERIFIED.
+            failed = [r for r in out.get("results", []) if not 200 <= r.get("status", 0) < 300]
+            return {**out, "total_operations": len(payload["operations"]),
+                    "failed_operations": len(failed), "errors": failed,
+                    "live_state": _read_back(fetch, system_id, payload)}
 
     return Connector("live", fetch, apply_fn, f"{product} @ {system_id}", metadata_xml=metadata_xml)
 
@@ -214,6 +247,8 @@ def build_reader(kind: str, system_id: str, product: str, registry: SystemRegist
     def refuse(payload):
         raise ConnectorError(f"{system_id} is bound read-only — this binding has no write path.")
 
-    c.apply = refuse
-    c.kind = f"{c.kind}-read"
-    return c
+    # Overwriting `apply` on the write-capable connector is not enough: the client it closes over
+    # stays reachable through every other attribute the object carries (_mock hangs the MockSAP on
+    # `.mock`, and a live client's own methods would ride along the same way). A reader is a new,
+    # smaller object holding only the halves that read — the write path is not refused, it is absent.
+    return Connector(f"{c.kind}-read", c.fetch, refuse, c.describe, metadata_xml=c.metadata_xml)

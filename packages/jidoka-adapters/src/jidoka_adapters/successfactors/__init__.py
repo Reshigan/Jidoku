@@ -44,6 +44,10 @@ class SFAdapter(Adapter):
                     f"the tier_map is lying, fix it rather than guessing a URL.")
             return {"kind": "odata_batch", "system": ir.system_binding, "dry_run": True,
                     "entity_set": entity_set,
+                    # An UPSERT is only an upsert if the substrate can tell which record it means.
+                    # EmpJob is keyed by userId, not externalCode, so the key field travels with
+                    # the payload rather than being guessed at the far end.
+                    "key_field": self.key_field(ir.object),
                     "operations": [{"method": "UPSERT", "entity": entity_set, "payload": ir.intent}]}
         if tier == "B":
             return {"kind": "import_file", "system": ir.system_binding,

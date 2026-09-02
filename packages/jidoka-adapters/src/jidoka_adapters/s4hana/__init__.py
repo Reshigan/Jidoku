@@ -111,6 +111,9 @@ class S4Adapter(Adapter):
                     f"the tier_map is lying, fix it rather than guessing a URL.")
             return {"kind": "odata_batch", "system": ir.system_binding, "dry_run": True,
                     "service": service,
+                    # No S/4 entity is keyed by externalCode, so an upsert that does not carry its
+                    # own key field cannot match an existing row — it appends a duplicate instead.
+                    "key_field": self.key_field(ir.object),
                     "operations": [{"method": "UPSERT", "entity": ir.object, "payload": ir.intent}]}
         if tier == "B":
             return {"kind": "import_file", "system": ir.system_binding,
