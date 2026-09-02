@@ -195,11 +195,13 @@ test("the console reaches every endpoint the API publishes", async ({ page, requ
   expect(missing, `endpoints with no path through the console:\n${missing.join("\n")}`).toEqual([]);
 });
 
-/** A refusal modal is a success here — it means the gate fired. Clear it and keep walking. */
+/** A refusal modal is a success here — it means the gate fired. Clear it and keep walking.
+    Scrims stack: a refusal can open over a dialog that has its own scrim, so clear until none
+    is left rather than assuming a single match. */
 async function dismissScrim(page: import("@playwright/test").Page) {
   await page.waitForTimeout(500);
-  if (await page.locator(".scrim").count()) {
-    await page.locator(".scrim").click({ position: { x: 5, y: 5 } });
+  for (let i = 0; i < 4 && await page.locator(".scrim").count(); i++) {
+    await page.locator(".scrim").last().click({ position: { x: 5, y: 5 } });
     await page.waitForTimeout(300);
   }
 }

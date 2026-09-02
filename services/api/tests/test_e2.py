@@ -1,6 +1,7 @@
 """E2: lifecycle, authN/Z, persistence round-trip, offline evidence verification."""
 import json
 import pathlib
+import threading
 
 import pytest
 from fastapi.testclient import TestClient
@@ -110,6 +111,31 @@ def test_rehydrated_ledger_continues_the_same_chain(tmp_path):
     assert second["prev"] == first["hash"]
     e.ledger.verify_chain()
     assert verify_bundle(e.ledger.entries)["verified"] is True
+
+
+def test_concurrent_writers_share_one_connection_safely(tmp_path):
+    """Regression: the connection is shared across FastAPI's threadpool (check_same_thread=False).
+    Unserialised, one thread commits another's implicit transaction and the loser raises
+    sqlite3.OperationalError: cannot commit - no transaction is active."""
+    repo = SqliteRepository(str(tmp_path / "j.db"))
+    errors: list[BaseException] = []
+
+    def hammer(n: int) -> None:
+        try:
+            for i in range(40):
+                repo.save_claims(f"E{n}", [{"i": i}])
+                repo.append_ledger(f"E{n}", {"action": "X", "i": i})
+                repo.load_claims(f"E{n}")
+        except BaseException as exc:      # noqa: BLE001 - the test is what it raised
+            errors.append(exc)
+
+    threads = [threading.Thread(target=hammer, args=(n,)) for n in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert errors == []
+    assert len(repo.load_ledger("E0")) == 40
 
 
 def test_ledger_table_has_no_update_path(tmp_path):

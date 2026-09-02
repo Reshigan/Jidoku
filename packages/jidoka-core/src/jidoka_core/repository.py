@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 from typing import Iterable, Protocol
 
 
@@ -119,6 +120,10 @@ class SqliteRepository:
     """
 
     def __init__(self, path: str = ":memory:") -> None:
+        # One connection shared across FastAPI's threadpool. Without a lock, two threads interleave
+        # inside a single implicit transaction: one commits it, the other's commit() then raises
+        # "cannot commit - no transaction is active". The lock makes each write atomic end to end.
+        self._lock = threading.RLock()
         self._conn = sqlite3.connect(path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.executescript(_SCHEMA)
@@ -128,29 +133,32 @@ class SqliteRepository:
         self._conn.close()
 
     def save_engagement(self, eid: str, name: str, client: str, phase: str) -> None:
-        self._conn.execute(
-            "INSERT INTO engagements (engagement_id, name, client, phase) VALUES (?,?,?,?) "
-            "ON CONFLICT(engagement_id) DO UPDATE SET name=excluded.name, client=excluded.client, "
-            "phase=excluded.phase",
-            (eid, name, client, phase),
-        )
-        self._conn.commit()
+        with self._lock, self._conn:
+            self._conn.execute(
+                "INSERT INTO engagements (engagement_id, name, client, phase) VALUES (?,?,?,?) "
+                "ON CONFLICT(engagement_id) DO UPDATE SET name=excluded.name, client=excluded.client, "
+                "phase=excluded.phase",
+                (eid, name, client, phase),
+            )
 
     def load_engagement(self, eid: str) -> dict | None:
-        row = self._conn.execute(
-            "SELECT engagement_id, name, client, phase FROM engagements WHERE engagement_id=?", (eid,)
-        ).fetchone()
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT engagement_id, name, client, phase FROM engagements WHERE engagement_id=?",
+                (eid,),
+            ).fetchone()
         return dict(row) if row else None
 
     def list_engagements(self) -> list[dict]:
-        rows = self._conn.execute(
-            "SELECT engagement_id, name, client, phase FROM engagements ORDER BY engagement_id"
-        ).fetchall()
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT engagement_id, name, client, phase FROM engagements ORDER BY engagement_id"
+            ).fetchall()
         return [dict(r) for r in rows]
 
     def append_ledger(self, eid: str, entry: dict) -> None:
         # seq is derived under the same transaction as the insert: the chain cannot interleave.
-        with self._conn:
+        with self._lock, self._conn:
             row = self._conn.execute(
                 "SELECT COALESCE(MAX(seq), 0) AS m FROM ledger WHERE engagement_id=?", (eid,)
             ).fetchone()
@@ -160,23 +168,25 @@ class SqliteRepository:
             )
 
     def load_ledger(self, eid: str) -> list[dict]:
-        rows = self._conn.execute(
-            "SELECT entry FROM ledger WHERE engagement_id=? ORDER BY seq", (eid,)
-        ).fetchall()
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT entry FROM ledger WHERE engagement_id=? ORDER BY seq", (eid,)
+            ).fetchall()
         return [json.loads(r["entry"]) for r in rows]
 
     def _put_blob(self, eid: str, kind: str, payload) -> None:
-        self._conn.execute(
-            "INSERT INTO blobs (engagement_id, kind, payload) VALUES (?,?,?) "
-            "ON CONFLICT(engagement_id, kind) DO UPDATE SET payload=excluded.payload",
-            (eid, kind, json.dumps(payload)),
-        )
-        self._conn.commit()
+        with self._lock, self._conn:
+            self._conn.execute(
+                "INSERT INTO blobs (engagement_id, kind, payload) VALUES (?,?,?) "
+                "ON CONFLICT(engagement_id, kind) DO UPDATE SET payload=excluded.payload",
+                (eid, kind, json.dumps(payload)),
+            )
 
     def _get_blob(self, eid: str, kind: str, default):
-        row = self._conn.execute(
-            "SELECT payload FROM blobs WHERE engagement_id=? AND kind=?", (eid, kind)
-        ).fetchone()
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT payload FROM blobs WHERE engagement_id=? AND kind=?", (eid, kind)
+            ).fetchone()
         return json.loads(row["payload"]) if row else default
 
     def save_ir(self, eid: str, records: list[dict], open_dps: dict) -> None:
