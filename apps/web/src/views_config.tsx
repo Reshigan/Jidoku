@@ -166,6 +166,13 @@ export function ConfigureView(props: {
                         ? "Armed, but with no connector nothing can reach the system."
                         : "Anything run against this system is a rehearsal."}
                   </span>
+                  {/* When it lapses, said rather than implied. An arming that quietly expired
+                      with the process was a window nobody could see the edges of. */}
+                  {a?.expires_at && (
+                    <span className="mut mono" style={{ fontSize: 11.5 }}>
+                      armed by {a.armed_by} · lapses {a.expires_at}
+                    </span>
+                  )}
                 </div>
                 <div className="cfg-actions">
                   {!c && props.canBind && (

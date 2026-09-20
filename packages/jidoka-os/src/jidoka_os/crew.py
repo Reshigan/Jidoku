@@ -158,9 +158,9 @@ def run(kernel, *, records, open_dp_ids, actor: str, bus: MessageBus | None = No
                               "human_step": ((payload or {}).get("human_step")
                                              or (steps_for_a_person[0] if steps_for_a_person else "")),
                               "steps": list(steps_for_a_person)})
-            waiting.append({"what": step["key"], "who": "a consultant at the keyboard",
-                            "why": f"Tier {step['tier']} — this product offers no write path "
-                                   f"for it, so a person does it and JIDOKA verifies it"})
+            # No handover line here. Whether this is still outstanding is a fact about the live
+            # system, and the verification below reads it — a chase written from the plan would
+            # keep asking for work somebody finished an hour ago.
     crew.append(_card(arc, log))
 
     # --- operator: rehearse every write ------------------------------------------------------
@@ -296,6 +296,12 @@ def run(kernel, *, records, open_dp_ids, actor: str, bus: MessageBus | None = No
     crew.append(_card(eco, log))
 
     verification = verify() if verify else None
+    for item in (verification or {}).get("awaiting_a_person", []):
+        # The chase, grounded: the artefact went out, and the live system still does not have it.
+        since = item.get("handed_over")
+        waiting.append({"what": item["key"], "who": "a consultant at the keyboard",
+                        "why": f"{item['reason']}"
+                               + (f" Handed over {since}." if since else "")})
 
     return {"crew": crew, "plan": plan, "plan_blocked": plan_block, "steps": steps,
             "artefacts": artefacts, "decisions_raised": raised,

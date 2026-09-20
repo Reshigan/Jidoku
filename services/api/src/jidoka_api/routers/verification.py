@@ -8,7 +8,8 @@ planning until a named human chooses between reasserting the intent and signing 
 writes the ledger.
 """
 from fastapi import APIRouter, Depends
-from jidoka_core.drift import NOT_APPLIED, DriftWatch
+from jidoka_core.drift import (AWAITING_A_PERSON, HANDED_OFF, NOT_APPLIED, UNTOUCHED,
+                                WRITTEN, DriftWatch)
 
 from ..auth import Identity, require
 from .engagements import get_or_404
@@ -25,10 +26,17 @@ def run_verification(e, actor: str) -> dict:
     quietly goes stale.
     """
     watch = DriftWatch(e.ledger, e.decisions)
-    # Only a record this platform has actually written can drift. The ledger is where that is
-    # recorded, so it is where the question is asked (ADR-0018).
-    applied = {entry.get("task") for entry in e.ledger.entries if entry.get("action") == "EXECUTED"}
-    verified, findings, skipped, unbuilt = [], [], [], []
+    # How far each record has got, read off the chain. Only a record this platform wrote can
+    # drift; one handed to a person is outstanding work with a date on it; one nobody has touched
+    # is unbuilt (ADR-0019, ADR-0021).
+    progress, handed_at = {}, {}
+    for entry in e.ledger.entries:
+        if entry.get("action") == "EXECUTED":
+            progress[entry.get("task")] = WRITTEN
+        elif entry.get("action") == "HANDED_OFF":
+            progress.setdefault(entry.get("task"), HANDED_OFF)
+            handed_at.setdefault(entry.get("task"), entry.get("ts"))
+    verified, findings, skipped, unbuilt, awaiting = [], [], [], [], []
     for r in e.ir:
         connector = e.connectors.get(r.system_binding)
         if connector is None:
@@ -43,19 +51,25 @@ def run_verification(e, actor: str) -> dict:
         except Exception as ex:  # noqa: BLE001 — a record that cannot be read is reported, not fatal
             skipped.append({"key": r.key, "reason": str(ex)})
             continue
-        finding = watch.observe(r, verdict, actor, applied=r.key in applied)
+        finding = watch.observe(r, verdict, actor, progress=progress.get(r.key, UNTOUCHED))
         if finding is None:
             verified.append(r.key)
         elif finding.status == NOT_APPLIED:
             unbuilt.append({"key": finding.key, "system": finding.system,
                             "reason": "signed intent describes it; nothing has been written yet"})
+        elif finding.status == AWAITING_A_PERSON:
+            awaiting.append({"key": finding.key, "system": finding.system, "tier": r.tier,
+                             "handed_over": handed_at.get(r.key, ""),
+                             "reason": f"Tier {r.tier} — this product publishes no write path, so "
+                                       f"a person does it. The artefact was handed over and the "
+                                       f"work is not in the system yet."})
         else:
             findings.append({"key": finding.key, "status": finding.status,
                              "system": finding.system, "fields": finding.fields,
                              "decision_point": finding.dp_id})
     e.persist_dps()
     return {"verified": verified, "drift": findings, "skipped": skipped, "not_applied": unbuilt,
-            "planning_blocked": bool(findings)}
+            "awaiting_a_person": awaiting, "planning_blocked": bool(findings)}
 
 
 @router.post("")

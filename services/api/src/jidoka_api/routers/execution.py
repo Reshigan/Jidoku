@@ -5,6 +5,8 @@ a builder then spends that arming. Neither can do both — the role table forbid
 the executor forbids it again (armed_by != actor). Two gates, because this is the one endpoint
 that changes a customer's production system.
 """
+import time
+
 from fastapi import APIRouter, Depends, HTTPException
 from jidoka_adapters.base import AdapterError
 from jidoka_core import transport as tp
@@ -69,9 +71,17 @@ def _executor(e, identity: Identity) -> Executor:
     return Executor(e.registry, e.ledger, identity.subject)
 
 
+#: How long an arming stands unless the approver says otherwise. Long enough for a cutover step
+#: with a person watching, short enough that a forgotten arming lapses before anybody is
+#: surprised by it. An approver can ask for less; nothing can ask for more without saying so.
+DEFAULT_ARMING_MINUTES = 60
+MAX_ARMING_MINUTES = 12 * 60
+
+
 class Arm(BaseModel):
     system_id: str
     reason: str = ""
+    minutes: int = DEFAULT_ARMING_MINUTES
 
 
 @router.post("/arm")
@@ -85,12 +95,20 @@ def arm(eid: str, body: Arm, identity: Identity = Depends(require("arm"))):
         raise HTTPException(403, str(ex))
     except RegistryError as ex:
         raise HTTPException(404, str(ex))
-    target = ArmedTarget(body.system_id, identity.subject, body.reason)
+    if body.minutes < 1 or body.minutes > MAX_ARMING_MINUTES:
+        raise HTTPException(
+            422, f"An arming stands for between 1 and {MAX_ARMING_MINUTES} minutes. A window "
+                 f"longer than that is not a window — arm it again when you need it.")
+    expires_at = time.time() + body.minutes * 60
+    target = ArmedTarget(body.system_id, identity.subject, body.reason, expires_at=expires_at)
     _ARMED[(eid, body.system_id)] = target
+    lapses = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(expires_at))
     e.ledger.append("EXECUTION", "ARMED", identity.subject,
-                    f"{body.system_id} armed for live write: {body.reason or 'no reason given'}",
-                    system=body.system_id)
-    return {"armed": body.system_id, "armed_by": identity.subject, "reason": body.reason}
+                    f"{body.system_id} armed for live write until {lapses}: "
+                    f"{body.reason or 'no reason given'}",
+                    system=body.system_id, expires_at=lapses, minutes=body.minutes)
+    return {"armed": body.system_id, "armed_by": identity.subject, "reason": body.reason,
+            "expires_at": lapses, "minutes": body.minutes}
 
 
 @router.delete("/arm/{system_id}")
@@ -103,9 +121,13 @@ def disarm(eid: str, system_id: str, identity: Identity = Depends(require("arm")
 
 @router.get("/arm")
 def armed(eid: str, identity: Identity = Depends(require("read"))):
+    """Live armings only. A lapsed one is not shown as armed, because it is not: the console
+    would otherwise offer a write the executor is about to refuse."""
     get_or_404(eid)
-    return {"armed": [{"system_id": t.system_id, "armed_by": t.armed_by, "reason": t.reason}
-                      for (e_id, _), t in _ARMED.items() if e_id == eid]}
+    return {"armed": [{"system_id": t.system_id, "armed_by": t.armed_by, "reason": t.reason,
+                       "expires_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t.expires_at))
+                       if t.expires_at else ""}
+                      for (e_id, _), t in _ARMED.items() if e_id == eid and not t.expired()]}
 
 
 class Step(BaseModel):

@@ -6,6 +6,7 @@ a step that reaches the substrate has passed the registry, the ledger and the ar
 
 Pure stdlib. The adapter is injected; the ledger is injected; nothing here knows about HTTP.
 """
+import time
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -37,19 +38,32 @@ class ExecutionRefused(Exception):
 
 @dataclass
 class ArmedTarget:
-    """Arming a live write is an explicit act with a named target and a named person.
+    """Arming a live write is an explicit act with a named target, a named person, and a window.
 
-    Invariant 6: Tier-A defaults to dry_run=True. Building one of these is the only way
-    a write leaves dry run, and it cannot be built without naming both.
+    Invariant 6: Tier-A defaults to dry_run=True. Building one of these is the only way a write
+    leaves dry run, and it cannot be built without naming the target and the person.
+
+    `expires_at` is a POSIX timestamp after which the arming is spent. It exists because an
+    arming is a decision made about a moment — "go ahead, now, for this" — and the moment does not
+    last indefinitely just because nobody wrote down when it ended. That was tolerable while a
+    person spent every arming within seconds of asking for it; it stopped being tolerable when an
+    unattended crew began spending them (ADR-0020, ADR-0021), because "how long is this live?"
+    then has to have an answer somebody chose rather than one the process lifetime happened to
+    give it. Zero means no expiry, which is the right default for a caller driving the executor
+    directly in a test or a script — the API always sets one.
     """
     system_id: str
     armed_by: str
     reason: str = ""
+    expires_at: float = 0.0
 
     def __post_init__(self):
         if not self.system_id or not self.armed_by:
             raise ExecutionRefused(
                 "Arming a live write requires an explicit target system and a named person.")
+
+    def expired(self, now: float | None = None) -> bool:
+        return bool(self.expires_at) and (now if now is not None else time.time()) >= self.expires_at
 
 
 @dataclass
@@ -94,6 +108,13 @@ class Executor:
             raise ExecutionRefused(
                 f"Armed for {armed.system_id} but this record binds to {ir_record.system_binding}. "
                 f"Arming is per-target and is never inherited.")
+        if armed.expired():
+            # Say when it lapsed, not just that it did: an operator reading this has to decide
+            # whether to re-arm or to find out what took so long, and those are different actions.
+            lapsed = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(armed.expires_at))
+            raise ExecutionRefused(
+                f"The arming of {armed.system_id} by {armed.armed_by} lapsed at {lapsed}. "
+                f"An arming is a window, not a standing authority — ask for it again.")
         if armed.armed_by == self.actor:
             # Invariant 7: the builder may not also be the one who arms the live write.
             raise ExecutionRefused(

@@ -53,7 +53,10 @@ export default function App() {
   const [refusal, setRefusal] = useState<{ title: string; text: string } | null>(null);
   const [dialog, setDialog] = useState<null | { kind: string; station?: Station; dp?: DecisionPoint; claim?: Claim }>(null);
   // Execution state is per-session, not per-engagement history: the ledger is the record of what
-  // happened, this is only what this operator has run since opening the screen.
+  // happened, this is only what this operator has run since opening the screen. Snapshots are the
+  // exception and always were — the executor's gate reads the task's chain, not this session — and
+  // once a crew run takes them, a screen reading session memory tells an operator a live write is
+  // impossible while the server is ready to perform one.
   const [armed, setArmed] = useState<ArmedTarget[]>([]);
   const [connectors, setConnectors] = useState<Connector[]>([]);
   const [results, setResults] = useState<Record<string, ExecutionResult>>({});
@@ -61,6 +64,19 @@ export default function App() {
   const [snapshots, setSnapshots] = useState<Record<string, number>>({});
   // A time query is this operator's question, not engagement state — it is cleared with the view.
   const [asOf, setAsOf] = useState<{ as_of: string; claims: Claim[] } | null>(null);
+
+  /** Snapshots as the server would count them: the chain first, this session on top of it. */
+  const snapshotted = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const e of d.entries ?? []) {
+      if (e.action === "SNAPSHOT") out[e.task] = Number(e.rows ?? 0);
+      // A rollback puts the system back to the before-state, and the console's own station
+      // derivation treats that as clearing the snapshot. Agree with it, or one screen offers a
+      // live write the other says is not possible.
+      if (e.action === "ROLLED_BACK") delete out[e.task];
+    }
+    return { ...out, ...snapshots };
+  }, [d.entries, snapshots]);
 
   const signedIn = !!who && roles.length > 0;
   const can = (c: string) =>
@@ -367,7 +383,7 @@ export default function App() {
               {view === "Configure" && (
                 <ConfigureView plan={d.plan} planBlock={d.planBlock} armed={armed}
                                connectors={connectors}
-                               results={results} snapshots={snapshots}
+                               results={results} snapshots={snapshotted}
                                transports={transports} busy={busy}
                                canExecute={can("write") && !offline && !stopped && !d.chainBroken}
                                canArm={can("approve") && !offline && !stopped && !d.chainBroken}

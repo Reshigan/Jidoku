@@ -61,7 +61,9 @@ export function CrewView(props: {
   };
 
   const v = run?.verification ?? null;
-  const checked = v ? v.verified.length + v.drift.length + v.not_applied.length + v.skipped.length : 0;
+  const checked = v
+    ? v.verified.length + v.drift.length + v.not_applied.length + v.awaiting_a_person.length + v.skipped.length
+    : 0;
 
   return (
     <>
@@ -173,6 +175,7 @@ export function CrewView(props: {
           <div className="counters">
             <div className="counter"><b>{v.verified.length}</b><span>match the live system</span></div>
             <div className="counter"><b>{v.drift.length}</b><span>unexplained differences</span></div>
+            <div className="counter"><b>{v.awaiting_a_person.length}</b><span>with a person</span></div>
             <div className="counter"><b>{v.not_applied.length}</b><span>not built yet</span></div>
             <div className="counter"><b>{v.skipped.length}</b><span>could not be read</span></div>
           </div>
@@ -191,6 +194,31 @@ export function CrewView(props: {
                 </tbody>
               </table>
             </div>
+          )}
+          {v.awaiting_a_person.length > 0 && (
+            <>
+              <p className="mut" style={{ marginTop: 12 }}>
+                With a person — the platform produced the artefact and the work is not in the
+                system yet. Tier B and C have no write path to take, so a person does them and
+                JIDOKA re-reads the system to see it done. That is a chase with a date on it,
+                never a decision point: it would stop the line over somebody's inbox.
+              </p>
+              <div className="tblwrap">
+                <table className="tbl">
+                  <thead><tr><th>Record</th><th>Tier</th><th>System</th><th>Handed over</th></tr></thead>
+                  <tbody>
+                    {v.awaiting_a_person.map((a) => (
+                      <tr key={a.key}>
+                        <td className="mono">{a.key}</td>
+                        <td>{a.tier}</td>
+                        <td className="mono">{a.system}</td>
+                        <td className="mono">{a.handed_over || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
           {v.not_applied.length > 0 && (
             <p className="mut" style={{ marginTop: 12, fontSize: 12.5 }}>

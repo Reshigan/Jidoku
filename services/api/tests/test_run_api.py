@@ -1,6 +1,7 @@
 """The crew run over HTTP: what a team of consultants can do alone, and where it stops."""
 import json
 import pathlib
+import time
 
 from fastapi.testclient import TestClient
 from jidoka_api.auth import issue_token
@@ -60,8 +61,12 @@ def test_once_the_question_is_answered_the_crew_takes_it_to_the_gate():
     assert report["plan_blocked"] is None
     assert [s["status"] for s in report["steps"]] == ["DRY_RUN", "DRY_RUN"]
     assert [a["tier"] for a in report["artefacts"]] == ["C"]
-    assert report["verification"]["planning_blocked"] is False
-    assert len(report["verification"]["not_applied"]) == len(IR)
+    v = report["verification"]
+    assert v["planning_blocked"] is False
+    # the two Tier-A records were only rehearsed, so nothing was written; the Tier-C artefact went
+    # to a person, which is outstanding work rather than unbuilt work
+    assert len(v["not_applied"]) == 2
+    assert [a["key"] for a in v["awaiting_a_person"]] == ["SuccessFactors:DATA_MODEL_XML:CSDM_ZAF_NID"]
     assert report["economics"]["rehearsed"] == 2 and report["economics"]["manual_steps"] == 1
 
 
@@ -209,8 +214,9 @@ def test_what_the_crew_configured_verifies_against_the_live_system():
     report = c.post(f"/engagements/{eid}/run", headers=hdr("a.builder", "builder")).json()
     v = report["verification"]
     assert len(v["verified"]) == 2 and v["drift"] == []
-    # the Tier-C record is a person's work and nobody has done it, so it is still unbuilt
-    assert [u["key"] for u in v["not_applied"]] == ["SuccessFactors:DATA_MODEL_XML:CSDM_ZAF_NID"]
+    # the Tier-C record is a person's work and nobody has done it: outstanding, not unbuilt
+    assert v["not_applied"] == []
+    assert [a["key"] for a in v["awaiting_a_person"]] == ["SuccessFactors:DATA_MODEL_XML:CSDM_ZAF_NID"]
 
 
 def test_the_crew_writes_and_still_cannot_approve_its_own_work():
@@ -316,3 +322,84 @@ def test_a_route_that_ends_somewhere_unwritable_never_moves_the_change():
     entries = c.get(f"/engagements/{eid}/ledger").json()["entries"]
     assert not any(e["action"] == "TRANSPORT_ADVANCED" for e in entries)
     assert any(w["who"] == "whoever owns the transport route" for w in report["waiting_on_a_person"])
+
+
+# --- an arming is a window, not a standing authority (ADR-0021) -----------------------------------
+
+def test_an_arming_carries_the_moment_it_lapses():
+    eid = _ready()
+    body = _armed(eid).json()
+    assert body["minutes"] == 60 and body["expires_at"]
+    entry = next(e for e in c.get(f"/engagements/{eid}/ledger").json()["entries"]
+                 if e["action"] == "ARMED")
+    assert entry["expires_at"] == body["expires_at"]
+
+
+def test_a_lapsed_arming_is_refused_and_says_when_it_lapsed():
+    eid = _ready()
+    _armed(eid)
+    # Wind the window shut the way time would, rather than sleeping through it.
+    from jidoka_api.routers.execution import _ARMED
+
+    _ARMED[(eid, SYSTEM)].expires_at = time.time() - 1
+    report = c.post(f"/engagements/{eid}/run", headers=hdr("a.builder", "builder")).json()
+    assert {s["status"] for s in report["steps"]} == {"REFUSED"}
+    assert "lapsed at" in report["steps"][0]["detail"]
+    assert "EXECUTED" not in [e["action"] for e in c.get(f"/engagements/{eid}/ledger").json()["entries"]]
+
+
+def test_a_lapsed_arming_is_not_listed_as_armed():
+    """The console must not offer a write the executor is about to refuse."""
+    eid = _ready()
+    _armed(eid)
+    from jidoka_api.routers.execution import _ARMED
+
+    _ARMED[(eid, SYSTEM)].expires_at = time.time() - 1
+    assert c.get(f"/engagements/{eid}/execution/arm").json()["armed"] == []
+
+
+def test_an_arming_window_has_a_ceiling():
+    eid = _ready()
+    r = c.post(f"/engagements/{eid}/execution/arm",
+               json={"system_id": SYSTEM, "minutes": 60 * 24 * 7},
+               headers=hdr("an.approver", "approver"))
+    assert r.status_code == 422 and "not a window" in r.json()["detail"]
+
+
+# --- chasing a person's work (ADR-0021) -----------------------------------------------------------
+
+def test_an_artefact_handed_over_and_not_done_is_chased_not_called_unbuilt():
+    eid = _ready()
+    report = c.post(f"/engagements/{eid}/run").json()
+    awaiting = report["verification"]["awaiting_a_person"]
+    assert [a["key"] for a in awaiting] == ["SuccessFactors:DATA_MODEL_XML:CSDM_ZAF_NID"]
+    assert awaiting[0]["tier"] == "C" and awaiting[0]["handed_over"]
+    chase = next(w for w in report["waiting_on_a_person"] if w["what"] == awaiting[0]["key"])
+    assert "Handed over" in chase["why"] and chase["who"] == "a consultant at the keyboard"
+
+
+def test_the_chase_stops_when_the_person_has_done_the_work():
+    """JIDOKA verifies human work by re-reading the system, which is the whole Tier-C bargain."""
+    eid = _ready()
+    c.post(f"/engagements/{eid}/run")
+    # The consultant does it by hand, in the tenant, exactly as the instruction sheet said.
+    conn = STORE.get(eid).connectors[SYSTEM]
+    tier_c = next(r for r in IR if r["tier"] == "C")
+    conn.mock.collections.setdefault(tier_c["object"], []).append(dict(tier_c["intent"]))
+
+    report = c.post(f"/engagements/{eid}/run").json()
+    assert report["verification"]["awaiting_a_person"] == []
+    assert tier_c["product"] + ":" + tier_c["object"] + ":" + tier_c["external_code"] \
+        in report["verification"]["verified"]
+    assert not any(w["who"] == "a consultant at the keyboard" for w in report["waiting_on_a_person"])
+
+
+def test_outstanding_human_work_never_blocks_the_plan():
+    """It is a chase, not a question. A decision point here would stop the line over somebody's
+    inbox, and invariant 2 is for values nobody may guess."""
+    eid = _ready()
+    report = c.post(f"/engagements/{eid}/run").json()
+    assert report["verification"]["planning_blocked"] is False
+    dps = c.get(f"/engagements/{eid}/decisions").json()["decision_points"]
+    assert not any(d["dp_id"].startswith("DP-DRIFT-") for d in dps)
+    assert c.get(f"/engagements/{eid}/plan").status_code == 200

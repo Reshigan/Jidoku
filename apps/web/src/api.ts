@@ -185,7 +185,12 @@ export type TransportState = {
 
 export type StepTransport = TransportState & { key: string };
 
-export type ArmedTarget = { system_id: string; armed_by: string; reason: string };
+/** An arming is a window, not a standing authority (ADR-0021): it names the moment it lapses,
+    and a lapsed one is never listed here — the console must not offer a write about to be
+    refused. `expires_at` is empty only for an arming made without one, which the API never does. */
+export type ArmedTarget = {
+  system_id: string; armed_by: string; reason: string; expires_at: string; minutes?: number;
+};
 export type Connector = { system_id: string; kind: string; describe: string };
 
 /** A call the server refused, or could not answer. Carries the server's own words. */
@@ -370,6 +375,9 @@ export type VerificationRun = {
   /** Signed intent describes it and nobody has built it yet. Not drift — nothing changed under
       anyone, because nothing was ever there. It is unbuilt work, and the plan is what closes it. */
   not_applied: { key: string; system: string; reason: string }[];
+  /** Handed to a person and not in the system yet. Also not drift: the platform did its half of
+      a Tier B/C step and the work is outstanding, which is a thing to chase with a date on it. */
+  awaiting_a_person: { key: string; system: string; tier: string; handed_over: string; reason: string }[];
   planning_blocked: boolean;
 };
 export type NumberRangeView = {
