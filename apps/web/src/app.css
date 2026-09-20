@@ -679,6 +679,13 @@ footer {
   .main { margin-left: 0; padding-bottom: 124px; }
   .page, .topbar { padding-left: 16px; padding-right: 16px; }
   .btn, select, input, textarea { min-height: 44px; }
+
+  /* Five phase names across a phone is 8px more than a phone has, and a mono word with
+     letter-spacing does not break on its own however small the flex basis is. The page then
+     scrolls sideways, which on the board that carries the andon state is a defect and not a
+     cosmetic one. Let the name break and give the padding back. */
+  .track-stop { padding: 18px 4px 8px; overflow-wrap: anywhere; }
+  .track-stop .eyebrow { letter-spacing: .06em; }
 }
 
 /* A touch device is not a screen size: a laptop with a touchscreen needs the same targets. */

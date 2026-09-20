@@ -278,8 +278,16 @@ test("the session survives a reload, an expired one does not, and sign out clear
    off it is a defect and not a small one: at 390px the Ledger, Evidence and Milestones tabs were
    past the right edge, unclickable, on a platform whose argument is the audit trail. */
 test("every lamp on the rail is reachable on a phone, and nothing pushes the page sideways", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+  // An engagement has to exist and be open, or every screen renders an empty state and this
+  // passes on the one layout nobody ships — which it did for a while, over a Line view that
+  // pushed the page 8px sideways whenever an engagement was actually loaded. The identity under
+  // test holds no builder role on purpose, so a builder creates it and hands it over.
+  const name = `Phone ${Date.now()}`;
+  await signIn(page, "phone.builder");
+  await newEngagement(page, "Komatsu", name);
   await signIn(page, "a.builder", ["approver", "auditor"]);
+  await openEngagement(page, name);
+  await page.setViewportSize({ width: 390, height: 844 });
   for (const tab of await page.getByRole("tab").all()) {
     await tab.click({ timeout: 3000 });
     const slop = await page.evaluate(
