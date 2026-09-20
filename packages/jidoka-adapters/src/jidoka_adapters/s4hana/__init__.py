@@ -91,6 +91,27 @@ class S4Adapter(Adapter):
             "WORKFLOW_CONFIG_SWDD": "C",
         }
 
+    #: Why S/4 gives this adapter no read path, by tier. The tier is the reason: IMG customising
+    #: lives in client-dependent tables that no published OData service exposes, and a migration
+    #: cockpit load leaves no service behind that reads the result back.
+    _NO_READ_PATH = {
+        "B": "loaded from a file through LTMC/LSMW. No published OData service reads the result "
+             "back, so JIDOKA cannot confirm the load landed.",
+        "C": "IMG/SPRO customising. It is client-dependent, it travels by transport, and no "
+             "published service reads it, so JIDOKA cannot read it back to confirm a change.",
+    }
+
+    def write_target(self, entity: str) -> str | None:
+        """The OData service that publishes a write for this entity, if SAP publishes one."""
+        return SERVICES.get(entity)
+
+    def unverifiable(self) -> dict:
+        """Everything outside SERVICES. Derived from the one map that names a read path, so the
+        two cannot drift: an entity becomes confirmable the day a service is added for it."""
+        return {entity: self._NO_READ_PATH[tier]
+                for entity, tier in self.tier_map().items()
+                if entity not in SERVICES and tier in self._NO_READ_PATH}
+
     def extract(self, system, entity: str) -> list[dict]:
         if not self._fetch:
             raise RuntimeError("No fetcher configured — inject live OData client or fixture.")

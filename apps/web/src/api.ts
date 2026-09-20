@@ -378,6 +378,13 @@ export type VerificationRun = {
   /** Handed to a person and not in the system yet. Also not drift: the platform did its half of
       a Tier B/C step and the work is outstanding, which is a thing to chase with a date on it. */
   awaiting_a_person: { key: string; system: string; tier: string; handed_over: string; reason: string }[];
+  /** The product publishes no way to read this object back, so no re-read will ever confirm it.
+      Waiting would be waiting forever; what is owed is a named person's attestation (ADR-0022). */
+  unconfirmable: { key: string; system: string; tier: string; reason: string }[];
+  /** A person said they did it, on the chain, against one version of the record's intent. Weaker
+      than verified and never shown as if it were — the platform has not seen the system. */
+  attested: { key: string; system: string; tier: string; reason: string;
+              attested_by: string; at: string; note: string }[];
   planning_blocked: boolean;
 };
 export type NumberRangeView = {
@@ -523,6 +530,13 @@ const api2 = {
       method: "POST",
       body: JSON.stringify({ key }),
     }),
+  /** A person's word about work this platform has no way to read back. Refused with a 409 where
+      the object IS readable — there, the live system answers and nobody's word substitutes. */
+  attest: (eid: string, key: string, note = "") =>
+    call<{ key: string; attested_by: string; at: string; note: string }>(
+      `/engagements/${eid}/execution/attest`,
+      { method: "POST", body: JSON.stringify({ key, note }) },
+    ),
   /** A restore is a write: it wears the same armed target, snapshot and builder-is-not-approver
       gates an execute does. The server refuses; the console only offers. */
   rollback: (eid: string, key: string, reason = "") =>

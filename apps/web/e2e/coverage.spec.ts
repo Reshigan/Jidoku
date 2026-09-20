@@ -66,6 +66,12 @@ test("the console reaches every endpoint the API publishes", async ({ page, requ
     object: "A_CostCenter", product: "S4HANA", system_binding: "KOM-S4-DEV", tier: "A",
     intent: { CostCenter: "CC90", CompanyCode: "1000" },
     source: { workbook: "w.xlsx", signed_by: "x", date: "2026-01-01" },
+  }, {
+    // Provisioning-only, so SF publishes no way to read it back: the record a person attests to
+    // rather than one the platform can ever check (ADR-0022).
+    object: "DATA_MODEL_XML", product: "SuccessFactors", system_binding: "KOM-SF-DEV", tier: "C",
+    intent: { externalCode: "CSDM_COV", change: "Add coverage marker" },
+    source: { workbook: "w.xlsx", signed_by: "x", date: "2026-01-01" },
   }]);
   await page.getByLabel("Records (JSON array)").fill(records);
   await page.getByRole("button", { name: "Check it" }).click();
@@ -201,6 +207,11 @@ test("the console reaches every endpoint the API publishes", async ({ page, requ
   }
   await page.getByRole("tab", { name: /^Crew/ }).click();
   await page.getByRole("button", { name: "Run again" }).click();
+  await dismissScrim(page);
+  // An object the product publishes no read path for is never chased: a person attests to it.
+  // Not guarded by a count check — the walk loads a Tier-C record precisely so this path runs,
+  // and a silently skipped step is how a spec stops covering the thing it claims to cover.
+  await page.getByRole("button", { name: "I made this change" }).first().click();
   await dismissScrim(page);
 
   // Insight: read a live tenant into drafts, sign one into intent (the door from archaeology

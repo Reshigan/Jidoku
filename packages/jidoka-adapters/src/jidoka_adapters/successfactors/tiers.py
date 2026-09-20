@@ -170,3 +170,35 @@ TIER_MAP = {
     "PROXY_MANAGEMENT": "C",
     "IPS_PROVISIONING_JOB": "C",
 }
+
+
+# entity -> the SFOData entity set that READS it, for objects SF publishes for reading but not for
+# writing. They are Tier B or C because nothing may write them, and they are still confirmable:
+# a person does the work and JIDOKA reads the result back, which is the Tier B/C bargain in
+# ADR-0003. Keeping them here rather than in ENTITY_SETS is the point — ENTITY_SETS is a list of
+# write targets, and a readable set that leaked into it would become a live-write bug.
+READ_ONLY_SETS = {
+    "TimeAccountDetail": "TimeAccountDetail",       # derived by the accrual run; readable, never written
+    "EmployeeTimeSheet": "EmployeeTimeSheet",       # derived by valuation
+    "WorkScheduleDay": "WorkScheduleDay",           # child of the work schedule
+    "Holiday": "Holiday",                           # child of the holiday calendar
+    "PicklistOption": "PicklistOption",             # child of PickListV2; readable on its own
+}
+
+#: Why SF publishes no read path for an object. One sentence per tier, because the reason really
+#: is the same for every object in each group: the tier IS the reason.
+_NO_READ_PATH = {
+    "B": "an import artefact rather than an object the tenant publishes — SF has no entity set "
+         "that reads it back, so JIDOKA cannot confirm the load landed.",
+    "C": "Admin Center or Provisioning only. No SFOData entity set publishes it, so JIDOKA cannot "
+         "read it back to confirm a person's change.",
+}
+
+
+def unverifiable() -> dict:
+    """Every declared entity SF gives this adapter no way to read. Derived, never hand-listed:
+    a second list of the same fact is a second thing to keep in step."""
+    readable = set(ENTITY_SETS) | set(READ_ONLY_SETS)
+    return {entity: _NO_READ_PATH[tier]
+            for entity, tier in TIER_MAP.items()
+            if entity not in readable and tier in _NO_READ_PATH}

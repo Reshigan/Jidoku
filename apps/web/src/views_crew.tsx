@@ -48,6 +48,21 @@ export function CrewView(props: {
 
   if (!eid) return <Empty title="No engagement" body="Choose an engagement to put the crew on it." />;
 
+  /** A person's word, under their own name. The server refuses it where the object is readable,
+      and that refusal is quoted rather than pre-empted here. */
+  const attest = async (key: string) => {
+    setBusy(true);
+    try {
+      await platform.attest(eid, key);
+      setRun(await platform.runCrew(eid));
+      await props.onChanged();
+    } catch (e) {
+      if (e instanceof ApiError) onRefusal("The attestation was not recorded", e.detail);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const start = async () => {
     setBusy(true);
     try {
@@ -62,7 +77,8 @@ export function CrewView(props: {
 
   const v = run?.verification ?? null;
   const checked = v
-    ? v.verified.length + v.drift.length + v.not_applied.length + v.awaiting_a_person.length + v.skipped.length
+    ? v.verified.length + v.drift.length + v.not_applied.length + v.awaiting_a_person.length +
+      v.unconfirmable.length + v.attested.length + v.skipped.length
     : 0;
 
   return (
@@ -177,7 +193,10 @@ export function CrewView(props: {
             <div className="counter"><b>{v.drift.length}</b><span>unexplained differences</span></div>
             <div className="counter"><b>{v.awaiting_a_person.length}</b><span>with a person</span></div>
             <div className="counter"><b>{v.not_applied.length}</b><span>not built yet</span></div>
-            <div className="counter"><b>{v.skipped.length}</b><span>could not be read</span></div>
+            <div className="counter">
+              <b>{v.unconfirmable.length}</b><span>no read path</span>
+            </div>
+            <div className="counter"><b>{v.attested.length}</b><span>attested, not checked</span></div>
           </div>
           {v.drift.length > 0 && (
             <div className="tblwrap" style={{ marginTop: 12 }}>
@@ -213,6 +232,51 @@ export function CrewView(props: {
                         <td>{a.tier}</td>
                         <td className="mono">{a.system}</td>
                         <td className="mono">{a.handed_over || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+          {(v.unconfirmable.length > 0 || v.attested.length > 0) && (
+            <>
+              <p className="mut" style={{ marginTop: 12 }}>
+                No read path — the product publishes nothing that reads these objects back, so no
+                re-read will ever confirm them and waiting would be waiting forever. What is owed
+                is a named person's word, on the chain, about the version of the intent they
+                worked to. An attestation is never counted as a verification: this platform has
+                not seen the system.
+              </p>
+              <div className="tblwrap">
+                <table className="tbl">
+                  <thead><tr><th>Record</th><th>Tier</th><th>Why it cannot be read</th><th>Attested</th></tr></thead>
+                  <tbody>
+                    {v.attested.map((a) => (
+                      <tr key={a.key}>
+                        <td className="mono">{a.key}</td>
+                        <td>{a.tier}</td>
+                        <td className="mut" style={{ fontSize: 12.5 }}>{a.reason}</td>
+                        <td>
+                          <Pill lamp="call">by {a.attested_by}</Pill>
+                          <div className="mut mono" style={{ fontSize: 11.5, marginTop: 4 }}>{a.at}</div>
+                          {a.note && <div className="mut" style={{ fontSize: 12 }}>{a.note}</div>}
+                        </td>
+                      </tr>
+                    ))}
+                    {v.unconfirmable.map((u) => (
+                      <tr key={u.key}>
+                        <td className="mono">{u.key}</td>
+                        <td>{u.tier}</td>
+                        <td className="mut" style={{ fontSize: 12.5 }}>{u.reason}</td>
+                        <td>
+                          {props.canRun ? (
+                            <button className="btn" disabled={busy}
+                                    onClick={() => void attest(u.key)}>
+                              I made this change
+                            </button>
+                          ) : <Pill lamp="stop">nobody yet</Pill>}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

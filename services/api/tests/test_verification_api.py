@@ -69,7 +69,8 @@ def test_a_record_nobody_has_built_yet_is_unbuilt_work_not_drift():
     _bound(eid, IR[0]["system_binding"])
     body = c.post(f"/engagements/{eid}/verification").json()
     assert body["drift"] == [] and body["planning_blocked"] is False
-    assert {u["key"] for u in body["not_applied"]} == {_key(r) for r in IR}
+    assert {u["key"] for u in body["not_applied"]} == {_key(r) for r in IR
+                                                      if r["object"] != "DATA_MODEL_XML"}
     dps = c.get(f"/engagements/{eid}/decisions").json()["decision_points"]
     assert not any(d["dp_id"].startswith("DP-DRIFT-") for d in dps)
     assert c.get(f"/engagements/{eid}/plan").status_code == 200
@@ -93,7 +94,11 @@ def test_live_state_matching_intent_is_ledgered_as_verified():
         conn.mock.collections.setdefault(rec["object"], []).append(dict(rec["intent"]))
     body = c.post(f"/engagements/{eid}/verification").json()
     assert body["planning_blocked"] is False
-    assert len(body["verified"]) == len(IR)
+    # DATA_MODEL_XML is not an SFOData entity set, so seeding a row for it proves nothing and
+    # the platform says so rather than reading a fixture it would never read in a real tenant.
+    readable = [r for r in IR if r["object"] != "DATA_MODEL_XML"]
+    assert len(body["verified"]) == len(readable)
+    assert [u["key"] for u in body["unconfirmable"]] == ["SuccessFactors:DATA_MODEL_XML:CSDM_ZAF_NID"]
     actions = [x["action"] for x in c.get(f"/engagements/{eid}/ledger").json()["entries"]]
     assert "VERIFIED" in actions and "DRIFT_DETECTED" not in actions
 

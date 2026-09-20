@@ -8,6 +8,8 @@ record). It appends the finding to the ledger and raises a decision point that b
 until a human chooses — reassert the signed intent, or sign new intent that says the observed
 state is now the design. Drift is a decision, not a report (ADR-0013).
 """
+import hashlib
+import json
 from dataclasses import dataclass, field
 
 from .decisions import DecisionPoint
@@ -25,12 +27,29 @@ AWAITING_A_PERSON = "AWAITING_A_PERSON"
 #: from the live system means, and nothing else here depends on them.
 WRITTEN, HANDED_OFF, UNTOUCHED = "WRITTEN", "HANDED_OFF", "UNTOUCHED"
 
+#: The product publishes no way to read this object back, so nothing here can confirm it (ADR-0022).
+UNCONFIRMABLE = "UNCONFIRMABLE"
+
+#: A named person said they did it. Weaker than verified and never displayed as if it were: a
+#: person's word is evidence about a person, and the platform has not seen the system.
+ATTESTED = "ATTESTED"
+
+
+def intent_hash(intent) -> str:
+    """Fingerprint of the intent an attestation covers.
+
+    An attestation is about a specific change. When the signed intent moves underneath it, what
+    somebody attested to is no longer what the record says, and treating the old word as current
+    would launder a stale claim into a clean-looking report.
+    """
+    return hashlib.sha256(json.dumps(intent or {}, sort_keys=True, default=str).encode()).hexdigest()
+
 
 @dataclass
 class DriftFinding:
     """One record whose live state does not match its signed intent."""
     key: str
-    status: str                       # DRIFT | MISSING | NOT_APPLIED | AWAITING_A_PERSON
+    status: str    # DRIFT | MISSING | NOT_APPLIED | AWAITING_A_PERSON | UNCONFIRMABLE | ATTESTED
     system: str
     fields: dict = field(default_factory=dict)   # field -> {"intent": ..., "live": ...}
     dp_id: str | None = None          # the decision point now blocking this record
@@ -51,6 +70,38 @@ class DriftWatch:
     def __init__(self, ledger, decisions):
         self.ledger = ledger
         self.decisions = decisions
+
+    def unconfirmable(self, record, actor: str, reason: str,
+                      attestation: dict | None = None) -> DriftFinding:
+        """A record the product gives no read path for. There is nothing to compare, so nothing
+        is compared — the alternative is an extract that fails and gets filed as "could not be
+        read", which reads like a transient fault rather than a permanent limit.
+
+        With a current attestation the finding is ATTESTED: a named person's word, on the chain,
+        about a specific version of the intent. Without one, or with one whose intent has moved
+        underneath it, the record is UNCONFIRMABLE and stays that way until somebody attests. No
+        decision point either way: a missing read path is a fact about the product, not a
+        question about the configuration, and blocking the plan on it would stop every engagement
+        that touches a Provisioning switch.
+        """
+        key = record.key
+        current = intent_hash(getattr(record, "intent", {}))
+        fresh = bool(attestation) and attestation.get("intent_hash") == current
+        status = ATTESTED if fresh else UNCONFIRMABLE
+
+        if fresh:
+            detail = (f"no read path — {reason} Attested by {attestation.get('actor')} "
+                      f"at {attestation.get('ts')}; this platform has not seen the system.")
+        elif attestation:
+            detail = (f"no read path — {reason} The attestation by {attestation.get('actor')} "
+                      f"covers an earlier version of this record's intent and no longer applies.")
+        else:
+            detail = f"no read path — {reason} Nobody has attested to it."
+
+        self.ledger.append(key, status, actor, detail,
+                           system=record.system_binding, status=status)
+        return DriftFinding(key=key, status=status, system=record.system_binding,
+                            fields={}, dp_id=None)
 
     def observe(self, record, verification: dict, actor: str,
                 progress: str = WRITTEN) -> DriftFinding | None:

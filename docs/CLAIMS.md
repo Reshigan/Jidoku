@@ -45,8 +45,10 @@ of it.
    the crew has the operator's route to a customer's system and less authority than the operator:
    no syscall arms anything, the executor refuses an arming whose holder is the actor spending it,
    and APPROVE exists in no ring an agent can occupy. An arming is a window with a stated expiry
-   rather than a standing authority, and a Tier B/C artefact handed to a person is chased from the
-   live system until a re-read finds the work done. A run that configures a whole landscape ends
+   rather than a standing authority; a Tier B/C artefact handed to a person is chased from the
+   live system until a re-read finds the work done; and where the product publishes no read path
+   at all, the adapter says so and the record is a named person's attestation — never counted as
+   a verification — rather than a chase with no end. A run that configures a whole landscape ends
    unapproved, waiting on a reviewer who did not build it. (ADR-0018, ADR-0020, ADR-0021;
    `packages/jidoka-os/src/jidoka_os/crew.py`; `test_crew.py`, `test_run_api.py`.)
 

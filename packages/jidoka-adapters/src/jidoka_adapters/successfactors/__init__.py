@@ -5,10 +5,10 @@ from ..base import Adapter
 from .odata import SFODataClient, ODataError
 from .loader import BatchLoader
 from . import importers
-from .tiers import ENTITY_SETS, KEY_FIELDS, TIER_MAP
+from .tiers import ENTITY_SETS, KEY_FIELDS, READ_ONLY_SETS, TIER_MAP, unverifiable
 
 __all__ = ["SFAdapter", "SFODataClient", "BatchLoader", "importers",
-           "ENTITY_SETS", "KEY_FIELDS", "TIER_MAP"]
+           "ENTITY_SETS", "KEY_FIELDS", "READ_ONLY_SETS", "TIER_MAP"]
 
 class SFAdapter(Adapter):
     product = "SuccessFactors"
@@ -25,6 +25,17 @@ class SFAdapter(Adapter):
 
     def entity_set(self, entity: str) -> str | None:
         return ENTITY_SETS.get(entity)
+
+    def write_target(self, entity: str) -> str | None:
+        """The entity set an upsert goes to. None means SF publishes no write path for it."""
+        return ENTITY_SETS.get(entity)
+
+    def read_set(self, entity: str) -> str | None:
+        """The entity set a verification reads. A writable set reads too; some sets only read."""
+        return ENTITY_SETS.get(entity) or READ_ONLY_SETS.get(entity)
+
+    def unverifiable(self) -> dict:
+        return unverifiable()
 
     def key_field(self, entity: str) -> str:
         return KEY_FIELDS.get(entity, "externalCode")

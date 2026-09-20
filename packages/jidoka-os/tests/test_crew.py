@@ -302,3 +302,38 @@ def test_verification_runs_last_and_is_the_platforms_act_not_an_agents():
     # no agent holds a capability for it: there is no verification syscall at all
     from jidoka_os.syscalls import SYSCALL_TABLE
     assert not any("verif" in name for name in SYSCALL_TABLE)
+
+
+# --- the auditor on evidence it cannot check (ADR-0022) -------------------------------------------
+
+def test_an_attested_record_draws_a_sharper_objection_than_never_verified():
+    """A person's word is evidence about a person. Naming that is what ring 3 is for."""
+    led = Ledger()
+    led.append("P:Obj:X", "ATTESTED", "t.mabaso", "changed it in Provisioning")
+    findings = {o["body"]["finding"] for o in run(kernel(ledger=led))["objections"]}
+    assert "rests on an attestation, not a check" in findings
+    assert "never verified" not in findings
+
+
+def test_an_unconfirmable_record_with_no_attestation_is_called_unevidenced():
+    led = Ledger()
+    led.append("P:Obj:X", "UNCONFIRMABLE", "lead@gonxt", "no read path")
+    findings = {o["body"]["finding"] for o in run(kernel(ledger=led))["objections"]}
+    assert "cannot be checked, and nobody has attested" in findings
+
+
+def test_outstanding_human_work_is_not_called_unexamined():
+    led = Ledger()
+    led.append("P:Obj:X", "AWAITING_A_PERSON", "lead@gonxt", "handed over, not done")
+    findings = {o["body"]["finding"] for o in run(kernel(ledger=led))["objections"]}
+    assert "never verified" not in findings
+
+
+def test_the_latest_verdict_wins_over_an_earlier_one():
+    """Unreadable yesterday, attested today: the objection has to follow the record."""
+    led = Ledger()
+    led.append("P:Obj:X", "UNCONFIRMABLE", "lead@gonxt", "no read path")
+    led.append("P:Obj:X", "ATTESTED", "t.mabaso", "changed it in Provisioning")
+    findings = {o["body"]["finding"] for o in run(kernel(ledger=led))["objections"]}
+    assert "rests on an attestation, not a check" in findings
+    assert "cannot be checked, and nobody has attested" not in findings

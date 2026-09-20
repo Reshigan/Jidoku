@@ -241,20 +241,34 @@ def run(kernel, *, records, open_dp_ids, actor: str, bus: MessageBus | None = No
     # same chain. Stale evidence is not evidence.
     entries = list(kernel.ledger.entries)
     snapshotted = {e.get("task") for e in entries if e.get("action") == "SNAPSHOT"}
-    # NOT_APPLIED counts as checked: the platform read the live system and found the record
-    # unbuilt. That is a verdict, and objecting "nobody has ever looked at this" over it would be
-    # false — the objection is for records nothing has ever been compared against.
-    checked = {e.get("task") for e in entries
-               if e.get("action") in ("VERIFIED", "DRIFT_DETECTED", "NOT_APPLIED")}
+    # The last thing a verification said about each record. "Never verified" has to mean nobody
+    # looked — a verdict of unbuilt, outstanding, or unreadable is a verdict, and objecting that
+    # nobody has ever looked would be false. The other two verdicts get objections of their own,
+    # because "a person said so" and "nobody can check this" are exactly the unproven claims this
+    # ring exists to name.
+    VERDICTS = ("VERIFIED", "DRIFT_DETECTED", "NOT_APPLIED", "AWAITING_A_PERSON",
+                "UNCONFIRMABLE", "ATTESTED")
+    verdict = {}
+    for e in entries:
+        if e.get("action") in VERDICTS:
+            verdict[e.get("task")] = e.get("action")
 
     def object_to(kind: str, body: dict, text: str):
         bus.send(Message(frm=aud.manifest.name, to="engagement", kind=kind, body=body))
         log.append(text)
 
     for rec in records:
-        if rec.key not in checked:
+        last = verdict.get(rec.key)
+        if last is None:
             object_to("OBJECTION", {"key": rec.key, "finding": "never verified"},
                       f"{rec.key} has signed intent and no verification on the chain")
+        elif last == "ATTESTED":
+            object_to("OBJECTION", {"key": rec.key, "finding": "rests on an attestation, not a check"},
+                      f"{rec.key} is held true on a person's word; nothing has read the system")
+        elif last == "UNCONFIRMABLE":
+            object_to("OBJECTION",
+                      {"key": rec.key, "finding": "cannot be checked, and nobody has attested"},
+                      f"{rec.key} has no read path and no attestation — it is unevidenced")
         if not (rec.source or {}).get("cell_range"):
             object_to("OBJECTION", {"key": rec.key, "finding": "provenance without a location"},
                       f"{rec.key} names a workbook but not where in it")
@@ -302,6 +316,13 @@ def run(kernel, *, records, open_dp_ids, actor: str, bus: MessageBus | None = No
         waiting.append({"what": item["key"], "who": "a consultant at the keyboard",
                         "why": f"{item['reason']}"
                                + (f" Handed over {since}." if since else "")})
+    for item in (verification or {}).get("unconfirmable", []):
+        # Not a chase: there is nothing to re-read, so waiting for it would be waiting forever.
+        # What is owed here is a person's word, on the chain, about what they did (ADR-0022).
+        waiting.append({"what": item["key"], "who": "whoever makes the change, to attest to it",
+                        "why": f"Tier {item['tier']} — {item['reason']} JIDOKA cannot confirm "
+                               f"this one, so the record is a named person's attestation or "
+                               f"nothing at all."})
 
     return {"crew": crew, "plan": plan, "plan_blocked": plan_block, "steps": steps,
             "artefacts": artefacts, "decisions_raised": raised,

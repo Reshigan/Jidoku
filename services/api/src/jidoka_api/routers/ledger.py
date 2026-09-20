@@ -15,7 +15,7 @@ router = APIRouter(prefix="/engagements/{eid}/ledger", tags=["ledger"])
 # SNAPSHOT and a live write passes the rollback gate having read nothing; forge an EXECUTED under
 # the approver's name and approve() locks that approver out of their own task.
 RESERVED_ACTIONS = frozenset({"SNAPSHOT", "EXECUTED", "APPROVED", "ARMED", "DISARMED",
-                              "ROLLED_BACK", "PHASE_ADVANCED", "DRY_RUN"})
+                              "ROLLED_BACK", "PHASE_ADVANCED", "DRY_RUN", "ATTESTED"})
 
 
 class Entry(BaseModel):

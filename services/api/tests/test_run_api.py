@@ -63,10 +63,11 @@ def test_once_the_question_is_answered_the_crew_takes_it_to_the_gate():
     assert [a["tier"] for a in report["artefacts"]] == ["C"]
     v = report["verification"]
     assert v["planning_blocked"] is False
-    # the two Tier-A records were only rehearsed, so nothing was written; the Tier-C artefact went
-    # to a person, which is outstanding work rather than unbuilt work
+    # the two Tier-A records were only rehearsed, so nothing was written; the Tier-C artefact
+    # went to a person and SF publishes no way to read it back, so it is unconfirmable until
+    # somebody attests to it (ADR-0022)
     assert len(v["not_applied"]) == 2
-    assert [a["key"] for a in v["awaiting_a_person"]] == ["SuccessFactors:DATA_MODEL_XML:CSDM_ZAF_NID"]
+    assert [u["key"] for u in v["unconfirmable"]] == ["SuccessFactors:DATA_MODEL_XML:CSDM_ZAF_NID"]
     assert report["economics"]["rehearsed"] == 2 and report["economics"]["manual_steps"] == 1
 
 
@@ -214,9 +215,9 @@ def test_what_the_crew_configured_verifies_against_the_live_system():
     report = c.post(f"/engagements/{eid}/run", headers=hdr("a.builder", "builder")).json()
     v = report["verification"]
     assert len(v["verified"]) == 2 and v["drift"] == []
-    # the Tier-C record is a person's work and nobody has done it: outstanding, not unbuilt
-    assert v["not_applied"] == []
-    assert [a["key"] for a in v["awaiting_a_person"]] == ["SuccessFactors:DATA_MODEL_XML:CSDM_ZAF_NID"]
+    # the Tier-C record is a person's work, and one this platform cannot read back at all
+    assert v["not_applied"] == [] and v["awaiting_a_person"] == []
+    assert [u["key"] for u in v["unconfirmable"]] == ["SuccessFactors:DATA_MODEL_XML:CSDM_ZAF_NID"]
 
 
 def test_the_crew_writes_and_still_cannot_approve_its_own_work():
@@ -368,29 +369,26 @@ def test_an_arming_window_has_a_ceiling():
 
 # --- chasing a person's work (ADR-0021) -----------------------------------------------------------
 
-def test_an_artefact_handed_over_and_not_done_is_chased_not_called_unbuilt():
-    eid = _ready()
-    report = c.post(f"/engagements/{eid}/run").json()
-    awaiting = report["verification"]["awaiting_a_person"]
-    assert [a["key"] for a in awaiting] == ["SuccessFactors:DATA_MODEL_XML:CSDM_ZAF_NID"]
-    assert awaiting[0]["tier"] == "C" and awaiting[0]["handed_over"]
-    chase = next(w for w in report["waiting_on_a_person"] if w["what"] == awaiting[0]["key"])
-    assert "Handed over" in chase["why"] and chase["who"] == "a consultant at the keyboard"
-
-
-def test_the_chase_stops_when_the_person_has_done_the_work():
-    """JIDOKA verifies human work by re-reading the system, which is the whole Tier-C bargain."""
-    eid = _ready()
+def test_an_artefact_this_platform_can_read_back_is_chased_until_it_is_done():
+    """A readable Tier-B object is the ordinary case: hand it over, then re-read until it lands."""
+    eid = _eng()
+    rec = {"object": "PicklistOption", "product": "SuccessFactors", "system_binding": SYSTEM,
+           "tier": "B", "external_code": "ZA_LEAVE_PAID",
+           "intent": {"externalCode": "ZA_LEAVE_PAID", "label": "Paid leave"},
+           "source": {"workbook": "w.xlsx", "cell_range": "A2", "signed_by": "t.mabaso",
+                      "date": "2026-02-01"}}
+    c.post(f"/engagements/{eid}/ir", json=[rec])
     c.post(f"/engagements/{eid}/run")
-    # The consultant does it by hand, in the tenant, exactly as the instruction sheet said.
-    conn = STORE.get(eid).connectors[SYSTEM]
-    tier_c = next(r for r in IR if r["tier"] == "C")
-    conn.mock.collections.setdefault(tier_c["object"], []).append(dict(tier_c["intent"]))
+    awaiting = c.post(f"/engagements/{eid}/run").json()["verification"]["awaiting_a_person"]
+    assert [a["key"] for a in awaiting] == ["SuccessFactors:PicklistOption:ZA_LEAVE_PAID"]
+    assert awaiting[0]["tier"] == "B" and awaiting[0]["handed_over"]
 
+    # The consultant loads it by hand, exactly as the artefact said.
+    STORE.get(eid).connectors[SYSTEM].mock.collections.setdefault(
+        "PicklistOption", []).append(dict(rec["intent"]))
     report = c.post(f"/engagements/{eid}/run").json()
     assert report["verification"]["awaiting_a_person"] == []
-    assert tier_c["product"] + ":" + tier_c["object"] + ":" + tier_c["external_code"] \
-        in report["verification"]["verified"]
+    assert "SuccessFactors:PicklistOption:ZA_LEAVE_PAID" in report["verification"]["verified"]
     assert not any(w["who"] == "a consultant at the keyboard" for w in report["waiting_on_a_person"])
 
 
@@ -403,3 +401,99 @@ def test_outstanding_human_work_never_blocks_the_plan():
     dps = c.get(f"/engagements/{eid}/decisions").json()["decision_points"]
     assert not any(d["dp_id"].startswith("DP-DRIFT-") for d in dps)
     assert c.get(f"/engagements/{eid}/plan").status_code == 200
+
+
+# --- what the platform cannot read back, it does not pretend to check (ADR-0022) ------------------
+
+TIER_C_KEY = "SuccessFactors:DATA_MODEL_XML:CSDM_ZAF_NID"
+
+
+def test_an_object_with_no_read_path_is_unconfirmable_not_outstanding():
+    """SF publishes no entity set for the succession data model, so no re-read will ever find it.
+    Calling it outstanding would be a chase with no end."""
+    eid = _ready()
+    v = c.post(f"/engagements/{eid}/run").json()["verification"]
+    assert [u["key"] for u in v["unconfirmable"]] == [TIER_C_KEY]
+    assert v["awaiting_a_person"] == [] and v["planning_blocked"] is False
+    assert "Admin Center or Provisioning only" in v["unconfirmable"][0]["reason"]
+
+
+def test_the_handover_asks_for_an_attestation_rather_than_waiting():
+    eid = _ready()
+    report = c.post(f"/engagements/{eid}/run").json()
+    item = next(w for w in report["waiting_on_a_person"] if w["what"] == TIER_C_KEY)
+    assert item["who"] == "whoever makes the change, to attest to it"
+    assert "cannot confirm this one" in item["why"]
+
+
+def test_a_named_person_attests_and_the_record_reads_as_attested_never_verified():
+    eid = _ready()
+    c.post(f"/engagements/{eid}/run")
+    r = c.post(f"/engagements/{eid}/execution/attest",
+               json={"key": TIER_C_KEY, "note": "CSDM edited in Provisioning, screenshot in Box"},
+               headers=hdr("t.mabaso", "builder"))
+    assert r.status_code == 200 and r.json()["attested_by"] == "t.mabaso"
+
+    v = c.post(f"/engagements/{eid}/run").json()["verification"]
+    assert v["unconfirmable"] == []
+    assert [a["key"] for a in v["attested"]] == [TIER_C_KEY]
+    assert v["attested"][0]["attested_by"] == "t.mabaso"
+    # an attestation is never counted as a verification: the platform has not seen the system
+    assert TIER_C_KEY not in v["verified"]
+
+
+def test_an_attestation_is_signed_by_the_caller_and_cannot_be_posted_as_a_ledger_row():
+    """ADR-0015: the attestation is written by the act, under the token holder's own name."""
+    eid = _ready()
+    c.post(f"/engagements/{eid}/execution/attest", json={"key": TIER_C_KEY},
+           headers=hdr("t.mabaso", "builder"))
+    entry = next(e for e in c.get(f"/engagements/{eid}/ledger").json()["entries"]
+                 if e["action"] == "ATTESTED")
+    assert entry["actor"] == "t.mabaso" and entry["intent_hash"]
+
+    forged = c.post(f"/engagements/{eid}/ledger",
+                    json={"task": TIER_C_KEY, "action": "ATTESTED", "detail": "I did it"},
+                    headers=hdr("someone.else", "builder"))
+    assert forged.status_code == 403
+
+
+def test_an_attestation_retires_when_the_intent_it_covered_changes():
+    """Somebody attested to a change. The design then moved, and their word is about the old one."""
+    eid = _ready()
+    c.post(f"/engagements/{eid}/execution/attest", json={"key": TIER_C_KEY},
+           headers=hdr("t.mabaso", "builder"))
+    assert [a["key"] for a in c.post(f"/engagements/{eid}/run").json()["verification"]["attested"]] \
+        == [TIER_C_KEY]
+
+    changed = [dict(r) for r in IR]
+    for rec in changed:
+        if rec["object"] == "DATA_MODEL_XML":
+            rec["intent"] = {**rec["intent"], "change": "Add ZA national-id format ^[0-9]{13}$ v2"}
+    assert c.post(f"/engagements/{eid}/ir", json=changed).status_code == 200
+
+    v = c.post(f"/engagements/{eid}/run").json()["verification"]
+    assert v["attested"] == [] and [u["key"] for u in v["unconfirmable"]] == [TIER_C_KEY]
+    entry = [e for e in c.get(f"/engagements/{eid}/ledger").json()["entries"]
+             if e["action"] == "UNCONFIRMABLE"][-1]
+    assert "no longer applies" in entry["detail"]
+
+
+def test_attesting_to_something_the_platform_can_read_is_refused():
+    """A person's word must never mask a machine-checkable failure."""
+    eid = _ready()
+    readable = next(r for r in IR if r["tier"] == "A")
+    key = f"{readable['product']}:{readable['object']}:{readable['external_code']}"
+    r = c.post(f"/engagements/{eid}/execution/attest", json={"key": key},
+               headers=hdr("t.mabaso", "builder"))
+    assert r.status_code == 409 and "rather than taking anyone's word" in r.json()["detail"]
+
+
+def test_the_auditor_names_an_attestation_for_what_it_is():
+    """End to end: a person attests, and ring 3 still says the platform has not seen the system."""
+    eid = _ready()
+    c.post(f"/engagements/{eid}/run")
+    c.post(f"/engagements/{eid}/execution/attest", json={"key": TIER_C_KEY},
+           headers=hdr("t.mabaso", "builder"))
+    report = c.post(f"/engagements/{eid}/run").json()
+    findings = {o["body"]["finding"] for o in report["objections"]}
+    assert "rests on an attestation, not a check" in findings

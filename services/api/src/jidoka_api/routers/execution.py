@@ -10,6 +10,7 @@ import time
 from fastapi import APIRouter, Depends, HTTPException
 from jidoka_adapters.base import AdapterError
 from jidoka_core import transport as tp
+from jidoka_core.drift import intent_hash
 from jidoka_core.executor import ArmedTarget, ExecutionRefused, Executor, is_abap
 from jidoka_core.registry import RegistryError, WriteLockViolation
 from pydantic import BaseModel
@@ -342,6 +343,39 @@ def _apply_fn(e, r):
 
     c = e.connectors.get(r.system_binding)
     return c.apply if c else _refuse
+
+
+class Attest(BaseModel):
+    key: str
+    note: str = ""
+
+
+@router.post("/attest")
+def attest(eid: str, body: Attest, identity: Identity = Depends(require("execute"))):
+    """A person states they did work this platform has no way to read back (ADR-0022).
+
+    Offered only where the adapter says the product publishes no read path. Everywhere else the
+    live system is the answer, and accepting somebody's word instead would let a claim mask a
+    machine-checkable failure — which is the whole disease this platform exists to treat.
+
+    The attestation is written by the act, under the caller's own identity (ADR-0015), and it
+    carries the hash of the intent it covers so that a later change to that intent retires it
+    rather than silently inheriting it.
+    """
+    e = get_or_404(eid)
+    r = _record_or_404(e, body.key)
+    connector = e.connectors.get(r.system_binding)
+    adapter = _adapter_for(r.product, connector)
+    if adapter.verifiable(r.object):
+        raise HTTPException(
+            409, f"{r.object} can be read back on {r.product}, so JIDOKA checks it rather than "
+                 f"taking anyone's word for it. Run a verification.")
+    entry = e.ledger.append(body.key, "ATTESTED", identity.subject,
+                            body.note or f"{identity.subject} states this change was made by hand",
+                            intent_hash=intent_hash(r.intent), object=r.object,
+                            system=r.system_binding)
+    return {"key": body.key, "attested_by": identity.subject, "at": entry["ts"],
+            "note": entry["detail"]}
 
 
 class Bind(BaseModel):

@@ -308,3 +308,29 @@ class TestRead(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# --- the same honesty, for a product whose Tier C is IMG customising ------------------------------
+
+def test_no_tier_a_entity_lacks_a_published_service():
+    from jidoka_adapters.base import audit_tier_map
+
+    assert audit_tier_map(S4Adapter())["lying"] == []
+
+
+def test_img_customising_is_declared_unreadable_rather_than_silently_chased():
+    """No published OData service exposes T001 or its neighbours, so a verification would wait
+    forever for a confirmation it can never make."""
+    a = S4Adapter()
+    for entity in ("T001", "T030", "AUTH_ROLE_PFCG", "COST_CENTER_HIERARCHY"):
+        assert not a.verifiable(entity), entity
+    assert "IMG/SPRO customising" in a.unverifiable()["T001"]
+    assert "LTMC/LSMW" in a.unverifiable()["COST_CENTER_HIERARCHY"]
+
+
+def test_the_gap_is_derived_from_the_service_map_so_the_two_cannot_drift():
+    from jidoka_adapters.s4hana import SERVICES
+
+    a = S4Adapter()
+    assert all(a.verifiable(e) for e in SERVICES)
+    assert not any(e in a.unverifiable() for e in SERVICES)

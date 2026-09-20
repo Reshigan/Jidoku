@@ -8,8 +8,8 @@ planning until a named human chooses between reasserting the intent and signing 
 writes the ledger.
 """
 from fastapi import APIRouter, Depends
-from jidoka_core.drift import (AWAITING_A_PERSON, HANDED_OFF, NOT_APPLIED, UNTOUCHED,
-                                WRITTEN, DriftWatch)
+from jidoka_core.drift import (ATTESTED, AWAITING_A_PERSON, HANDED_OFF, NOT_APPLIED,
+                                UNTOUCHED, WRITTEN, DriftWatch)
 
 from ..auth import Identity, require
 from .engagements import get_or_404
@@ -36,7 +36,14 @@ def run_verification(e, actor: str) -> dict:
         elif entry.get("action") == "HANDED_OFF":
             progress.setdefault(entry.get("task"), HANDED_OFF)
             handed_at.setdefault(entry.get("task"), entry.get("ts"))
+    # An attestation is a person's word about one version of a record's intent, so the latest one
+    # per record is what counts and the comparison is left to core (ADR-0022).
+    attestations = {}
+    for entry in e.ledger.entries:
+        if entry.get("action") == "ATTESTED" and entry.get("intent_hash"):
+            attestations[entry.get("task")] = entry
     verified, findings, skipped, unbuilt, awaiting = [], [], [], [], []
+    unconfirmable, attested = [], []
     for r in e.ir:
         connector = e.connectors.get(r.system_binding)
         if connector is None:
@@ -44,6 +51,21 @@ def run_verification(e, actor: str) -> dict:
                                                     f"cannot read what cannot be reached"})
             continue
         adapter = _adapter_for(r.product, connector)
+        if not adapter.verifiable(r.object):
+            # Read nothing. The product publishes no path, so an extract here would fail and be
+            # filed as "could not be read", which reads like a transient fault rather than a
+            # permanent limit of the substrate.
+            finding = watch.unconfirmable(r, actor, adapter.unverifiable()[r.object],
+                                          attestations.get(r.key))
+            row = {"key": r.key, "system": r.system_binding, "tier": r.tier,
+                   "reason": adapter.unverifiable()[r.object]}
+            if finding.status == ATTESTED:
+                entry = attestations[r.key]
+                attested.append({**row, "attested_by": entry.get("actor"), "at": entry.get("ts"),
+                                 "note": entry.get("detail", "")})
+            else:
+                unconfirmable.append(row)
+            continue
         try:
             system = e.registry.get(r.system_binding)
             live = adapter.extract(system, r.object)
@@ -69,7 +91,8 @@ def run_verification(e, actor: str) -> dict:
                              "decision_point": finding.dp_id})
     e.persist_dps()
     return {"verified": verified, "drift": findings, "skipped": skipped, "not_applied": unbuilt,
-            "awaiting_a_person": awaiting, "planning_blocked": bool(findings)}
+            "awaiting_a_person": awaiting, "unconfirmable": unconfirmable, "attested": attested,
+            "planning_blocked": bool(findings)}
 
 
 @router.post("")
