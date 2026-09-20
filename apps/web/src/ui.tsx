@@ -87,7 +87,7 @@ export function Seal({ name, kanji = "印", lg = false }: { name: string; kanji?
   );
 }
 
-export const VIEWS = ["Line", "Work", "Configure", "Verify", "Decisions", "Intent", "Landscape", "Memory", "Ledger", "Evidence", "Documents", "Milestones"] as const;
+export const VIEWS = ["Line", "Work", "Configure", "Verify", "Decisions", "Intent", "Insight", "Landscape", "Memory", "Ledger", "Evidence", "Documents", "Milestones"] as const;
 export type ViewName = (typeof VIEWS)[number];
 
 /**

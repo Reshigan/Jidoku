@@ -10,6 +10,58 @@ export type Engagement = {
 };
 export type EngagementSummary = Engagement;
 
+/** A record recovered from a live system. Unsigned by construction: `source.signed_by` is empty,
+    which is exactly what makes it unloadable as intent until a person signs it. */
+export type Draft = {
+  key: string;
+  object: string;
+  product: string;
+  system_binding: string;
+  external_code: string;
+  tier: string;
+  intent: Record<string, unknown>;
+  source: { workbook: string; cell_range: string; signed_by: string; date: string };
+  provenance_status: string;
+  rationale: string | null;
+  signed: boolean;
+};
+
+export type Debt = {
+  score: number;
+  grade: string;
+  top_driver: string | null;
+  items: Record<string, number>;
+  counts: Record<string, number>;
+  /** counter -> what it was derived from. A counter absent here contributed nothing. */
+  measured: Record<string, string>;
+  /** Weights with no measurement behind them. Published so the score cannot imply more than it knows. */
+  unmeasured: string[];
+};
+
+export type Backlog = {
+  drafts: Draft[];
+  unexplained: string[];
+  systems: string[];
+  debt: Debt;
+};
+
+export type TimeTravel = {
+  at: string;
+  approved: string[];
+  rolled_back: string[];
+  open_dps: string[];
+  halted: boolean;
+  entries: number;
+};
+
+export type Blast = {
+  population: number;
+  affected: number;
+  affected_ids: (string | number)[];
+  unaffected: number;
+  statement: string;
+};
+
 export type PlanStep = {
   seq: number;
   key: string;
@@ -504,5 +556,33 @@ const api2 = {
     ),
 };
 
+const api3 = {
+  /* ---- insight: the brownfield door. Archaeology reads a live tenant into drafts that are
+     unsigned by construction; signing one turns it into ordinary IR that the planner, the
+     documents and verification already handle. Nothing here reconciles or writes to a tenant. ---- */
+  /** Reverse a bound system into draft records. Reads only. */
+  dig: (eid: string, system_id: string, entities: string[]) =>
+    call<Backlog>(`/engagements/${eid}/insight/archaeology`, {
+      method: "POST",
+      body: JSON.stringify({ system_id, entities }),
+    }),
+  backlog: (eid: string) => call<Backlog>(`/engagements/${eid}/insight/archaeology`),
+  /** The signature is the server's view of who is calling (ADR-0015) — there is no signer field
+      to send, and the console does not offer one. */
+  signDrafts: (eid: string, keys: string[], workbook: string, rationale = "") =>
+    call<{ signed: string[]; open_dps: Record<string, string[]>; ir_records: number; backlog: Backlog }>(
+      `/engagements/${eid}/insight/archaeology/sign`,
+      { method: "POST", body: JSON.stringify({ keys, workbook, rationale }) },
+    ),
+  debt: (eid: string) => call<Debt>(`/engagements/${eid}/insight/debt`),
+  timetravel: (eid: string, at: string) =>
+    call<TimeTravel>(`/engagements/${eid}/insight/timetravel?at=${encodeURIComponent(at)}`),
+  /** Counted in people, from the live system. A blast radius from a design document counts the
+      people somebody meant to have. */
+  blast: (eid: string, body: { system_id: string; entity: string; id_field: string;
+                               selector: Record<string, string>; delta: string }) =>
+    call<Blast>(`/engagements/${eid}/insight/blast`, { method: "POST", body: JSON.stringify(body) }),
+};
+
 /** One client surface. Typed by construction, so a missing endpoint is a compile error. */
-export const platform = { ...api, ...api2 };
+export const platform = { ...api, ...api2, ...api3 };

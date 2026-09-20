@@ -48,5 +48,7 @@
 - [ ] Objection records with scheduled revisit triggers
 ## E13 Insight & team (built: jidoka-insight; docs/JIDOKA_PROJECT_TEAM_AND_ALIGNMENT.md)
 - [x] Archaeology reverse-IR (unsigned by construction) · time-travel as_of · person-level blast radius · debt index
+- [x] Insight reachable end to end: API (`routers/insight.py`), Insight console view, `archaeology-backlog` document;
+      signing a recovered draft makes it ordinary IR the planner, documents and verification already handle (ADR-0017)
 - [ ] Cross-module contract registry in IR schema (owner module, declared readers)
 - [ ] Module agent manifests (RCM/ONB/PMGM/TO) + PMO/migration agent manifests in economy.py

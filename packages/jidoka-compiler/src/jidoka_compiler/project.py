@@ -30,6 +30,9 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+from jidoka_insight.archaeology import unexplained
+from jidoka_insight.debt import WEIGHTS, measure
+
 #: Documents that can be projected. Keyed by the name an API path asks for.
 DOCUMENTS = {
     "config-rationale": "Configuration Rationale — every configured value, and who signed for it.",
@@ -37,6 +40,8 @@ DOCUMENTS = {
     "decision-register": "Decision Register — every decision point, its owner and its resolution.",
     "verification-report": "Verification Report — signed intent checked against live state, "
                            "with every unexplained difference and who must answer for it.",
+    "archaeology-backlog": "Archaeology Backlog — what the live system was found to contain, "
+                           "what nobody can explain, and what that costs.",
 }
 
 
@@ -434,11 +439,87 @@ def verification_report(engagement) -> str:
     return "\n".join(out + _footer(engagement))
 
 
+def archaeology_backlog(engagement) -> str:
+    """The brownfield document: what is in the system, and what nobody can account for.
+
+    Every other document here projects signed intent. This one projects its absence — objects a
+    live tenant actually contains that no signed record explains. That inversion is deliberate.
+    A greenfield programme's risk is in what it has decided; a brownfield programme's risk is in
+    what it inherited and never examined, and no design document will ever mention it, because
+    the whole problem is that nobody wrote one.
+
+    Drafts are unsigned by construction, so nothing here is executable and nothing here should
+    read as though it were. The backlog is a queue of questions with a price attached, not a
+    configuration.
+    """
+    title, subtitle = "Archaeology Backlog", DOCUMENTS["archaeology-backlog"]
+    drafts = [dict(d) for d in (getattr(engagement, "drafts", []) or [])]
+    out = _header(engagement, title, subtitle)
+
+    if not drafts:
+        return "\n".join(out + [
+            "No live system has been read on this engagement yet.",
+            "",
+            "Archaeology reverses a running tenant into draft records so the objects nobody can "
+            "explain become visible work. Until a system is read there is nothing to account for, "
+            "and an empty backlog is the honest output — not a claim that the system is clean.",
+        ] + _footer(engagement))
+
+    open_items = unexplained(drafts)
+    debt = measure(drafts, _decisions(engagement))
+    by_system = defaultdict(list)
+    for d in drafts:
+        by_system[d.get("system_binding") or "—"].append(d)
+
+    out += [f"{len(drafts)} object(s) recovered from {len(by_system)} system(s). "
+            f"**{len(open_items)} have no recorded rationale.**", "",
+            "Every record below is unsigned by construction and therefore unexecutable "
+            "(invariant 1). A recovered object becomes configuration only when a named person "
+            "signs it, and signing is an assertion that somebody understands why it exists.", ""]
+
+    out += ["## Debt index", "",
+            f"**Score {debt['score']} — grade {debt['grade']}**"
+            + (f", driven by `{debt['top_driver']}`." if debt["top_driver"] else "."), ""]
+    out += _table(["Counter", "Count", "Weight", "Contribution", "Measured from"],
+                  [[f"`{k}`", debt["counts"].get(k, 0), WEIGHTS[k], debt["items"][k],
+                    debt["measured"].get(k, "*not measured*")]
+                   for k in sorted(WEIGHTS)])
+    out += ["",
+            "The weights are published above and the score is reproducible from the same extract. "
+            "Counters marked *not measured* contribute nothing and are not silently assumed to be "
+            "zero: "
+            + (", ".join(f"`{c}`" for c in debt["unmeasured"]) or "none")
+            + ". A number nobody can trace is an opinion.", ""]
+
+    for system in sorted(by_system):
+        rows = by_system[system]
+        out += [f"## `{system}`", "",
+                f"{len(rows)} object(s) recovered.", ""]
+        out += _table(["Object", "Code", "Rationale", "Status"],
+                      [[d.get("object"), f"`{_code(d)}`",
+                        d.get("rationale") or "**unexplained**",
+                        d.get("provenance_status") or "UNVERIFIED"]
+                       for d in sorted(rows, key=lambda r: (r.get("object") or "", _code(r)))])
+        out.append("")
+
+    out += ["## What to do with this", "",
+            "Each unexplained object is one question: *why does this exist, and is it still "
+            "wanted?* The answers divide into three, and only three:", "",
+            "1. **It is wanted** — someone signs it, and it becomes intent the platform will "
+            "plan, document and verify like any other record.",
+            "2. **It is not wanted** — it is decommissioned, and the backlog shrinks honestly.",
+            "3. **Nobody knows** — which is itself the finding, and the reason this document "
+            "exists rather than a migration that quietly carried it forward.", ""]
+
+    return "\n".join(out + _footer(engagement))
+
+
 RENDERERS = {
     "config-rationale": config_rationale,
     "solution-design": solution_design,
     "decision-register": decision_register,
     "verification-report": verification_report,
+    "archaeology-backlog": archaeology_backlog,
 }
 
 

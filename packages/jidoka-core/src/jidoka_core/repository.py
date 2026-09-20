@@ -33,6 +33,8 @@ class Repository(Protocol):
     def load_dps(self, eid: str) -> list[dict]: ...
     def save_claims(self, eid: str, claims: list[dict]) -> None: ...
     def load_claims(self, eid: str) -> list[dict]: ...
+    def save_drafts(self, eid: str, drafts: list[dict]) -> None: ...
+    def load_drafts(self, eid: str) -> list[dict]: ...
 
 
 class InMemoryRepository:
@@ -45,6 +47,7 @@ class InMemoryRepository:
         self._systems: dict[str, tuple[list[dict], list]] = {}
         self._dps: dict[str, list[dict]] = {}
         self._claims: dict[str, list[dict]] = {}
+        self._drafts: dict[str, list[dict]] = {}
 
     def save_engagement(self, eid: str, name: str, client: str, phase: str) -> None:
         self._eng[eid] = {"engagement_id": eid, "name": name, "client": client, "phase": phase}
@@ -87,6 +90,12 @@ class InMemoryRepository:
 
     def load_claims(self, eid: str) -> list[dict]:
         return [dict(c) for c in self._claims.get(eid, [])]
+
+    def save_drafts(self, eid: str, drafts: list[dict]) -> None:
+        self._drafts[eid] = [dict(d) for d in drafts]
+
+    def load_drafts(self, eid: str) -> list[dict]:
+        return [dict(d) for d in self._drafts.get(eid, [])]
 
 
 _SCHEMA = """
@@ -215,6 +224,15 @@ class SqliteRepository:
 
     def load_claims(self, eid: str) -> list[dict]:
         return self._get_blob(eid, "claims", [])
+
+    def save_drafts(self, eid: str, drafts: list[dict]) -> None:
+        # Archaeology output, unsigned by construction. Stored so the backlog survives a restart:
+        # an unanswered "why does this exist" is the work, and work that vanishes on a deploy is
+        # work nobody does.
+        self._put_blob(eid, "drafts", drafts)
+
+    def load_drafts(self, eid: str) -> list[dict]:
+        return self._get_blob(eid, "drafts", [])
 
 
 def open_repository(db_url: str | None) -> Repository:

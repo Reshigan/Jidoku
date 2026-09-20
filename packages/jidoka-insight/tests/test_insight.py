@@ -2,9 +2,10 @@ import unittest
 from jidoka_insight.archaeology import reverse_ir, unexplained
 from jidoka_insight.timetravel import as_of
 from jidoka_insight.blast import blast_radius
-from jidoka_insight.debt import debt_index
+from jidoka_insight.debt import WEIGHTS, debt_index, measure
 from jidoka_core.executor import Executor
 from jidoka_core.ir import IRRecord, load_ir, IRValidationError
+from jidoka_core.decisions import DecisionPoint
 from jidoka_core.ledger import Ledger
 from jidoka_core.registry import SystemRecord, SystemRegistry
 
@@ -63,3 +64,31 @@ class TestDebt(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestDerivedDebt(unittest.TestCase):
+    """A weight with no measurement behind it must not move the score."""
+
+    def _draft(self, code, rationale=None):
+        return {"external_code": code, "rationale": rationale}
+
+    def test_the_score_counts_only_what_was_observed(self):
+        m = measure([self._draft("A"), self._draft("B", "kept for ZA payroll")], [])
+        self.assertEqual(m["counts"]["undocumented_customisation"], 1)
+        self.assertEqual(m["score"], WEIGHTS["undocumented_customisation"])
+        self.assertIn("custom_object", m["unmeasured"])
+        self.assertEqual(m["items"]["custom_object"], 0)
+
+    def test_open_drift_decisions_are_counted_and_resolved_ones_are_not(self):
+        open_dp = DecisionPoint("DP-DRIFT-x", "DESIGN", "?", "lead")
+        closed = DecisionPoint("DP-DRIFT-y", "DESIGN", "?", "lead")
+        closed.resolution = {"by": "lead", "value": "reassert"}
+        other = DecisionPoint("DP-B14", "STATUTORY", "?", "client")
+        m = measure([], [open_dp, closed, other])
+        self.assertEqual(m["counts"]["unauthorised_drift"], 1)
+        self.assertEqual(m["score"], WEIGHTS["unauthorised_drift"])
+
+    def test_a_measured_counter_is_never_reported_as_unmeasured(self):
+        m = measure([], [])
+        self.assertEqual(set(m["counts"]) & set(m["unmeasured"]), set())
+        self.assertEqual(set(m["counts"]), set(m["measured"]))

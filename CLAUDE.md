@@ -8,7 +8,8 @@ hash-chained governance ledger with human-in-the-loop decisioning.
 - `packages/jidoka-core`      — domain kernel: IR, planner, registry, ledger, decisions, twin. Pure stdlib. Everything depends on this; it depends on nothing.
 - `packages/jidoka-os`        — Agent OS: privilege rings, capability-checked syscalls, processes/budgets, shift scheduler, agent economy. Read docs/JIDOKA_AGENT_OS.md.
 - `packages/jidoka-knowledge` — memory: evidence-grounded claims, project vs system stores, deterministic staleness, the scrubber gate. Read docs/adr/0010.
-- `packages/jidoka-insight`   — archaeology, time-travel, blast radius, technical debt.
+- `packages/jidoka-insight`   — archaeology, time-travel, blast radius, technical debt. The brownfield door: a
+                                 recovered object is unsigned until a person signs it (ADR-0017).
 - `packages/jidoka-adapters`  — Adapter SDK + product adapters (SuccessFactors is the reference). Depends on jidoka-core only.
 - `packages/jidoka-compiler`  — design docs (workbooks) → IR. LLM-assisted, sign-off-gated.
 - `services/api`             — FastAPI: engagements, IR, plans, ledger, decisions, registry.

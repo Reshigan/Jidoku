@@ -184,6 +184,28 @@ test("the console reaches every endpoint the API publishes", async ({ page, requ
   await page.getByRole("button", { name: "Allocate next" }).first().click();
   await dismissScrim(page);
 
+  // Insight: read a live tenant into drafts, sign one into intent (the door from archaeology
+  // into the ordinary machinery), replay the ledger to a moment, and count a change in people.
+  await page.getByRole("tab", { name: /^Insight/ }).click();
+  await page.getByLabel("System to read").selectOption("KOM-SF-DEV");
+  await page.getByLabel("Entities").fill("FOCostCenter");
+  await page.getByRole("button", { name: "Read the system" }).click();
+  await dismissScrim(page);
+  await page.getByRole("checkbox", { name: /^Select / }).first().check();
+  await page.getByLabel("Workbook").fill("brownfield-review");
+  await page.getByRole("button", { name: /^Sign \d+ into intent$/ }).click();
+  await dismissScrim(page);
+  await page.getByLabel("As of").fill(new Date().toISOString().slice(0, 19) + "Z");
+  await page.getByRole("button", { name: "Replay to this moment" }).click();
+  await dismissScrim(page);
+  await page.getByLabel("Population system").selectOption("KOM-SF-DEV");
+  await page.getByLabel("Entity", { exact: true }).fill("FOCostCenter");
+  await page.getByLabel("Where field").fill("cust_region");
+  await page.getByLabel("equals").fill("EMEA");
+  await page.getByLabel("Change", { exact: true }).fill("region rollup corrected");
+  await page.getByRole("button", { name: "Count the people" }).click();
+  await dismissScrim(page);
+
   // Documents: the pack is projected from signed intent, so opening it is the whole path.
   await page.getByRole("tab", { name: /^Documents/ }).click();
   await expect(page.locator(".doc-tab").first()).toBeVisible();

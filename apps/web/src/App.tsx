@@ -14,6 +14,7 @@ import {
   MemoryView, MilestonesView, WorkView,
 } from "./views";
 import { DocumentsView } from "./views_document";
+import { InsightView } from "./views_insight";
 import { VerifyView } from "./views_verify";
 import { DP_KINDS, SYSTEM_ROLES, kindWords, roleLabel } from "./viewkit";
 import "./app.css";
@@ -433,6 +434,12 @@ export default function App() {
               {view === "Intent" && (
                 <IntentView records={d.records} gaps={d.irGaps} schemaVersion={d.schemaVersion}
                             writable={writable} onLoad={() => setDialog({ kind: "loadIr" })} />
+              )}
+              {view === "Insight" && (
+                <InsightView eid={eid} landscape={d.landscape}
+                             canDig={can("write") && !offline && !stopped && !d.chainBroken}
+                             onRefusal={(title, text) => setRefusal({ title, text })}
+                             onChanged={after} />
               )}
               {view === "Landscape" && (
                 <LandscapeView landscape={d.landscape} writable={writable}
