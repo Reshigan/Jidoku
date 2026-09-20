@@ -34,7 +34,9 @@
 - [ ] Vectorize retrieval with citation-required answers; citation-coverage metric on dashboard
 - [ ] Skill Factory: elicitation tooling, engagement mining, senior sign-off flow, K5 exam gate
 ## E11 Advanced concepts (docs/JIDOKA_ADVANCED_CONCEPTS.md)
-- [ ] C6 Evidence Compiler: controls as executable predicates over ledger+state; complete-population assurance
+- [~] C6 Evidence Compiler: complete-population assurance is built (`jidoka_core.assurance`: every record filed by
+      what its claim rests on, published denominator, attestation never counted as proof — ADR-0023). Controls as
+      executable predicates over ledger+state is not.
 - [ ] C1 Refinement-typed IR: statutory/referential refinements; plan type-checking
 - [ ] C2 CP-SAT run-planner: optimal sequencing under approver/window/statutory constraints + shadow prices
 - [ ] C3 Bayesian forecaster: nightly Monte-Carlo P(go-live) + ranked interventions

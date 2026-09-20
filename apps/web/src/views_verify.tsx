@@ -6,8 +6,24 @@
    answers. The other half of the screen is number ranges (ADR-0014): codes as ledgered
    allocations, where a collision is a refusal with a name in it. */
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, NumberingSnapshot, VerificationRun, platform } from "./api";
-import { Empty, Field, Pill, Section } from "./ui";
+import { ApiError, AssuranceView, NumberingSnapshot, VerificationRun, platform } from "./api";
+import { Empty, Field, Pill, Section, Skeleton } from "./ui";
+
+const BASIS_WORDS: Record<string, string> = {
+  checked: "read back from the live system by this platform",
+  disagrees: "read, and the system says something else — each one is an open decision",
+  attested: "a named person's word; no read path exists, so nobody has seen the system",
+  unevidenced: "no read path and no attestation — nothing supports it at all",
+  outstanding: "handed to a person and not done yet",
+  unbuilt: "nothing has been written yet",
+  unexamined: "no verification has ever looked at it",
+};
+
+/** Proven reads green, a person's word amber, nothing at all red. The colour is the argument. */
+const BASIS_LAMP: Record<string, string> = {
+  checked: "run", disagrees: "stop", attested: "call", unevidenced: "stop",
+  outstanding: "call", unbuilt: "idle", unexamined: "idle",
+};
 
 export function VerifyView(props: {
   eid: string | null;
@@ -18,10 +34,20 @@ export function VerifyView(props: {
 }) {
   const { eid, onRefusal } = props;
   const [run, setRun] = useState<VerificationRun | null>(null);
+  const [assurance, setAssurance] = useState<AssuranceView | null>(null);
   const [numbering, setNumbering] = useState<NumberingSnapshot | null>(null);
   const [busy, setBusy] = useState(false);
   const [stamp, setStamp] = useState("");
   const [form, setForm] = useState({ range_id: "", object_type: "", prefix: "", start: "1", end: "9999" });
+
+  /* The question an auditor actually asks, answered from the chain rather than from this run:
+     a verification nobody has run yet still has a true answer, and it is "nothing is proven". */
+  const refreshAssurance = useCallback(() => {
+    if (!eid) return;
+    platform.assurance(eid)
+      .then(setAssurance)
+      .catch((e) => { if (e instanceof ApiError && !e.notAvailable) onRefusal("Assurance", e.detail); });
+  }, [eid, onRefusal]);
 
   const refreshNumbering = useCallback(() => {
     if (!eid) return;
@@ -30,7 +56,12 @@ export function VerifyView(props: {
       .catch((e) => { if (e instanceof ApiError && !e.notAvailable) onRefusal("Number ranges", e.detail); });
   }, [eid, onRefusal]);
 
-  useEffect(() => { setRun(null); setStamp(""); refreshNumbering(); }, [refreshNumbering]);
+  useEffect(() => {
+    setRun(null);
+    setStamp("");
+    refreshNumbering();
+    refreshAssurance();
+  }, [refreshNumbering, refreshAssurance]);
 
   if (!eid) return <Empty title="No engagement" body="Choose an engagement to verify it." />;
 
@@ -40,6 +71,7 @@ export function VerifyView(props: {
       const out = await platform.verify(eid);
       setRun(out);
       setStamp(new Date().toLocaleTimeString());
+      refreshAssurance();
       await props.onChanged();
     } catch (e) {
       if (e instanceof ApiError) onRefusal("Verification did not run", e.detail);
@@ -75,6 +107,49 @@ export function VerifyView(props: {
 
   return (
     <>
+      <Section
+        title="What can be proven"
+        note="Of everything this engagement claims is done, how much this platform read back itself — and how much rests on somebody's word."
+        lamp={assurance?.fraction === null || assurance === null ? undefined
+              : assurance.fraction === 1 ? "run" : assurance.fraction >= 0.5 ? "call" : "stop"}
+        status={assurance && assurance.fraction !== null
+          ? `${assurance.proven} of ${assurance.claimed} proven`
+          : undefined}
+      >
+        {!assurance ? <Skeleton rows={2} /> : assurance.fraction === null ? (
+          <p className="mut">
+            Nothing here claims to be done yet, so there is nothing to prove. That is a state, not
+            a score — a percentage printed now would be an opinion about an empty set.
+          </p>
+        ) : (
+          <>
+            <p>
+              <strong>{assurance.proven} of {assurance.claimed}</strong> record
+              {assurance.claimed === 1 ? "" : "s"} that claim to be done{" "}
+              {assurance.claimed === 1 ? "is" : "are"} proven — {Math.round(assurance.fraction * 100)}%.
+            </p>
+            <div className="tblwrap">
+              <table className="tbl">
+                <thead><tr><th>Rests on</th><th>Records</th><th>What that means</th></tr></thead>
+                <tbody>
+                  {Object.keys(assurance.counts).sort().map((b) => (
+                    <tr key={b}>
+                      <td><Pill lamp={BASIS_LAMP[b]}>{b}</Pill></td>
+                      <td className="num">{assurance.counts[b]}</td>
+                      <td className="mut" style={{ fontSize: 12.5 }}>{BASIS_WORDS[b] ?? b}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="mut" style={{ marginTop: 12, fontSize: 12.5 }}>
+              {assurance.formula} Not counted: {assurance.not_counted.join("; ")}. Counting those
+              would move the number for reasons that have nothing to do with evidence.
+            </p>
+          </>
+        )}
+      </Section>
+
       <Section
         title="Verification"
         note="Signed intent checked against live state. Reading only — a difference becomes a decision, never a silent fix."

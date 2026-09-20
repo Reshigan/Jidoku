@@ -52,7 +52,15 @@ of it.
    unapproved, waiting on a reviewer who did not build it. (ADR-0018, ADR-0020, ADR-0021;
    `packages/jidoka-os/src/jidoka_os/crew.py`; `test_crew.py`, `test_run_api.py`.)
 
-5. **Unsigned intent is unexecutable by construction.** IR records without a signed source do not
+5. **The platform publishes how much of its own work it can prove.** Every signed record is filed
+   by what its claim to being done rests on — read back from the live system, a named person's
+   word, nothing at all, or not claimed yet — and the headline is `checked / (checked + disagrees
+   + attested + unevidenced)`, with the denominator and the three excluded bases printed beside
+   it. An attestation sits in the denominator and never the numerator. We know of no configuration
+   tool that reports its own assurance as a fraction it can be argued with about. (ADR-0023;
+   `packages/jidoka-core/src/jidoka_core/assurance.py`; `test_assurance.py`.)
+
+6. **Unsigned intent is unexecutable by construction.** IR records without a signed source do not
    load; open decision points — whether from the IR or raised later, including by drift — hard-block
    planning through one gate; the agent is always builder and never approver; approval requires a
    different reviewer and a prior snapshot; live Tier-A writes require an explicitly armed target
@@ -76,7 +84,7 @@ of it.
 - **"An LLM that fully understands SAP."** The knowledge subsystem is evidence-grounded and the
   scrubber gate works, but the corpus question (DP-K01 — entitlement to SAP documentation) is an
   open legal decision point and remains blocked until counsel answers it.
-- **"World first" as a totality.** The five claims above are shapes we believe are new. The only
+- **"World first" as a totality.** The six claims above are shapes we believe are new. The only
   honest form of the headline is: *the first SAP configuration platform we know of where drift,
   documents, tests and number ranges are all projections of one signed, hash-chained record — and
   where the machine can never approve its own work.*

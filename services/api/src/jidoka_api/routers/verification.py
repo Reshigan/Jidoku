@@ -8,6 +8,7 @@ planning until a named human chooses between reasserting the intent and signing 
 writes the ledger.
 """
 from fastapi import APIRouter, Depends
+from jidoka_core.assurance import assure
 from jidoka_core.drift import (ATTESTED, AWAITING_A_PERSON, HANDED_OFF, NOT_APPLIED,
                                 UNTOUCHED, WRITTEN, DriftWatch)
 
@@ -93,6 +94,17 @@ def run_verification(e, actor: str) -> dict:
     return {"verified": verified, "drift": findings, "skipped": skipped, "not_applied": unbuilt,
             "awaiting_a_person": awaiting, "unconfirmable": unconfirmable, "attested": attested,
             "planning_blocked": bool(findings)}
+
+
+@router.get("/assurance")
+def assurance(eid: str, identity: Identity = Depends(require("read"))):
+    """Of everything this engagement claims is done, how much can be demonstrated.
+
+    A read of the chain, so it costs nothing and cannot disagree with the ledger it is drawn from.
+    Gated on `read`: an auditor asks this question more often than anybody, and it changes nothing.
+    """
+    e = get_or_404(eid)
+    return assure(e.ir, e.ledger.entries).as_dict()
 
 
 @router.post("")

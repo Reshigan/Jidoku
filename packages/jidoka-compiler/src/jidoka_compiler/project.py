@@ -30,6 +30,8 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+from jidoka_core.assurance import VERDICTS, assure
+from jidoka_core.ir import record_key
 from jidoka_insight.archaeology import unexplained
 from jidoka_insight.debt import WEIGHTS, measure
 
@@ -367,6 +369,19 @@ def decision_register(engagement) -> str:
     return "\n".join(out + _footer(engagement))
 
 
+#: A sentence per basis, so the table means the same thing to a reader who has not read ADR-0022.
+_BASIS_WORDS = {
+    "checked": "this platform read the live system and found the signed value.",
+    "disagrees": "read, and the live system says something else. Each one is an open decision.",
+    "attested": "a named person's word. The product publishes no way to read it back, so nobody "
+                "has seen the system — this is evidence about a person.",
+    "unevidenced": "no read path and no attestation. Nothing supports this record at all.",
+    "outstanding": "handed to a person and not done yet. No claim of completion.",
+    "unbuilt": "nothing has been written. No claim of completion.",
+    "unexamined": "no verification has ever looked at it. The absence of a check is a finding.",
+}
+
+
 def verification_report(engagement) -> str:
     """What was checked, what matched, what drifted, and what has never been looked at.
 
@@ -381,15 +396,36 @@ def verification_report(engagement) -> str:
         return _no_ir_yet(engagement, title, subtitle)
 
     def _key(rec):
-        return f"{rec.get('product')}:{rec.get('object')}:{_code(rec)}"
+        return record_key(rec)
 
-    # Latest verification verdict per record, straight off the ledger.
+    # Latest verification verdict per record, straight off the ledger. Every verdict, not only
+    # the two that read a live system: a record the platform found unreadable has been looked at,
+    # and listing it under "never verified" would contradict the assurance table above.
     last: dict[str, dict] = {}
     for e in _ledger_entries(engagement):
-        if e.get("action") in ("VERIFIED", "DRIFT_DETECTED"):
+        if e.get("action") in VERDICTS:
             last[e.get("task")] = e
 
     out = _header(engagement, title, subtitle)
+
+    # The headline an auditor came for, before the detail they will read to check it.
+    a = assure(records, _ledger_entries(engagement)).as_dict()
+    counts = a["counts"]
+    out += ["## What can be proven", ""]
+    if a["fraction"] is None:
+        out += ["Nothing on this engagement claims to be done yet, so there is nothing to prove. "
+                "That is a state, not a score — a fraction printed here would be an opinion about "
+                "an empty set.", ""]
+    else:
+        out += [f"**{a['proven']} of {a['claimed']} records that claim to be done are proven** "
+                f"({a['fraction'] * 100:.0f}%) — read back from the live system by this platform.", ""]
+    out += _table(["Rests on", "Records", "What that means"],
+                  [[b, counts.get(b, 0), _BASIS_WORDS[b]] for b in sorted(counts)])
+    out += ["",
+            f"*{a['formula']}* Not counted: "
+            + "; ".join(a["not_counted"]) + ". Counting those would move the number for reasons "
+            "that have nothing to do with evidence.", ""]
+
     out += ["## What is checked", "",
             "The expected state below is not authored by a tester — it is the engagement's signed "
             "intent, per object. Settled fields are asserted verbatim against the live system; "
@@ -411,7 +447,10 @@ def verification_report(engagement) -> str:
         if e is None:
             never.append(rec)
             continue
-        verdict = "match" if e.get("action") == "VERIFIED" else f"**{e.get('status', 'DRIFT')}**"
+        action = e.get("action")
+        verdict = "match" if action == "VERIFIED" else (
+            f"**{e.get('status', 'DRIFT')}**" if action == "DRIFT_DETECTED"
+            else action.replace("_", " ").lower())
         rows.append([rec.get("object"), f"`{_code(rec)}`", verdict, e.get("ts", "—"),
                      e.get("detail", "")])
     out += _table(["Object", "Code", "Result", "When", "Detail"], rows) or            ["*No verification has been run on this engagement.*"]

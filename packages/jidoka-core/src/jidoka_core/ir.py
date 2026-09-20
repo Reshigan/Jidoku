@@ -20,9 +20,23 @@ class IRRecord:
 
     @property
     def key(self) -> str:
-        return f"{self.product}:{self.object}:{self.external_code or self.intent.get('externalCode','?')}"
+        return record_key(self)
 
 class IRValidationError(Exception): ...
+
+
+def record_key(record) -> str:
+    """The name one IR record answers to, from a dataclass or from the dict it was loaded as.
+
+    Both are real — the API holds dataclasses, the repository and the projections hold rows — and
+    they have to produce the same string, because that string is the ledger's task name. It was
+    written twice, and the copy that took a dict quietly returned nothing, so an assurance count
+    read off the chain reported every record as unexamined.
+    """
+    get = record.get if isinstance(record, dict) else lambda f, d=None: getattr(record, f, d)
+    intent = get("intent") or {}
+    code = get("external_code") or intent.get("externalCode") or "?"
+    return f"{get('product')}:{get('object')}:{code}"
 
 def _find_decision_points(node: Any, path="intent") -> list[str]:
     hits = []

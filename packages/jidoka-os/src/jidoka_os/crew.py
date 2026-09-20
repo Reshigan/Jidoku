@@ -245,13 +245,11 @@ def run(kernel, *, records, open_dp_ids, actor: str, bus: MessageBus | None = No
     # looked — a verdict of unbuilt, outstanding, or unreadable is a verdict, and objecting that
     # nobody has ever looked would be false. The other two verdicts get objections of their own,
     # because "a person said so" and "nobody can check this" are exactly the unproven claims this
-    # ring exists to name.
-    VERDICTS = ("VERIFIED", "DRIFT_DETECTED", "NOT_APPLIED", "AWAITING_A_PERSON",
-                "UNCONFIRMABLE", "ATTESTED")
-    verdict = {}
-    for e in entries:
-        if e.get("action") in VERDICTS:
-            verdict[e.get("task")] = e.get("action")
+    # ring exists to name. The vocabulary comes from core, which writes it: a second copy here
+    # would be a second thing to keep in step, and this module held one until it did not have to.
+    from jidoka_core.assurance import verdicts as _verdicts
+
+    verdict = _verdicts(entries)
 
     def object_to(kind: str, body: dict, text: str):
         bus.send(Message(frm=aud.manifest.name, to="engagement", kind=kind, body=body))

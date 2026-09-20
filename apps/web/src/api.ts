@@ -387,6 +387,20 @@ export type VerificationRun = {
               attested_by: string; at: string; note: string }[];
   planning_blocked: boolean;
 };
+/** What this engagement can prove, counted from its own chain (ADR-0023). `fraction` is null when
+    nothing claims to be done — an empty set has no score, and 0 would read as a failure. */
+export type AssuranceView = {
+  records: number;
+  basis: Record<string, string[]>;
+  counts: Record<string, number>;
+  claimed: number;
+  proven: number;
+  fraction: number | null;
+  /** Published with the number, so nobody has to take the number on trust. */
+  formula: string;
+  not_counted: string[];
+};
+
 export type NumberRangeView = {
   range_id: string; object_type: string; prefix: string;
   start: number; end: number; width: number; next_free: string | null;
@@ -606,6 +620,8 @@ const api2 = {
       blocking decision point on the server; the console never reconciles anything. */
   verify: (eid: string) =>
     call<VerificationRun>(`/engagements/${eid}/verification`, { method: "POST" }),
+  /** A read of the chain: it costs nothing and cannot disagree with the ledger it is drawn from. */
+  assurance: (eid: string) => call<AssuranceView>(`/engagements/${eid}/verification/assurance`),
   numbering: (eid: string) => call<NumberingSnapshot>(`/engagements/${eid}/numbering`),
   registerRange: (eid: string, body: {
     range_id: string; object_type: string; prefix: string; start: number; end: number; width?: number;

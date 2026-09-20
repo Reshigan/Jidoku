@@ -126,3 +126,54 @@ def test_verification_never_writes_to_the_live_system():
     before = {k: [dict(r) for r in v] for k, v in conn.mock.collections.items()}
     c.post(f"/engagements/{eid}/verification")
     assert conn.mock.collections == before
+
+
+# --- assurance: what this engagement can prove (ADR-0023) -----------------------------------------
+
+def test_assurance_is_empty_before_anything_claims_to_be_done():
+    eid = _eng()
+    a = c.get(f"/engagements/{eid}/verification/assurance").json()
+    assert a["fraction"] is None and a["claimed"] == 0
+    assert a["counts"] == {"unexamined": len(IR)}
+
+
+def test_assurance_separates_what_was_checked_from_what_was_attested():
+    eid = _eng()
+    conn = _bound(eid, IR[0]["system_binding"])
+    for rec in IR:
+        conn.mock.collections.setdefault(rec["object"], []).append(dict(rec["intent"]))
+    c.post(f"/engagements/{eid}/verification")
+    a = c.get(f"/engagements/{eid}/verification/assurance").json()
+    # two readable records matched; the data model has no read path and nobody has attested
+    assert a["counts"]["checked"] == 2 and a["counts"]["unevidenced"] == 1
+    assert a["proven"] == 2 and a["claimed"] == 3
+
+    c.post(f"/engagements/{eid}/execution/attest",
+           json={"key": "SuccessFactors:DATA_MODEL_XML:CSDM_ZAF_NID"},
+           headers=hdr("t.mabaso", "builder"))
+    c.post(f"/engagements/{eid}/verification")
+    a = c.get(f"/engagements/{eid}/verification/assurance").json()
+    assert a["counts"]["attested"] == 1 and "unevidenced" not in a["counts"]
+    # the attestation did not make it provable — the denominator is unchanged
+    assert a["proven"] == 2 and a["claimed"] == 3
+
+
+def test_an_auditor_may_read_assurance_and_may_not_run_a_verification():
+    eid = _eng()
+    assert c.get(f"/engagements/{eid}/verification/assurance",
+                 headers=hdr("an.auditor", "auditor")).status_code == 200
+    assert c.post(f"/engagements/{eid}/verification",
+                  headers=hdr("an.auditor", "auditor")).status_code == 403
+
+
+def test_the_verification_report_leads_with_what_can_be_proven():
+    eid = _eng()
+    conn = _bound(eid, IR[0]["system_binding"])
+    for rec in IR:
+        conn.mock.collections.setdefault(rec["object"], []).append(dict(rec["intent"]))
+    c.post(f"/engagements/{eid}/verification")
+    doc = c.get(f"/engagements/{eid}/documents/verification-report").text
+    assert "## What can be proven" in doc
+    assert "2 of 3 records that claim to be done are proven" in doc
+    # and the report does not contradict its own headline further down
+    assert "unconfirmable" in doc.lower()
