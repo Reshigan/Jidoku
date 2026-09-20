@@ -104,11 +104,76 @@ def test_the_operator_cannot_emit_an_artefact_and_the_architect_does_it():
     assert any("emitted" in d for d in architect_card["did"])
 
 
-def test_every_tier_a_step_comes_back_rehearsed_never_written():
-    """Invariant 6 from the crew's side: it has no way to arm, so a run cannot write."""
+def test_an_unarmed_step_comes_back_rehearsed_and_asks_for_an_approver():
+    """Invariant 6 from the crew's side: it has no way to arm, so an unarmed step cannot write."""
     report = run(kernel())
     assert [s["status"] for s in report["steps"]] == ["DRY_RUN"]
     assert any(w["who"] == "an approver" for w in report["waiting_on_a_person"])
+
+
+def test_there_is_no_syscall_the_crew_could_arm_with():
+    from jidoka_os.syscalls import SYSCALL_TABLE
+
+    assert not any("arm" in name for name in SYSCALL_TABLE)
+
+
+def test_a_written_step_waits_on_a_reviewer_who_did_not_build_it():
+    """The crew can write now. It still cannot be the second person invariant 4 wants."""
+    def wrote(proc, **kw):
+        return {"key": kw.get("key"), "tier": "A", "system": "SYS-DEV", "status": "VERIFIED",
+                "detail": "written and verified"}
+
+    report = run(kernel(sys_write_tier_a=wrote))
+    assert any(w["who"] == "a reviewer who did not build it" for w in report["waiting_on_a_person"])
+
+
+def test_the_operator_carries_a_transport_hop_by_hop_until_production():
+    hops = iter([
+        {"in_production": False, "next_hop": "S4-PRD", "route": ["S4-DEV", "S4-QA", "S4-PRD"],
+         "imported_into": ["S4-QA"]},
+        {"in_production": True, "next_hop": None, "route": ["S4-DEV", "S4-QA", "S4-PRD"],
+         "imported_into": ["S4-QA", "S4-PRD"]},
+    ])
+    report = run(kernel(
+        sys_write_tier_a=lambda proc, **kw: {
+            "key": kw.get("key"), "tier": "A", "system": "SYS-DEV", "status": "IN_TRANSPORT",
+            "detail": "verified, not yet in production",
+            "transport": {"route": ["S4-DEV", "S4-QA", "S4-PRD"], "next_hop": "S4-QA"}},
+        sys_advance_transport=lambda proc, **kw: next(hops)))
+    step = report["steps"][0]
+    assert step["status"] == "VERIFIED" and step["transport"]["in_production"] is True
+
+
+def test_a_refused_hop_stops_the_walk_and_says_who_owns_it():
+    def refuse(proc, **kw):
+        raise RuntimeError("next legal hop is S4-QA. Route order is not optional.")
+
+    report = run(kernel(
+        sys_write_tier_a=lambda proc, **kw: {
+            "key": kw.get("key"), "tier": "A", "system": "SYS-DEV", "status": "IN_TRANSPORT",
+            "detail": "verified, not yet in production",
+            "transport": {"route": ["S4-DEV", "S4-QA", "S4-PRD"], "next_hop": "S4-QA"}},
+        sys_advance_transport=refuse))
+    step = report["steps"][0]
+    assert step["status"] == "IN_TRANSPORT" and "Route order is not optional" in step["detail"]
+    assert any(w["who"] == "whoever owns the transport route" for w in report["waiting_on_a_person"])
+
+
+def test_a_substrate_that_never_says_stop_does_not_spin_forever():
+    """Bounded by the route's own length: a loop trusting the substrate to end it would not end."""
+    calls = {"n": 0}
+
+    def never_lands(proc, **kw):
+        calls["n"] += 1
+        return {"in_production": False, "next_hop": "S4-QA", "route": ["S4-DEV", "S4-QA"],
+                "imported_into": []}
+
+    run(kernel(
+        sys_write_tier_a=lambda proc, **kw: {
+            "key": kw.get("key"), "tier": "A", "system": "SYS-DEV", "status": "IN_TRANSPORT",
+            "detail": "", "transport": {"route": ["S4-DEV", "S4-QA"], "next_hop": "S4-QA"}},
+        sys_advance_transport=never_lands))
+    assert calls["n"] == 2
 
 
 def test_a_refused_syscall_is_reported_not_raised_into_the_run():

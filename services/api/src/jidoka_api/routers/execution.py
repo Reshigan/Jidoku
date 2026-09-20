@@ -136,19 +136,33 @@ def snapshot(eid: str, body: Step, identity: Identity = Depends(require("snapsho
     return {"key": body.key, "rows": len(rows), "before": rows}
 
 
+def execute_step(e, identity: Identity, key: str):
+    """Run one step, armed or not. The single implementation of the apply path.
+
+    The endpoint below maps its refusals onto HTTP; the crew's operator lets them travel back
+    through the syscall boundary as a refused step (ADR-0020). Neither gets its own copy of the
+    gates, because two copies of a gate are one gate and one bug waiting to happen.
+
+    Arming is read here, never granted here: `_ARMED` is written only by the arm endpoint, which
+    an approver holds and a builder does not. Absent an arming this is a dry run, whoever asked.
+    """
+    eid = e.engagement_id
+    r = _record_or_404(e, key)
+    target = _ARMED.get((eid, r.system_binding))
+    connector = e.connectors.get(r.system_binding)
+    req, route = _transport_for(e, eid, key, r) if (target and is_abap(r.product)) else (None, None)
+    return _executor(e, identity).execute(
+        key, _adapter_for(r.product, connector), r, armed=target,
+        apply_fn=_apply_fn(e, r) if target else None,
+        transport_request=req, route=route)
+
+
 @router.post("/execute")
 def execute(eid: str, body: Step, identity: Identity = Depends(require("execute"))):
     """Dry run unless an approver has armed this record's target. Tier B/C hand off to a human."""
     e = get_or_404(eid)
-    r = _record_or_404(e, body.key)
-    target = _ARMED.get((eid, r.system_binding))
-    connector = e.connectors.get(r.system_binding)
-    req, route = _transport_for(e, eid, body.key, r) if (target and is_abap(r.product)) else (None, None)
     try:
-        res = _executor(e, identity).execute(
-            body.key, _adapter_for(r.product, connector), r, armed=target,
-            apply_fn=_apply_fn(e, r) if target else None,
-            transport_request=req, route=route)
+        res = execute_step(e, identity, body.key)
     except ExecutionRefused as ex:
         raise HTTPException(409, str(ex))
     except WriteLockViolation as ex:
@@ -237,23 +251,47 @@ def rollback(eid: str, body: Rollback, identity: Identity = Depends(require("exe
 # ---- transport: on the ABAP stack the write is only half the change (ADR-0006) ----------------
 
 
+class NoTransportHeld(Exception):
+    """Asked to advance a step that never captured a transport. Not a fault — a wrong question."""
+
+
+def advance_step(e, identity: Identity, key: str) -> dict:
+    """One hop along the declared route. The single implementation, shared with the crew.
+
+    A transport exists only because an armed live write was captured in it, and the route came
+    from the promotion paths a human registered — so moving a change along it is the completion
+    of an authorised write (ADR-0006), not a new authority.
+    """
+    r = _record_or_404(e, key)
+    if not is_abap(r.product):
+        raise tp.TransportError(
+            f"{r.product} is not an ABAP product — its changes do not travel by transport, "
+            f"so there is nothing to advance.")
+    held = _TRANSPORTS.get((e.engagement_id, key))
+    if held is None:
+        raise NoTransportHeld(
+            f"{key}: no transport request is held for this step. Execute it live first — "
+            f"a transport exists because a write was captured in it, never before.")
+    req, route = held
+    state = _executor(e, identity).advance_transport(key, req, route)
+    landed = state["currently_in"]
+    e.ledger.append(key, "TRANSPORT_ADVANCED", identity.subject,
+                    f"{req.request_id} imported into {landed} "
+                    f"({e.registry.get(landed).environment}); next hop {state['next_hop'] or 'none — in production'}",
+                    request_id=req.request_id, target_system=landed,
+                    target_environment=e.registry.get(landed).environment,
+                    next_hop=state["next_hop"], in_production=state["in_production"])
+    return {"key": key, **state}
+
+
 @router.post("/transport")
 def advance(eid: str, body: Step, identity: Identity = Depends(require("transport"))):
     """Release if still modifiable, then import into the next legal hop. One call, one hop."""
     e = get_or_404(eid)
-    r = _record_or_404(e, body.key)
-    if not is_abap(r.product):
-        raise HTTPException(
-            422, f"{r.product} is not an ABAP product — its changes do not travel by transport, "
-                 f"so there is nothing to advance.")
-    held = _TRANSPORTS.get((eid, body.key))
-    if held is None:
-        raise HTTPException(
-            404, f"{body.key}: no transport request is held for this step. Execute it live first — "
-                 f"a transport exists because a write was captured in it, never before.")
-    req, route = held
     try:
-        state = _executor(e, identity).advance_transport(body.key, req, route)
+        return advance_step(e, identity, body.key)
+    except NoTransportHeld as exc:
+        raise HTTPException(404, str(exc))
     except ExecutionRefused as exc:
         raise HTTPException(409, str(exc))
     except WriteLockViolation as exc:
@@ -262,14 +300,6 @@ def advance(eid: str, body: Step, identity: Identity = Depends(require("transpor
         raise HTTPException(422, str(exc))
     except RegistryError as exc:
         raise HTTPException(404, str(exc))
-    landed = state["currently_in"]
-    e.ledger.append(body.key, "TRANSPORT_ADVANCED", identity.subject,
-                    f"{req.request_id} imported into {landed} "
-                    f"({e.registry.get(landed).environment}); next hop {state['next_hop'] or 'none — in production'}",
-                    request_id=req.request_id, target_system=landed,
-                    target_environment=e.registry.get(landed).environment,
-                    next_hop=state["next_hop"], in_production=state["in_production"])
-    return {"key": body.key, **state}
 
 
 @router.get("/transport")

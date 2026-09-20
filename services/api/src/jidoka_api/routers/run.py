@@ -27,7 +27,7 @@ from jidoka_os.syscalls import Kernel
 
 from ..auth import Identity, require
 from .engagements import get_or_404
-from .execution import _adapter_for, _executor, _record_or_404
+from .execution import _adapter_for, _executor, _record_or_404, advance_step, execute_step
 from .verification import run_verification
 
 router = APIRouter(prefix="/engagements/{eid}/run", tags=["run"])
@@ -61,14 +61,25 @@ def _handlers(e, identity: Identity, kernel: Kernel) -> None:
         return {"key": key, "rows": len(rows)}
 
     def sys_write_tier_a(proc, key: str = "", **_):
-        """A rehearsal, always. `armed=None` is what makes it one: the executor's own gate turns
-        an unarmed Tier-A step into a dry run, and there is no argument from here that changes it
-        (invariant 6). The crew cannot arm, because no agent ring holds the authority to."""
-        rec = _record_or_404(e, key)
-        res = ex.execute(key, _adapter_for(rec.product, e.connectors.get(rec.system_binding)),
-                         rec, armed=None)
+        """The real write, when an approver has armed the target — and a rehearsal when nobody has.
+
+        The crew spends an arming; it can never grant one. `_ARMED` is written by the arm endpoint
+        alone, which an approver holds and a builder does not, and the executor refuses an arming
+        whose `armed_by` is the actor running the step (invariant 7). Absent an arming the
+        executor's own gate makes this a dry run, and there is no argument from here that changes
+        that (invariant 6). Same call the Work board's Execute button makes — one implementation,
+        one set of gates (ADR-0020).
+        """
+        res = execute_step(e, identity, key)
         return {"key": res.key, "tier": res.tier, "system": res.system, "status": res.status,
-                "detail": res.detail, "payload": res.payload}
+                "detail": res.detail, "payload": res.payload,
+                "verification": res.verification, "transport": res.transport}
+
+    def sys_advance_transport(proc, key: str = "", **_):
+        """One hop along the route a human declared at registration. A transport exists only
+        because an armed write was captured in it, so this finishes an authorised change rather
+        than starting a new one (ADR-0006, ADR-0009)."""
+        return advance_step(e, identity, key)
 
     def sys_emit_artefact(proc, key: str = "", **_):
         """Tier B and C: the executor hands off to a person and ledgers that it did."""
@@ -93,6 +104,7 @@ def _handlers(e, identity: Identity, kernel: Kernel) -> None:
 
     for name, fn in (("sys_plan", sys_plan), ("sys_extract", sys_extract),
                      ("sys_write_tier_a", sys_write_tier_a),
+                     ("sys_advance_transport", sys_advance_transport),
                      ("sys_emit_artefact", sys_emit_artefact), ("sys_raise_dp", sys_raise_dp),
                      ("sys_ledger_append", sys_ledger_append), ("sys_halt", sys_halt)):
         kernel.register(name, fn)

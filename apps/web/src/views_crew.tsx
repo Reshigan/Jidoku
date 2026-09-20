@@ -18,7 +18,14 @@ const RING_LAMP: Record<string, string> = { AGENT: "run", SERVICE: "run", UNTRUS
 const RING_WORDS: Record<string, string> = {
   AGENT: "ring 2 · agent", SERVICE: "ring 1 · service", UNTRUSTED: "ring 3 · untrusted",
 };
-const STATUS_LAMP: Record<string, string> = { DRY_RUN: "call", REFUSED: "stop", HANDED_OFF: "call" };
+/* A write that reached a customer's system reads green; one that stopped at a gate reads amber;
+   a refusal or a half-landed batch reads red. Nothing here is decorative — an operator scanning
+   this column is asking "did we change production", and the colour has to answer it. */
+const STATUS_LAMP: Record<string, string> = {
+  VERIFIED: "run", APPLIED: "run",
+  DRY_RUN: "call", IN_TRANSPORT: "call", HANDED_OFF: "call",
+  REFUSED: "stop", FAILED: "stop", PARTIAL: "stop", DRIFTED: "stop",
+};
 
 export function CrewView(props: {
   eid: string | null;
@@ -72,11 +79,12 @@ export function CrewView(props: {
         {!run ? (
           <p className="mut">
             Nobody has run the crew on this engagement. A run sequences the work, snapshots every
-            target, rehearses each Tier-A write as a dry run, emits the artefacts a person must
-            execute by hand, raises the statutory questions nobody may guess, objects to its own
-            output from a ring that cannot write, prices what is left and verifies the result.
-            It cannot arm a live write and it cannot approve anything, so it ends by handing the
-            engagement back.
+            target, writes each Tier-A step — for real where an approver has armed the system, as
+            a rehearsal everywhere else — carries an ABAP change along its declared route until it
+            lands in production, emits the artefacts a person must execute by hand, raises the
+            statutory questions nobody may guess, objects to its own output from a ring that
+            cannot write, prices what is left and verifies the result. It cannot arm a target and
+            it cannot approve anything, so it ends by handing the engagement back.
           </p>
         ) : (
           <>
@@ -198,7 +206,7 @@ export function CrewView(props: {
       {run && (run.steps.length > 0 || run.artefacts.length > 0) && (
         <Section
           title="What the crew did"
-          note="Every Tier-A write is a rehearsal. The payload is real; the write did not happen."
+          note="An armed target is written for real and verified against the live system. Everything else is a rehearsal: the payload is real, the write did not happen."
           status={run.economics ? `${run.economics.rehearsed} rehearsed · ${run.economics.manual_steps} for a person` : ""}
           className="grow scrolls"
         >
@@ -212,7 +220,20 @@ export function CrewView(props: {
                     <td>{s.tier}</td>
                     <td className="mono">{s.system}</td>
                     <td><Pill lamp={STATUS_LAMP[s.status] ?? "idle"}>{s.status.replace("_", " ").toLowerCase()}</Pill></td>
-                    <td style={{ fontSize: 12.5 }}>{s.detail}</td>
+                    <td style={{ fontSize: 12.5 }}>
+                      {s.detail}
+                      {/* On the ABAP stack the write is half the change; where the change sits on
+                          its route is the other half, and it is not an aside (ADR-0006). */}
+                      {s.transport?.route?.length ? (
+                        <div className="mut mono" style={{ fontSize: 11.5, marginTop: 4 }}>
+                          {s.transport.request_id} · {s.transport.route.map((hop) => (
+                            s.transport!.imported_into.includes(hop) || hop === s.transport!.route[0]
+                              ? hop : `(${hop})`
+                          )).join(" → ")}
+                          {s.transport.in_production ? " · in production" : ` · next ${s.transport.next_hop}`}
+                        </div>
+                      ) : null}
+                    </td>
                   </tr>
                 ))}
                 {run.artefacts.map((a) => (

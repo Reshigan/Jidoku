@@ -75,7 +75,11 @@ export type CrewRun = {
   plan: Plan | null;
   /** The planner's refusal, verbatim. An open decision stopping the plan is the platform working. */
   plan_blocked: string | null;
-  steps: { key: string; tier: string; system: string; status: string; detail: string }[];
+  steps: {
+    key: string; tier: string; system: string; status: string; detail: string;
+    /** Where an ABAP change sits on its route. Absent on products that do not transport. */
+    transport?: TransportState;
+  }[];
   artefacts: { key: string; tier: string; kind: string; human_step: string; steps: string[] }[];
   decisions_raised: string[];
   objections: { from: string; kind: string; body: Record<string, string> }[];

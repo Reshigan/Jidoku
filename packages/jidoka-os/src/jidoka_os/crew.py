@@ -24,6 +24,12 @@ from .economy import Message, MessageBus, architect, auditor, economist, operato
 from .process import BudgetExceeded, State
 from .syscalls import HaltedError, SyscallError
 
+#: The step states this module reasons about. Spelled here rather than imported: jidoka-os does
+#: not depend on jidoka-core, and these are the words the handler hands back across the syscall
+#: boundary. `jidoka_core.executor` is where they are defined for the executor's own use.
+DRY_RUN, APPLIED, VERIFIED, IN_TRANSPORT, PARTIAL = (
+    "DRY_RUN", "APPLIED", "VERIFIED", "IN_TRANSPORT", "PARTIAL")
+
 #: Field-name markers that make a value statutory until proven otherwise. Published here, like the
 #: scrubber's patterns, because a gate nobody can read is a gate nobody can argue with. A signed
 #: workbook is not a statutory source: invariant 5 wants a client evidence reference, and a
@@ -172,17 +178,58 @@ def run(kernel, *, records, open_dp_ids, actor: str, bus: MessageBus | None = No
             steps.append({"key": step["key"], "tier": "A", "system": step["system"],
                           "status": "REFUSED", "detail": err[1]})
             continue
-        res, err = _call(kernel, ops, "sys_write_tier_a", log, f"rehearsed {step['key']}",
+        res, err = _call(kernel, ops, "sys_write_tier_a", log, f"wrote {step['key']}",
                          system_id=step["system"], key=step["key"], detail=step["key"])
         if err:
             steps.append({"key": step["key"], "tier": "A", "system": step["system"],
                           "status": "REFUSED", "detail": err[1]})
             continue
+
+        # On the ABAP stack the write is half the change: a verified write sits in a transport
+        # until it lands in production (ADR-0006). The operator carries it the rest of the way,
+        # one legal hop at a time, and stops the moment the route or a gate says stop. Bounded by
+        # the route's own length — a loop that trusted the substrate to say "no next hop" would
+        # spin forever the first time a substrate lied.
+        hops = len((res.get("transport") or {}).get("route") or [])
+        for _ in range(hops):
+            if res.get("status") != IN_TRANSPORT:
+                break
+            state, err = _call(kernel, ops, "sys_advance_transport", log,
+                               f"advanced {step['key']} to "
+                               f"{(res.get('transport') or {}).get('next_hop') or 'its next hop'}",
+                               system_id=step["system"], key=step["key"], detail=step["key"])
+            if err:
+                res = {**res, "detail": f"{res.get('detail', '')} {err[1]}".strip()}
+                break
+            # The detail travels with the status. Leaving the pre-advance sentence in place
+            # left a row reading "not yet in production" beside a transport that had reached it.
+            landed = state.get("currently_in")
+            res = {**res, "transport": state,
+                   "status": VERIFIED if state.get("in_production") else IN_TRANSPORT,
+                   "detail": (f"written, verified, and imported into {landed} — in production"
+                              if state.get("in_production")
+                              else f"written and verified; now in {landed}, "
+                                   f"next hop {state.get('next_hop')}")}
+
         steps.append(res)
-        if res.get("status") == "DRY_RUN":
+        status = res.get("status")
+        if status == DRY_RUN:
             waiting.append({"what": step["key"], "who": "an approver",
                             "why": "rehearsed, not written — a live write needs a named approver "
                                    "to arm the target, and the operator may never arm its own"})
+        elif status in (VERIFIED, APPLIED):
+            # The work is done and unreviewed. Invariant 4 wants a second person, and the crew is
+            # never that person: the ledger refuses an approval from whoever executed.
+            waiting.append({"what": step["key"], "who": "a reviewer who did not build it",
+                            "why": "written and verified against the live system — an approval "
+                                   "needs a second person, and the crew can never be one"})
+        elif status == IN_TRANSPORT:
+            waiting.append({"what": step["key"], "who": "whoever owns the transport route",
+                            "why": res.get("detail") or "verified but not yet in production"})
+        elif status == PARTIAL:
+            waiting.append({"what": step["key"], "who": "an operator",
+                            "why": "some operations landed and some were rejected — the substrate "
+                                   "is in a partial state and needs a rollback from the snapshot"})
     crew.append(_card(ops, log))
 
     # --- auditor: objections, from a ring that cannot write anything --------------------------
