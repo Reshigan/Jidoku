@@ -757,6 +757,16 @@ footer {
 .counters { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
 .counters > * { border-right: 1px solid var(--line); background: var(--floor2); }
 .counters > *:last-child { border-right: none; }
+/* One gauge: the number first, because the number is what an operator scans for. The label is
+   an eyebrow like every other label on the floor, so a counter reads as part of the panel rather
+   than as a tile someone bolted on. */
+.counter { padding: 10px 12px; display: grid; gap: 2px; }
+.counter > b { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.counter > span {
+  font-family: var(--mono); font-size: 10px; font-weight: 500; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--ink-dim);
+}
+@media (max-width: 560px) { .counters { grid-auto-flow: row; } }
 
 /* Panels in a board row match heights; content pins to the top. Only a scrolling list is
    stretched — a fixed block cannot use the room, and stretching one leaves a void that reads

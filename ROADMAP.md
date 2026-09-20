@@ -38,7 +38,8 @@
 - [ ] C1 Refinement-typed IR: statutory/referential refinements; plan type-checking
 - [ ] C2 CP-SAT run-planner: optimal sequencing under approver/window/statutory constraints + shadow prices
 - [ ] C3 Bayesian forecaster: nightly Monte-Carlo P(go-live) + ranked interventions
-- [ ] C5 Adversarial agent economy: architect/auditor/sentinel/operator/economist, no shared memory
+- [x] C5 Adversarial agent economy: architect/auditor/sentinel/operator/economist, no shared memory — `jidoka_os.crew`
+      runs the pass, `routers/run.py` binds the syscalls to the executor, the Crew view shows who held what authority (ADR-0018)
 - [ ] C4/C7 (research): causal defect graph; DP routing mechanism design
 ## E12 Team-member behaviours (docs/JIDOKA_TEAM_MEMBER_MODEL.md)
 - [ ] Shift scheduler + night jobs + first-person handover composer

@@ -57,6 +57,39 @@ export type TimeTravel = {
   entries: number;
 };
 
+/** What one agent was allowed to do, and what it did with that. Both, always. */
+export type CrewCard = {
+  name: string;
+  ring: "AGENT" | "SERVICE" | "UNTRUSTED";
+  objective: string;
+  capabilities: string[];
+  syscalls: number;
+  tokens: number;
+  state: string;
+  exit_reason: string;
+  did: string[];
+};
+
+export type CrewRun = {
+  crew: CrewCard[];
+  plan: Plan | null;
+  /** The planner's refusal, verbatim. An open decision stopping the plan is the platform working. */
+  plan_blocked: string | null;
+  steps: { key: string; tier: string; system: string; status: string; detail: string }[];
+  artefacts: { key: string; tier: string; kind: string; human_step: string; steps: string[] }[];
+  decisions_raised: string[];
+  objections: { from: string; kind: string; body: Record<string, string> }[];
+  economics: {
+    steps: Record<string, number>; manual_steps: number; rehearsed: number; refused: number;
+    open_questions: number; not_priced: string[];
+  } | null;
+  verification: VerificationRun | null;
+  /** The handover. A run ends here rather than in a fait accompli — arming and approval are human. */
+  waiting_on_a_person: { what: string; who: string; why: string }[];
+  halted: boolean;
+  halt_reason: string;
+};
+
 export type Blast = {
   population: number;
   affected: number;
@@ -330,6 +363,9 @@ export type VerificationRun = {
   verified: string[];
   drift: DriftFindingView[];
   skipped: { key: string; reason: string }[];
+  /** Signed intent describes it and nobody has built it yet. Not drift — nothing changed under
+      anyone, because nothing was ever there. It is unbuilt work, and the plan is what closes it. */
+  not_applied: { key: string; system: string; reason: string }[];
   planning_blocked: boolean;
 };
 export type NumberRangeView = {
@@ -585,6 +621,11 @@ const api3 = {
   blast: (eid: string, body: { system_id: string; entity: string; id_field: string;
                                selector: Record<string, string>; delta: string }) =>
     call<Blast>(`/engagements/${eid}/insight/blast`, { method: "POST", body: JSON.stringify(body) }),
+
+  /* ---- the crew run (ADR-0018). The team takes the engagement as far as it can go alone and
+     stops at every human gate: it cannot arm a live write and no ring it can occupy can approve. ---- */
+  runCrew: (eid: string) => call<CrewRun>(`/engagements/${eid}/run`, { method: "POST" }),
+  lastRun: (eid: string) => call<CrewRun>(`/engagements/${eid}/run`),
 };
 
 /** One client surface. Typed by construction, so a missing endpoint is a compile error. */

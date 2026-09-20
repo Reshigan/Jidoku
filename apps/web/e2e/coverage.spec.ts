@@ -184,6 +184,25 @@ test("the console reaches every endpoint the API publishes", async ({ page, requ
   await page.getByRole("button", { name: "Allocate next" }).first().click();
   await dismissScrim(page);
 
+  // Crew: put the team on the engagement. It stops at the statutory question the sentinel raises,
+  // which is the platform working — answer it, then run again and it goes to the human gate.
+  await page.getByRole("tab", { name: /^Crew/ }).click();
+  await page.getByRole("button", { name: /^(Put the crew on it|Run again)$/ }).click();
+  await dismissScrim(page);
+  await page.getByRole("tab", { name: /^Decisions/ }).click();
+  const statutory = page.locator(".station", { hasText: "DP-STAT-" }).first();
+  if (await statutory.count()) {
+    await statutory.getByRole("button", { name: "Take this decision" }).click();
+    await page.getByRole("textbox", { name: /^Decision/ }).fill("MONTHLY");
+    const evidence = page.getByLabel(/[Ee]vidence/);
+    if (await evidence.count()) await evidence.first().fill("BCEA s20 — client legal memo");
+    await page.getByRole("button", { name: "Record the decision" }).click();
+    await dismissScrim(page);
+  }
+  await page.getByRole("tab", { name: /^Crew/ }).click();
+  await page.getByRole("button", { name: "Run again" }).click();
+  await dismissScrim(page);
+
   // Insight: read a live tenant into drafts, sign one into intent (the door from archaeology
   // into the ordinary machinery), replay the ledger to a moment, and count a change in people.
   await page.getByRole("tab", { name: /^Insight/ }).click();

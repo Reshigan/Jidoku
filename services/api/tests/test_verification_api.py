@@ -12,6 +12,10 @@ IR = json.load(open(pathlib.Path(__file__).parents[3] /
                     "packages/jidoka-core/tests/fixtures/komatsu_sample_ir.json"))
 
 
+def _key(rec):
+    return f"{rec['product']}:{rec['object']}:{rec['external_code']}"
+
+
 def hdr(subject, *roles):
     return {"Authorization": f"Bearer {issue_token(subject, roles)}"}
 
@@ -40,9 +44,13 @@ def test_no_connector_means_skipped_never_silently_green():
     assert "no connector bound" in body["skipped"][0]["reason"]
 
 
-def test_a_missing_record_raises_a_blocking_decision_point():
+def test_a_record_this_platform_built_and_cannot_find_raises_a_blocking_decision_point():
+    """Absence after a build is drift: we wrote it, and it is gone."""
     eid = _eng()
     _bound(eid, IR[0]["system_binding"])
+    # The executor writes EXECUTED when a live write happens; the kernel is the only thing
+    # permitted to (ADR-0015), so the test seeds it the same way rather than over HTTP.
+    STORE.get(eid).ledger.append(_key(IR[0]), "EXECUTED", "builder@gonxt", "live write")
     body = c.post(f"/engagements/{eid}/verification").json()
     assert body["planning_blocked"] is True
     statuses = {f["key"]: f["status"] for f in body["drift"]}
@@ -51,6 +59,31 @@ def test_a_missing_record_raises_a_blocking_decision_point():
     assert any(d["dp_id"].startswith("DP-DRIFT-") for d in dps)
     # and planning is actually blocked by it, not just reported
     assert c.get(f"/engagements/{eid}/plan").status_code == 409
+
+
+def test_a_record_nobody_has_built_yet_is_unbuilt_work_not_drift():
+    """The defect this rule fixes: verifying a fresh engagement used to raise a decision point per
+    record, whose two answers — reassert, or adopt — are both wrong when the answer is "build it",
+    and left the plan blocked on a question nobody should have been asked (ADR-0018)."""
+    eid = _eng()
+    _bound(eid, IR[0]["system_binding"])
+    body = c.post(f"/engagements/{eid}/verification").json()
+    assert body["drift"] == [] and body["planning_blocked"] is False
+    assert {u["key"] for u in body["not_applied"]} == {_key(r) for r in IR}
+    dps = c.get(f"/engagements/{eid}/decisions").json()["decision_points"]
+    assert not any(d["dp_id"].startswith("DP-DRIFT-") for d in dps)
+    assert c.get(f"/engagements/{eid}/plan").status_code == 200
+
+
+def test_a_record_nobody_built_that_exists_anyway_is_still_drift():
+    """The most interesting row on the page: somebody configured it outside this platform."""
+    eid = _eng()
+    conn = _bound(eid, IR[0]["system_binding"])
+    row = dict(IR[0]["intent"])
+    row["unit"] = "HOURS"
+    conn.mock.collections.setdefault(IR[0]["object"], []).append(row)
+    body = c.post(f"/engagements/{eid}/verification").json()
+    assert any(f["status"] == "DRIFT" for f in body["drift"])
 
 
 def test_live_state_matching_intent_is_ledgered_as_verified():

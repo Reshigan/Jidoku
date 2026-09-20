@@ -6,7 +6,9 @@ hash-chained governance ledger with human-in-the-loop decisioning.
 
 ## Monorepo map
 - `packages/jidoka-core`      — domain kernel: IR, planner, registry, ledger, decisions, twin. Pure stdlib. Everything depends on this; it depends on nothing.
-- `packages/jidoka-os`        — Agent OS: privilege rings, capability-checked syscalls, processes/budgets, shift scheduler, agent economy. Read docs/JIDOKA_AGENT_OS.md.
+- `packages/jidoka-os`        — Agent OS: privilege rings, capability-checked syscalls, processes/budgets, shift scheduler, agent economy.
+                                 `crew.run` is the five-agent pass that takes an engagement to the first human gate (ADR-0018).
+                                 Read docs/JIDOKA_AGENT_OS.md.
 - `packages/jidoka-knowledge` — memory: evidence-grounded claims, project vs system stores, deterministic staleness, the scrubber gate. Read docs/adr/0010.
 - `packages/jidoka-insight`   — archaeology, time-travel, blast radius, technical debt. The brownfield door: a
                                  recovered object is unsigned until a person signs it (ADR-0017).

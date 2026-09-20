@@ -14,6 +14,7 @@ import {
   MemoryView, MilestonesView, WorkView,
 } from "./views";
 import { DocumentsView } from "./views_document";
+import { CrewView } from "./views_crew";
 import { InsightView } from "./views_insight";
 import { VerifyView } from "./views_verify";
 import { DP_KINDS, SYSTEM_ROLES, kindWords, roleLabel } from "./viewkit";
@@ -349,6 +350,12 @@ export default function App() {
                             await guard("The phase cannot advance", () => platform.advancePhase(eid, to));
                             await after();
                           }} />
+              )}
+              {view === "Crew" && (
+                <CrewView eid={eid}
+                          canRun={can("write") && !offline && !stopped && !d.chainBroken}
+                          onRefusal={(title, text) => setRefusal({ title, text })}
+                          onChanged={after} />
               )}
               {view === "Work" && (
                 <WorkView lanes={lanes} planBlock={d.planBlock} busy={busy}

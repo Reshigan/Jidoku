@@ -36,7 +36,17 @@ of it.
    an out-of-range code is refused before anything is kept. The ledger is the storage: the
    registry is rebuilt by replay. (ADR-0014; `packages/jidoka-core/src/jidoka_core/numbering.py`.)
 
-4. **Unsigned intent is unexecutable by construction.** IR records without a signed source do not
+4. **An unattended crew can run an engagement and structurally cannot finish it.** Five agents
+   with opposed objectives take an engagement as far as it goes alone — sequence, snapshot,
+   rehearse every Tier-A write, emit the artefacts a person must do by hand, raise the statutory
+   questions nobody may guess, object to their own output, price the remainder and verify. Every
+   effect goes through a capability-checked syscall bound to the same executor the console's
+   buttons use, so the crew has the operator's route to a customer's system and less authority
+   than the operator: it cannot arm a live write, and APPROVE exists in no ring an agent can
+   occupy. The run ends in a handover, and the report names each agent's authority beside its
+   work. (ADR-0018; `packages/jidoka-os/src/jidoka_os/crew.py`; `test_crew.py`, `test_run_api.py`.)
+
+5. **Unsigned intent is unexecutable by construction.** IR records without a signed source do not
    load; open decision points — whether from the IR or raised later, including by drift — hard-block
    planning through one gate; the agent is always builder and never approver; approval requires a
    different reviewer and a prior snapshot; live Tier-A writes require an explicitly armed target
@@ -50,12 +60,18 @@ of it.
   live SuccessFactors or S/4HANA tenant has been written to from this codebase.
 - **"Covers the SAP portfolio."** One reference adapter (SuccessFactors) is real; other products
   are tier-mapped but not implemented end to end.
+- **"The crew replaces a consulting team."** It does a team's *mechanical* pass: sequencing,
+  rehearsal, artefact production, statutory challenge, objection, pricing and verification, on
+  fixtures, deterministically. It has never run against a live tenant, it brings no judgement of
+  its own — the statutory sentinel matches field names against a published word list, it does not
+  understand South African leave law — and by construction it cannot finish anything. Read the
+  claim as "an unattended pass to the first human gate", which is what the tests prove.
 - **"An LLM that fully understands SAP."** The knowledge subsystem is evidence-grounded and the
   scrubber gate works, but the corpus question (DP-K01 — entitlement to SAP documentation) is an
   open legal decision point and remains blocked until counsel answers it.
-- **"World first" as a totality.** The four claims above are shapes we believe are new. The only
+- **"World first" as a totality.** The five claims above are shapes we believe are new. The only
   honest form of the headline is: *the first SAP configuration platform we know of where drift,
   documents, tests and number ranges are all projections of one signed, hash-chained record — and
   where the machine can never approve its own work.*
 
-*Last reviewed 2026-09-01. If a claim above stops being true, edit this file in the same PR.*
+*Last reviewed 2026-09-20. If a claim above stops being true, edit this file in the same PR.*
