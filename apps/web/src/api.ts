@@ -32,6 +32,9 @@ export type Debt = {
   top_driver: string | null;
   items: Record<string, number>;
   counts: Record<string, number>;
+  /** The published weights, sent rather than derived: a weight inferred from a contribution
+      divided by a zero count prints as 0, which is exactly what "published" must not mean. */
+  weights: Record<string, number>;
   /** counter -> what it was derived from. A counter absent here contributed nothing. */
   measured: Record<string, string>;
   /** Weights with no measurement behind them. Published so the score cannot imply more than it knows. */

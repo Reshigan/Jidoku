@@ -42,5 +42,8 @@ def measure(drafts: list[dict], decision_points, extra: dict | None = None) -> d
     """The index plus its provenance: what was counted, and what was not looked at."""
     counts = counts_from(drafts, decision_points, extra)
     index = debt_index(counts)
-    return {**index, "counts": counts, "measured": dict(MEASURED),
+    # The weights travel with the score. A consumer that derives them from the contributions
+    # divides by a count that is often zero, and prints a published weight as 0 — which is the
+    # one thing a "published weights" claim may not do.
+    return {**index, "counts": counts, "weights": dict(WEIGHTS), "measured": dict(MEASURED),
             "unmeasured": sorted(set(WEIGHTS) - set(counts))}

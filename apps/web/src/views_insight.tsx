@@ -184,7 +184,7 @@ export function InsightView(props: {
                   <tr key={k}>
                     <td className="mono">{k}</td>
                     <td>{backlog.debt.counts[k] ?? 0}</td>
-                    <td>{backlog.debt.items[k] / Math.max(backlog.debt.counts[k] ?? 0, 1)}</td>
+                    <td>{backlog.debt.weights[k]}</td>
                     <td>{backlog.debt.items[k]}</td>
                     <td className="mut" style={{ fontSize: 12.5 }}>
                       {backlog.debt.measured[k] ?? <em>not measured</em>}

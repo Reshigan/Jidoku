@@ -88,6 +88,12 @@ class TestDerivedDebt(unittest.TestCase):
         self.assertEqual(m["counts"]["unauthorised_drift"], 1)
         self.assertEqual(m["score"], WEIGHTS["unauthorised_drift"])
 
+    def test_the_published_weights_travel_with_the_score(self):
+        """A consumer must never have to derive a weight from a contribution over a zero count."""
+        m = measure([], [])
+        self.assertEqual(m["weights"], WEIGHTS)
+        self.assertTrue(all(w > 0 for w in m["weights"].values()))
+
     def test_a_measured_counter_is_never_reported_as_unmeasured(self):
         m = measure([], [])
         self.assertEqual(set(m["counts"]) & set(m["unmeasured"]), set())
