@@ -4,7 +4,7 @@
 # So: the repo venv if there is one, else whatever python3 is on PATH. Override with PY=...
 PY ?= $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
 setup:
-	$(PY) -m pip install --break-system-packages -e packages/jidoka-core -e packages/jidoka-adapters -e packages/jidoka-os -e packages/jidoka-compiler -e packages/jidoka-insight -e services/api -e services/agent
+	$(PY) -m pip install --break-system-packages -e packages/jidoka-core -e packages/jidoka-adapters -e packages/jidoka-os -e packages/jidoka-compiler -e packages/jidoka-insight -e packages/jidoka-knowledge -e services/api -e services/agent
 test:
 	$(PY) -m pytest packages/*/tests services/*/tests -q
 api:
