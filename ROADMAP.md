@@ -40,7 +40,11 @@ for weeks after they were built, until somebody checked.
 ## E8 New adapters
 - [~] S/4HANA adapter: OData writes, CSRF, and transport-aware completion DEV→QA→PROD are built (ADR-0006,
       ADR-0009). BC Set generation and TMS release hooks are not.
-- [ ] BTP adapter via Terraform provider
+- [x] BTP adapter: Terraform-declared objects are Tier B — JIDOKA emits the HCL, a person plans,
+      reads the diff and applies under their own credentials, and JIDOKA reads the BTP APIs back
+      (applying it would mean owning the customer's state file or destroying what it did not know
+      about). Tier A is the two real write APIs; Tier C is cockpit-only with an attestation. No
+      live connector, and `_live` refuses BTP by name (ADR-0038)
 ## E9 Deployment & SaaS
 - [x] EngagementLedger Durable Object: the chain in plain JS (`deploy/cloudflare/src/chain.mjs`),
       one DO per engagement so appends cannot race for the same prev hash, identity from the Access
