@@ -10,8 +10,8 @@
    crew has no way to arm one. What is waiting on a person is the first thing on the screen,
    because it is the only part somebody has to act on. */
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, CrewCard, CrewRun, NightShift, platform } from "./api";
-import { Empty, Pill, Section } from "./ui";
+import { ApiError, CrewCard, CrewRun, NightShift, TeamMember, platform } from "./api";
+import { Empty, Field, Pill, Section } from "./ui";
 
 /** Ring 3 reads as the loudest badge on the card: the auditor's whole power is that it has none. */
 const RING_LAMP: Record<string, string> = { AGENT: "run", SERVICE: "run", UNTRUSTED: "call" };
@@ -36,6 +36,8 @@ export function CrewView(props: {
   const { eid, onRefusal } = props;
   const [run, setRun] = useState<CrewRun | null>(null);
   const [night, setNight] = useState<NightShift | null>(null);
+  const [team, setTeam] = useState<TeamMember[] | null>(null);
+  const [joiner, setJoiner] = useState({ name: "", authority: "", cost: "1", utc_offset: "0" });
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(() => {
@@ -46,9 +48,12 @@ export function CrewView(props: {
     platform.lastNight(eid)
       .then((n) => setNight(n.handover ? n : null))
       .catch((e) => { if (e instanceof ApiError && !e.notAvailable) onRefusal("The handover", e.detail); });
+    platform.team(eid)
+      .then((t) => setTeam(t.people))
+      .catch((e) => { if (e instanceof ApiError && !e.notAvailable) onRefusal("The team", e.detail); });
   }, [eid, onRefusal]);
 
-  useEffect(() => { setRun(null); setNight(null); load(); }, [load]);
+  useEffect(() => { setRun(null); setNight(null); setTeam(null); load(); }, [load]);
 
   if (!eid) return <Empty title="No engagement" body="Choose an engagement to put the crew on it." />;
 
@@ -64,6 +69,24 @@ export function CrewView(props: {
       if (e instanceof ApiError) onRefusal("The attestation was not recorded", e.detail);
     } finally {
       setBusy(false);
+    }
+  };
+
+  /** Adds one person. The API replaces the list, so the console sends the team it is showing plus
+      the new name — a team is a statement about now, and the screen is what "now" looks like. */
+  const addPerson = async () => {
+    try {
+      const person = {
+        name: joiner.name.trim(),
+        authority: joiner.authority.split(/[,\s]+/).filter(Boolean),
+        cost: Number(joiner.cost) || 1,
+        utc_offset: Number(joiner.utc_offset) || 0,
+      };
+      const out = await platform.registerTeam(eid, [...(team ?? []), person]);
+      setTeam(out.people);
+      setJoiner({ name: "", authority: "", cost: "1", utc_offset: "0" });
+    } catch (e) {
+      if (e instanceof ApiError) onRefusal("That person was not registered", e.detail);
     }
   };
 
@@ -132,6 +155,15 @@ export function CrewView(props: {
                   ? <strong key={i}>{part.slice(2, -2)}</strong>
                   : <span key={i}>{part}</span>)}
             </div>
+            {team !== null && (
+              <p className="mut" style={{ marginTop: 12, fontSize: 12.5 }}>
+                {team.length === 0
+                  ? "Nobody is registered on this engagement, so the handover names a role rather " +
+                    "than a person — honest, and nobody answers a request addressed to nobody."
+                  : `Asks go to the least senior person registered who may sign the thing, in their own ` +
+                    `working hours: ${team.map((p) => `${p.name} (${p.authority.join(", ") || "no authority"})`).join(" · ")}.`}
+              </p>
+            )}
             {night.interrupted.length > 0 && (
               <p className="mut" style={{ marginTop: 12, fontSize: 12.5 }}>
                 Woken for:{" "}
@@ -140,6 +172,22 @@ export function CrewView(props: {
               </p>
             )}
           </>
+        )}
+        {props.canRun && (
+          <div className="row" style={{ gap: 12, alignItems: "flex-end", marginTop: 14, flexWrap: "wrap" }}>
+            <Field label="Who" value={joiner.name} placeholder="T. Mabaso"
+                   onChange={(v) => setJoiner({ ...joiner, name: v })} />
+            <Field label="May" value={joiner.authority} placeholder="approve, resolve_dp"
+                   onChange={(v) => setJoiner({ ...joiner, authority: v })} />
+            <Field label="Costs" value={joiner.cost}
+                   onChange={(v) => setJoiner({ ...joiner, cost: v })} />
+            <Field label="Hours east of UTC" value={joiner.utc_offset}
+                   onChange={(v) => setJoiner({ ...joiner, utc_offset: v })} />
+            <button className="btn" disabled={!joiner.name.trim() || !joiner.authority.trim()}
+                    onClick={() => void addPerson()}>
+              Add to the team
+            </button>
+          </div>
         )}
       </Section>
 

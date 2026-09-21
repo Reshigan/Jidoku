@@ -59,6 +59,8 @@ class Engagement:
     drafts: list = field(default_factory=list)
     # The twin's rule export, as handed over. Parsed on use, never on load: one parser.
     rules: list = field(default_factory=list)
+    # The people this engagement may ask for something, as the organisation declared them.
+    people: list = field(default_factory=list)
     # Number ranges rebuild from the ledger (their registrations and allocations ride in entries),
     # so they need no table of their own.
     numbering: NumberRanges = None
@@ -111,6 +113,10 @@ class Engagement:
     def persist_rules(self) -> None:
         if self.repo:
             self.repo.save_rules(self.engagement_id, [dict(r) for r in self.rules])
+
+    def persist_people(self) -> None:
+        if self.repo:
+            self.repo.save_people(self.engagement_id, [dict(p) for p in self.people])
 
     def persist_memory(self) -> None:
         if self.repo:
@@ -167,6 +173,7 @@ class Store:
             e.memory._claims.append(Claim.from_dict(raw))
         e.drafts = self.repo.load_drafts(eid)
         e.rules = self.repo.load_rules(eid)
+        e.people = self.repo.load_people(eid)
         raw_ir, e.open_dps = self.repo.load_ir(eid)
         e.ir = [IRRecord(**r) for r in raw_ir]
         systems, paths = self.repo.load_systems(eid)

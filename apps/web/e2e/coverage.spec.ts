@@ -218,6 +218,12 @@ test("the console reaches every endpoint the API publishes", async ({ page, requ
   await page.getByRole("tab", { name: /^Crew/ }).click();
   await page.getByRole("button", { name: "Run again" }).click();
   await dismissScrim(page);
+  // Somebody for the night to address: a request sent to a role is a request nobody answers.
+  await page.getByLabel("Who").fill("T. Mabaso");
+  await page.getByLabel("May", { exact: true }).fill("approve, resolve_dp, execute");
+  await page.getByRole("button", { name: "Add to the team" }).click();
+  await dismissScrim(page);
+
   // The night shift: the same checks, unattended, and a handover in the morning.
   await page.getByRole("button", { name: /^(Work the night|Work another night)$/ }).click();
   await dismissScrim(page);

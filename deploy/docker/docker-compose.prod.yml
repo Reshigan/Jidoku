@@ -8,8 +8,18 @@ services:
   agent:
     image: ghcr.io/gonxt/jidoka-agent:latest
     environment: [ANTHROPIC_API_KEY, JIDOKA_API_URL, JIDOKA_AGENT_MODEL]
-  jobs:
-    image: ghcr.io/gonxt/jidoka-jobs:latest   # queue consumers: extract/diff/verify/nightly-consistency
+  # The night shift's clock (ADR-0028). Same image as the API on purpose: the shift is the kernel's
+  # own code, and a second image would be a second path to a customer's systems. A sleep loop is
+  # what compose can express — under an orchestrator this is a CronJob or a systemd timer, and the
+  # entry point does not care which clock calls it.
+  nightshift:
+    image: ghcr.io/gonxt/jidoka-api:latest
+    environment: [DB_URL, LEDGER_DB_URL, OBJECTS_URL]
+    depends_on: [db, ledger-db]
+    command: ["sh", "-c", "while true; do python -m jidoka_api.nightly --quiet; sleep 86400; done"]
+    restart: unless-stopped
+  # Queue consumers — extract/diff/verify/nightly-consistency — are specified in
+  # docs/JIDOKA_DEPLOYMENT_AND_KNOWLEDGE_SPEC.md and this repository does not build the image.
   db:
     image: postgres:16
     volumes: [dbdata:/var/lib/postgresql/data]

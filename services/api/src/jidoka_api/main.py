@@ -2,8 +2,8 @@ from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from .routers import (auth_router, controls, decisions, documents, engagements, execution,
-                      insight, ir, ledger, memory, nightshift, numbering, plans,
-                      registry, run, schema_router, twin, verification)
+                      insight, ir, ledger, memory, nightshift, numbering, people,
+                      plans, registry, run, schema_router, twin, verification)
 from .state import STORE
 
 app = FastAPI(title="goNXT JIDOKA API", version="0.1.0",
@@ -14,7 +14,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 for r in (auth_router, engagements, ir, plans, ledger, decisions, documents, registry, schema_router,
           execution, memory, numbering, verification, insight, run, controls, twin,
-          nightshift):
+          nightshift, people):
     app.include_router(r.router)
 
 

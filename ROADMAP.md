@@ -63,11 +63,13 @@ for weeks after they were built, until somebody checked.
 - [ ] C4/C7 (research): causal defect graph; DP routing mechanism design
 ## E12 Team-member behaviours (docs/JIDOKA_TEAM_MEMBER_MODEL.md)
 - [x] Shift scheduler + night jobs + first-person handover composer (`jidoka_os.handover`,
-      `routers/nightshift.py`, the Crew screen — ADR-0027). Nothing schedules itself yet: running the night is
-      still a call, and the cron belongs to deployment.
+      `routers/nightshift.py`, the Crew screen — ADR-0027), with a clock in both deployment shapes:
+      `python -m jidoka_api.nightly` under compose, a Worker `scheduled()` handler at the edge (ADR-0028)
 - [x] Interruption budget ranked by cost-of-silence — published table, hard budget, and what it held back is in
       the handover rather than dropped (ADR-0027)
-- [ ] Person profiles: authority, capacity, latency, working hours; cheapest-sufficient-authority routing
+- [~] Person profiles: authority, working hours and cheapest-sufficient-authority routing are built
+      (`jidoka_os.people`, `routers/people.py` — ADR-0029). Capacity is declared and unused; latency is not
+      modelled at all, though the ledger's DP_RAISED/DP_RESOLVED pairs would support learning it.
 - [ ] Self-accountability page: fidelity defects, forecast calibration, refusal review
 - [ ] Objection records with scheduled revisit triggers
 ## E13 Insight & team (built: jidoka-insight; docs/JIDOKA_PROJECT_TEAM_AND_ALIGNMENT.md)

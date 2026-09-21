@@ -110,6 +110,18 @@ export type NightFinding = {
   kind: string; what: string; who: string; detail: string; cost: number;
 };
 
+/** Somebody the platform may ask for something. Authority is written in the platform's own
+    permission names, and cost is declared by the organisation — never inferred (M4). */
+export type TeamMember = {
+  name: string;
+  authority: string[];
+  cost: number;
+  hours: [number, number];
+  utc_offset: number;
+  days: number[];
+  capacity_per_week: number;
+};
+
 export type Blast = {
   population: number;
   affected: number;
@@ -734,6 +746,12 @@ const api3 = {
   /** Work the night and compose the morning's handover. Writes the ledger, like any check does. */
   runNight: (eid: string) => call<NightShift>(`/engagements/${eid}/nightshift`, { method: "POST" }),
   lastNight: (eid: string) => call<NightShift>(`/engagements/${eid}/nightshift`),
+  team: (eid: string) =>
+    call<{ people: TeamMember[]; can_be_asked_for: string[] }>(`/engagements/${eid}/people`),
+  /** Replaces the team: it is a statement about now, not an append log. */
+  registerTeam: (eid: string, people: unknown[]) =>
+    call<{ people: TeamMember[] }>(`/engagements/${eid}/people`,
+      { method: "POST", body: JSON.stringify(people) }),
   lastRun: (eid: string) => call<CrewRun>(`/engagements/${eid}/run`),
 };
 

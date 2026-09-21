@@ -67,3 +67,57 @@ def test_the_cost_table_is_published_with_the_night():
     out = run(night())
     assert out["cost_of_silence"] == COST_OF_SILENCE
     assert out["cost_of_silence"]["chain_broken"] > out["cost_of_silence"]["twin_miss"]
+
+
+# --- addressing people rather than roles (M4) -----------------------------------------------------
+
+from datetime import datetime, timezone                                        # noqa: E402
+
+from jidoka_os.people import Person                                            # noqa: E402
+
+WED = datetime(2026, 9, 16, 9, 0, tzinfo=timezone.utc)
+SAT = datetime(2026, 9, 19, 5, 0, tzinfo=timezone.utc)
+TEAM = [Person("T. Mabaso", frozenset({"approve", "resolve_dp"}), cost=4, utc_offset=2),
+        Person("A. Silva", frozenset({"resolve_dp"}), cost=1, utc_offset=2, hours=(8, 16))]
+
+
+def test_with_no_team_registered_it_names_the_role_exactly_as_before():
+    """Honest and useless, and better than pretending somebody was asked."""
+    out = run(night(Finding("drift", "ANN_LEAVE drifted", "whoever signed it", needs="resolve_dp")))
+    assert out["waited"][0]["who"] == "whoever signed it"
+    assert "- whoever signed it: ANN_LEAVE drifted" in compose(out, "E", "C")
+
+
+def test_with_a_team_it_asks_the_cheapest_sufficient_authority_by_name():
+    out = run(night(Finding("drift", "ANN_LEAVE drifted", "whoever signed it", needs="resolve_dp")),
+              people=TEAM, now=WED)
+    assert out["waited"][0]["who"] == "A. Silva"
+    assert "- A. Silva: ANN_LEAVE drifted" in compose(out, "E", "C")
+
+
+def test_a_routine_ask_outside_their_hours_says_when_they_will_see_it():
+    out = run(night(Finding("drift", "ANN_LEAVE drifted", needs="resolve_dp")),
+              people=TEAM, now=SAT)
+    assert "- A. Silva — at Mon 08:00 their time: ANN_LEAVE drifted" in compose(out, "E", "C")
+
+
+def test_an_urgent_ask_outside_their_hours_goes_now():
+    out = run(night(Finding("chain_broken", "the chain does not verify", needs="approve")),
+              people=TEAM, now=SAT)
+    row = (out["interrupted"] + out["waited"])[0]
+    assert row["who"] == "T. Mabaso" and row["when"] == "now"
+
+
+def test_a_finding_nobody_registered_can_answer_is_the_finding():
+    out = run(night(Finding("arming_lapsed", "the arming of KOM-SF-DEV lapsed", needs="arm")),
+              people=TEAM, now=WED)
+    text = compose(out, "E", "C")
+    assert "(nobody I can ask) the arming of KOM-SF-DEV lapsed" in text
+    assert "nobody registered on this engagement may 'arm'" in text
+
+
+def test_a_finding_that_needs_nobody_is_never_routed():
+    out = run(night(Finding("twin_miss", "the twin was wrong about ANN_LEAVE")),
+              people=TEAM, now=WED)
+    assert out["waited"][0]["who"] == ""
+    assert "Nothing from me. I will keep checking." in compose(out, "E", "C")

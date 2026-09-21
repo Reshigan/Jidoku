@@ -26,9 +26,19 @@ run_worker_first = [
   "/openapi.json",
 ]
 
+# The night shift's clock (ADR-0027, ADR-0028). The shift itself is a call the kernel serves; this
+# is only what makes it happen at 02:00 UTC without somebody remembering. Cron lives here rather
+# than inside the kernel because the platform runs in two deployment shapes and a clock inside the
+# process would have picked one.
+[triggers]
+crons = ["0 2 * * *"]
+
 [env.production]
 name = "jidoka"
 routes = [{ pattern = "jidoka.vantax.co.za", custom_domain = true }]
+
+[env.production.triggers]
+crons = ["0 2 * * *"]
 
 [env.production.vars]
 # Origin of the FastAPI kernel. Empty here on purpose — no environment's origin is committed; the

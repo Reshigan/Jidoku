@@ -37,6 +37,8 @@ class Repository(Protocol):
     def load_drafts(self, eid: str) -> list[dict]: ...
     def save_rules(self, eid: str, rules: list[dict]) -> None: ...
     def load_rules(self, eid: str) -> list[dict]: ...
+    def save_people(self, eid: str, people: list[dict]) -> None: ...
+    def load_people(self, eid: str) -> list[dict]: ...
 
 
 class InMemoryRepository:
@@ -51,6 +53,7 @@ class InMemoryRepository:
         self._claims: dict[str, list[dict]] = {}
         self._drafts: dict[str, list[dict]] = {}
         self._rules: dict[str, list[dict]] = {}
+        self._people: dict[str, list[dict]] = {}
 
     def save_engagement(self, eid: str, name: str, client: str, phase: str) -> None:
         self._eng[eid] = {"engagement_id": eid, "name": name, "client": client, "phase": phase}
@@ -105,6 +108,12 @@ class InMemoryRepository:
 
     def load_rules(self, eid: str) -> list[dict]:
         return [dict(r) for r in self._rules.get(eid, [])]
+
+    def save_people(self, eid: str, people: list[dict]) -> None:
+        self._people[eid] = [dict(p) for p in people]
+
+    def load_people(self, eid: str) -> list[dict]:
+        return [dict(p) for p in self._people.get(eid, [])]
 
 
 _SCHEMA = """
@@ -250,6 +259,14 @@ class SqliteRepository:
 
     def load_rules(self, eid: str) -> list[dict]:
         return self._get_blob(eid, "rules", [])
+
+    def save_people(self, eid: str, people: list[dict]) -> None:
+        # Who the platform may ask for something, and when. Working hours and cost are facts about
+        # colleagues, declared by the organisation — never inferred, and never a secret.
+        self._put_blob(eid, "people", people)
+
+    def load_people(self, eid: str) -> list[dict]:
+        return self._get_blob(eid, "people", [])
 
 
 def open_repository(db_url: str | None) -> Repository:
