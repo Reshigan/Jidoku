@@ -71,10 +71,14 @@ def validate_record(raw: dict) -> tuple[IRRecord, list[str]]:
     # A contract that names no owner is a field with paperwork, and it is structurally invalid for
     # the same reason an unsigned source is: the thing it claims to establish, it does not.
     from .contracts import ContractError, validate as validate_contract
+    from .refinements import RefinementError, validate as validate_refinements
 
     try:
         validate_contract(rec)
-    except ContractError as ex:
+        # A refinement that cannot be checked is a comment that looks like protection, and a
+        # statutory bound with no signed authority is unsigned intent wearing a type.
+        validate_refinements(rec)
+    except (ContractError, RefinementError) as ex:
         raise IRValidationError(str(ex)) from None
     return rec, _find_decision_points(raw["intent"])
 

@@ -4,8 +4,55 @@
    waiting for a release; as a contract it is one declaration every one of them is already in. */
 import { useCallback, useEffect, useState } from "react";
 
-import { ApiError, Contracts, platform } from "./api";
+import { ApiError, Contracts, TypeCheck, platform } from "./api";
 import { Empty, Section } from "./ui";
+
+/* C1: the rule travels with the value. Every message below is the platform's own — a rejection
+   that needed rewording before it could go in a report would be reworded by hand, once, and then
+   drift away from what the type-checker actually enforces. */
+export function TypesPanel(props: {
+  eid: string | null;
+  onRefusal: (title: string, text: string) => void;
+}) {
+  const { eid, onRefusal } = props;
+  const [out, setOut] = useState<TypeCheck | null>(null);
+
+  useEffect(() => {
+    setOut(null);
+    if (!eid) return;
+    platform.types(eid)
+      .then(setOut)
+      .catch((e) => { if (e instanceof ApiError && !e.notAvailable) onRefusal("The type-check", e.detail); });
+  }, [eid, onRefusal]);
+
+  if (!eid || !out) return null;
+  const failures = [...out.disagrees, ...out.absent];
+
+  return (
+    <Section
+      title="What the types say"
+      note={out.method}
+      lamp={out.holds ? "run" : "stop"}
+      status={out.holds ? "signed intent type-checks" : `${failures.length} do not hold`}
+    >
+      {failures.length === 0 ? (
+        <p className="mut">
+          Every refinement in this design holds, and every field a type requires is set. Records
+          without refinements are not checked and are not counted here — an untyped value is
+          unconstrained, not approved.
+        </p>
+      ) : (
+        <ul style={{ margin: 0, paddingLeft: 18 }}>
+          {failures.map((f) => (
+            <li key={`${f.key}${f.path}`} style={{ marginBottom: 10 }}>
+              <span className="verbatim" style={{ display: "block" }}>{f.says}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Section>
+  );
+}
 
 export function ContractsPanel(props: {
   eid: string | null;

@@ -55,7 +55,11 @@ for weeks after they were built, until somebody checked.
 - [x] C6 Evidence Compiler: complete-population assurance (`jidoka_core.assurance` — ADR-0023) and controls as
       executable predicates over the ledger (`jidoka_core.controls`: six controls, every row tested, violations
       enumerated rather than counted, NOT_EXERCISED distinguished from PASS — ADR-0025)
-- [ ] C1 Refinement-typed IR: statutory/referential refinements; plan type-checking
+- [x] C1 Refinement-typed IR: `bounded` (a statutory ceiling citing statute, signer and date — a
+      bound with no authority does not load), `dependent` (decided by another object's field) and
+      `required` (R-107's shape). The plan is type-checked after the decision points, and every
+      rejection is the auditor's control narrative verbatim (`jidoka_core.refinements`,
+      `routers/types_router.py`, the Intent screen — ADR-0036). The compiler does not emit them yet.
 - [ ] C2 CP-SAT run-planner: optimal sequencing under approver/window/statutory constraints + shadow prices
 - [ ] C3 Bayesian forecaster: nightly Monte-Carlo P(go-live) + ranked interventions
 - [x] C5 Adversarial agent economy: architect/auditor/sentinel/operator/economist, no shared memory — `jidoka_os.crew`

@@ -7,7 +7,8 @@ from .routers import (accountability, auth_router, contracts, controls, decision
                       engagements,
                       execution, insight, ir, ledger, memory, nightshift, numbering, objections,
                       people,
-                      plans, portfolio, registry, run, schema_router, twin, verification)
+                      plans, portfolio, registry, run, schema_router, twin, types_router,
+                      verification)
 from .state import STORE
 
 app = FastAPI(title="goNXT JIDOKA API", version="0.1.0",
@@ -23,7 +24,8 @@ app.add_exception_handler(HTTPException, refusals.record)
 
 for r in (auth_router, engagements, ir, plans, ledger, decisions, documents, registry, schema_router,
           execution, memory, numbering, verification, insight, run, controls, twin,
-          nightshift, people, accountability, portfolio, objections, contracts):
+          nightshift, people, accountability, portfolio, objections, contracts,
+          types_router):
     app.include_router(r.router)
 
 

@@ -195,6 +195,18 @@ export type Contracts = {
   rule: string;
 };
 
+/** C1: refinements that do not hold, and required fields that are empty. Absence and
+    disagreement stay apart because an auditor reads the two differently. */
+export type TypeCheck = {
+  disagrees: TypeFailure[];
+  absent: TypeFailure[];
+  holds: boolean;
+  kinds: string[];
+  method: string;
+};
+
+export type TypeFailure = { key: string; path: string; kind: string; authority: string; says: string };
+
 export type Blast = {
   population: number;
   affected: number;
@@ -843,6 +855,7 @@ const api3 = {
   /** Every engagement at once, worst first. */
   portfolio: () => call<Portfolio>("/portfolio"),
   contracts: (eid: string) => call<Contracts>(`/engagements/${eid}/contracts`),
+  types: (eid: string) => call<TypeCheck>(`/engagements/${eid}/types`),
   objections: (eid: string) =>
     call<{ objections: ObjectionRow[]; open: ObjectionRow[]; due_for_revisit: ObjectionRow[];
            phase: string; grounds: string[] }>(`/engagements/${eid}/objections`),
