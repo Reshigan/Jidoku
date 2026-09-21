@@ -21,11 +21,28 @@ never passed through any other channel:
 | Where | Name | Value |
 |---|---|---|
 | Repository **secret** | `CLOUDFLARE_API_TOKEN` | A **scoped** token: Workers Scripts:Edit, Workers Routes:Edit, Account Settings:Read on this account only. Never the Global API key — it is unscopeable and carries billing. |
-| Repository **secret** | `CLOUDFLARE_ACCOUNT_ID` | The account ID. |
 | Repository **variable** | `KERNEL_URL` | `https://` origin of the FastAPI kernel (a hostname, not a credential). |
+| Repository **secret** | `CLOUDFLARE_ACCOUNT_ID` | Optional. `account_id` is committed in `wrangler.toml` — it is an identifier that grants nothing — so this is only needed by a fork deploying to a different account. Set, it wins; unset, it is ignored rather than blanking the config. |
+| Repository **secret** | `FLY_API_TOKEN` | Only if the kernel job publishes to Fly. Skipped with the rest of the pipeline until `KERNEL_URL` is set. |
 
 Until `KERNEL_URL` is set the console deploys and serves, and every API call returns a 503 saying
 the kernel is unreachable — deliberately, rather than a blank screen.
+
+### The one secret CI cannot set
+`NIGHT_TOKEN` is a **Worker** secret, not a repository secret, because nothing in the pipeline
+should be able to mint the token the night shift calls the kernel with. Set it once, by hand:
+
+```
+cd deploy/cloudflare && npx wrangler secret put NIGHT_TOKEN --env production
+```
+
+It is a builder token and nothing more — the night reads, verifies and chases, and every gate it
+meets is the gate a person's token meets (the agent is never an approver, invariant 7). Until it
+is set, the 02:00 cron refuses and logs *"KERNEL_URL or NIGHT_TOKEN is not configured — no night
+was worked"* rather than calling a customer's kernel unauthenticated. Check it is there with
+`npx wrangler secret list --env production`, and check the night actually ran with
+`npx wrangler tail --env production`; a night shift nobody knows stopped happening is worse than
+one that never started.
 
 ## The kernel origin
 Phase 1 runs `services/api/Dockerfile` wherever containers run (`deploy/docker`, Cloudflare

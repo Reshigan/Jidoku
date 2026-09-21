@@ -12,6 +12,14 @@ name = "jidoka"
 main = "src/index.ts"
 compatibility_date = "2026-08-01"
 
+# Which Cloudflare account this Worker belongs to. An identifier, not a credential: it names the
+# account and grants nothing, and committing it is what lets `npm run deploy` work from a clean
+# clone without a flag to remember. Everything that *is* a credential — the API token, NIGHT_TOKEN
+# — is set by a human out of band and appears nowhere in this repository. CI still passes
+# `accountId` from a repository secret, and the CLOUDFLARE_ACCOUNT_ID environment variable wins
+# over this line, so a fork deploying to its own account overrides it without editing the file.
+account_id = "08596e523c096f04b56d7ae43f7821f4"
+
 [assets]
 directory = "../../apps/web/dist"
 binding = "ASSETS"
