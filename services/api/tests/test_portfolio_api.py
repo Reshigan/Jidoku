@@ -78,3 +78,13 @@ def test_it_is_readable_without_a_privileged_role():
     """A roll-up only the most senior person can open gets screenshotted into a slide once a
     month and is wrong by the meeting."""
     assert c.get("/portfolio", headers=hdr("an.auditor", "auditor")).status_code == 200
+
+
+def test_the_order_is_a_rank_and_not_a_keyword_match_on_the_message():
+    """Sorting on the words would mean rewording a message silently reorders somebody's morning."""
+    _eng("a clean one")
+    broken = _eng("b tampered one")
+    STORE.get(broken).ledger.entries[0]["detail"] = "tampered after the fact"
+    rows = c.get("/portfolio").json()["engagements"]
+    assert [r["urgency"] for r in rows] == sorted(r["urgency"] for r in rows)
+    assert _mine({"engagements": rows}, broken)["urgency"] == 0

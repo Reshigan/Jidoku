@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from . import transport as tp
+from .clock import stamp
 from .ledger import Ledger
 from .registry import SystemRegistry
 
@@ -111,7 +112,7 @@ class Executor:
         if armed.expired():
             # Say when it lapsed, not just that it did: an operator reading this has to decide
             # whether to re-arm or to find out what took so long, and those are different actions.
-            lapsed = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(armed.expires_at))
+            lapsed = stamp(armed.expires_at)
             raise ExecutionRefused(
                 f"The arming of {armed.system_id} by {armed.armed_by} lapsed at {lapsed}. "
                 f"An arming is a window, not a standing authority — ask for it again.")

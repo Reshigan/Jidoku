@@ -34,10 +34,9 @@ sends anything, and nothing here knows what a notification is.
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from statistics import median
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-#: How the ledger writes a timestamp. UTC and fixed-width, so string order is time order.
-TS = "%Y-%m-%dT%H:%M:%SZ"
+from jidoka_core.clock import TS
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 #: The ledger action that records the platform having asked somebody for something. One entry per
 #: person per thing per week: asking the same person the same question on five consecutive nights

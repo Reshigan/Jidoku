@@ -27,8 +27,7 @@ Pure, stdlib, and a projection: run it twice on the same chain and it says the s
 """
 from datetime import datetime
 
-#: How the ledger writes a timestamp.
-TS = "%Y-%m-%dT%H:%M:%SZ"
+from .clock import TS
 
 #: A refusal cleared faster than this was, in practice, a step the person already had in hand.
 #: Published so it can be argued with: it is a judgement about what "friction" means, not a
@@ -65,25 +64,34 @@ def refusals(entries: list[dict], within_hours: float = FRICTION_WITHIN_HOURS) -
     whether the gate was right, only whether it held.
     """
     fired: dict[str, dict] = {}
-    for entry in entries:
-        if entry.get("action") != "REFUSED":
-            continue
-        gate = entry.get("task", "")
-        row = fired.setdefault(gate, {"gate": gate, "kind": entry.get("gate", ""),
-                                      "status": entry.get("status", 0), "fired": 0,
-                                      "cleared": 0, "cleared_fast": 0, "standing": 0,
-                                      "words": entry.get("detail", ""), "people": set()})
-        row["fired"] += 1
-        row["people"].add(entry.get("actor", ""))
+    # (gate, person) -> the refusals of theirs nothing has cleared yet. One pass: a scan per
+    # refusal is quadratic on a chain, and a chain is the one thing here that only ever grows.
+    open_against: dict[tuple, list] = {}
 
-        after = _cleared_after(entries, entry)
-        if after is None:
-            row["standing"] += 1
-            continue
-        row["cleared"] += 1
-        t0, t1 = _at(entry), _at(after)
-        if t0 and t1 and (t1 - t0).total_seconds() / 3600 <= within_hours:
-            row["cleared_fast"] += 1
+    for entry in entries:
+        action, gate, who = entry.get("action"), entry.get("task", ""), entry.get("actor", "")
+        if action == "REFUSED":
+            row = fired.setdefault(gate, {"gate": gate, "kind": entry.get("gate", ""),
+                                          "status": entry.get("status", 0), "fired": 0,
+                                          "cleared": 0, "cleared_fast": 0, "standing": 0,
+                                          "words": entry.get("detail", ""), "people": set()})
+            row["fired"] += 1
+            row["people"].add(who)
+            open_against.setdefault((gate, who), []).append(entry)
+        elif action == "CLEARED":
+            # Every refusal of theirs at this gate that was still open: they are past it now.
+            # The same person, at the same gate — somebody else succeeding where you were refused
+            # is separation of duties working, not your refusal clearing.
+            for refusal in open_against.pop((gate, who), []):
+                row = fired[gate]
+                row["cleared"] += 1
+                t0, t1 = _at(refusal), _at(entry)
+                if t0 and t1 and (t1 - t0).total_seconds() / 3600 <= within_hours:
+                    row["cleared_fast"] += 1
+
+    for still_open in open_against.values():
+        for refusal in still_open:
+            fired[refusal.get("task", "")]["standing"] += 1
 
     out = []
     for row in fired.values():
@@ -99,22 +107,6 @@ def refusals(entries: list[dict], within_hours: float = FRICTION_WITHIN_HOURS) -
             "method": ("A refusal is cleared when the same person later gets past the same gate. "
                        f"Cleared inside {within_hours:g}h counts as friction — they had the "
                        "missing step in hand. Nothing here knows whether a refusal was correct.")}
-
-
-def _cleared_after(entries: list[dict], refusal: dict) -> dict | None:
-    """The same person, past the same gate, later. Nothing else counts: somebody else succeeding
-    where you were refused is separation of duties working, not your refusal being cleared."""
-    seen = False
-    for entry in entries:
-        if entry is refusal:
-            seen = True
-            continue
-        if not seen:
-            continue
-        if (entry.get("action") == "CLEARED" and entry.get("task") == refusal.get("task")
-                and entry.get("actor") == refusal.get("actor")):
-            return entry
-    return None
 
 
 def mistakes(entries: list[dict]) -> dict:

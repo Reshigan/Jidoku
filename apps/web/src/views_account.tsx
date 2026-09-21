@@ -38,7 +38,10 @@ export function PortfolioView(props: { onRefusal: (title: string, text: string) 
           </thead>
           <tbody>
             {out.engagements.map((e) => (
-              <tr key={e.engagement_id} className={e.needs_a_person ? "warn" : undefined}>
+              /* No row highlight: the list is already worst-first and the last column says what
+                 is wrong in words. A colour somebody has to decode, on a row whose sentence
+                 already says it, is decoration. */
+              <tr key={e.engagement_id}>
                 <td>{e.name}</td>
                 <td>{e.client}</td>
                 <td>{e.phase}</td>

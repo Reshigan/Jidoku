@@ -173,6 +173,8 @@ export type PortfolioRow = {
   statutory_open: string[]; decisions_open: string[];
   proven: number | null; claimed: number;
   refusals_standing: number; needs_a_person: string;
+  /** Rank, not a keyword match on the sentence: rewording a message must not reorder the list. */
+  urgency: number;
 };
 
 export type Blast = {

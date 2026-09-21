@@ -10,6 +10,7 @@ import time
 from fastapi import APIRouter, Depends, HTTPException
 from jidoka_adapters.base import AdapterError
 from jidoka_core import transport as tp
+from jidoka_core.clock import stamp
 from jidoka_core.drift import intent_hash
 from jidoka_core.executor import ArmedTarget, ExecutionRefused, Executor, is_abap
 from jidoka_core.registry import RegistryError, WriteLockViolation
@@ -103,7 +104,7 @@ def arm(eid: str, body: Arm, identity: Identity = Depends(require("arm"))):
     expires_at = time.time() + body.minutes * 60
     target = ArmedTarget(body.system_id, identity.subject, body.reason, expires_at=expires_at)
     _ARMED[(eid, body.system_id)] = target
-    lapses = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(expires_at))
+    lapses = stamp(expires_at)
     e.ledger.append("EXECUTION", "ARMED", identity.subject,
                     f"{body.system_id} armed for live write until {lapses}: "
                     f"{body.reason or 'no reason given'}",
@@ -126,7 +127,7 @@ def armed(eid: str, identity: Identity = Depends(require("read"))):
     would otherwise offer a write the executor is about to refuse."""
     get_or_404(eid)
     return {"armed": [{"system_id": t.system_id, "armed_by": t.armed_by, "reason": t.reason,
-                       "expires_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t.expires_at))
+                       "expires_at": stamp(t.expires_at)
                        if t.expires_at else ""}
                       for (e_id, _), t in _ARMED.items() if e_id == eid and not t.expired()]}
 

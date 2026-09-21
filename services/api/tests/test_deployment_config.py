@@ -85,3 +85,20 @@ def test_every_value_the_worker_reads_is_one_somebody_was_told_to_set():
         f"The Worker reads {undocumented}, and nothing tells a deployer to set it. A binding the "
         f"code needs and the setup instructions omit is a silent outage waiting for a quiet "
         f"night.")
+
+
+def test_a_timestamp_format_is_written_in_exactly_one_place():
+    """The regression this file exists for, in its other form: the same format string was at seven
+    call sites. A parser reading `ts` with a format the writer no longer uses does not raise — it
+    matches nothing, and the projection quietly reports that nothing happened."""
+    here = pathlib.Path(__file__).resolve()
+    fmt = "%Y-%m-%d" "T%H:%M:%SZ"                 # split so this file is not itself a copy
+    holders = []
+    for path in _tracked():
+        if path == here or path.suffix != ".py" or not path.is_file():
+            continue
+        if fmt in path.read_text(encoding="utf-8"):
+            holders.append(str(path.relative_to(ROOT)))
+    assert holders == ["packages/jidoka-core/src/jidoka_core/clock.py"], (
+        f"The timestamp format is written in {holders}. It belongs in jidoka_core.clock and "
+        f"nowhere else — every other module imports TS or calls stamp().")

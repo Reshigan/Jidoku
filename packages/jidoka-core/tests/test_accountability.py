@@ -77,3 +77,26 @@ def test_no_single_number_comes_out_of_it():
     out = account([refused("2026-09-21T09:00:00Z")])
     assert "score" not in out and "grade" not in out
     assert set(out) == {"refusals", "mistakes", "twin", "unmeasurable", "says"}
+
+
+def test_two_refusals_and_one_clearing_clears_both():
+    """They were refused twice and got through once; both refusals were eventually followed by
+    that person getting past that gate. The count is of refusals that stopped holding, not of
+    clearings — and a single pass has to say the same thing a scan per refusal did."""
+    out = refusals([refused("2026-09-21T09:00:00Z"), refused("2026-09-21T09:30:00Z"),
+                    cleared("2026-09-21T09:40:00Z")])
+    assert out["fired"] == 2 and out["cleared"] == 2 and out["still_standing"] == 0
+
+
+def test_a_refusal_after_a_clearing_stands_on_its_own():
+    """Getting past a gate once does not retire it: the next refusal is open again."""
+    out = refusals([refused("2026-09-21T09:00:00Z"), cleared("2026-09-21T09:10:00Z"),
+                    refused("2026-09-21T14:00:00Z")])
+    assert out["cleared"] == 1 and out["still_standing"] == 1
+
+
+def test_two_gates_do_not_clear_each_other():
+    other = "POST /engagements/{eid}/ledger/approve"
+    out = refusals([refused("2026-09-21T09:00:00Z"), refused("2026-09-21T09:05:00Z", gate=other),
+                    cleared("2026-09-21T09:10:00Z")])
+    assert {g["gate"]: g["standing"] for g in out["gates"]} == {GATE: 0, other: 1}

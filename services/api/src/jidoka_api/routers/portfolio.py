@@ -44,24 +44,27 @@ def _row(e) -> dict:
             "statutory_open": statutory, "decisions_open": open_dps,
             "proven": a.fraction, "claimed": a.claimed,
             "refusals_standing": refusals(entries)["still_standing"],
-            "needs_a_person": _needs(chain, night, statutory)}
+            **_needs(chain, night, statutory)}
 
 
-def _needs(chain_ok: bool, night: dict, statutory: list) -> str:
-    """One line, and the worst thing first. A row that says three things says none of them."""
+#: Worst first, by the same reasoning the night shift ranks findings with (ADR-0027): what it
+#: costs the programme for this to go unseen today. A rank, not a keyword match on the sentence —
+#: sorting on the words would mean rewording a message silently reorders the list.
+CHAIN, STATUTORY, NIGHT, NOTHING = 0, 1, 2, 3
+
+
+def _needs(chain_ok: bool, night: dict, statutory: list) -> dict:
+    """One line, and the worst thing only. A row that says three things says none of them."""
     if not chain_ok:
-        return "the ledger chain does not verify — nothing this engagement claims is provable"
+        return {"urgency": CHAIN, "needs_a_person":
+                "the ledger chain does not verify — nothing this engagement claims is provable"}
     if statutory:
-        return (f"{len(statutory)} statutory decision(s) are blocking the plan, and JIDOKA will "
-                f"not invent them")
+        return {"urgency": STATUTORY, "needs_a_person":
+                f"{len(statutory)} statutory decision(s) are blocking the plan, and JIDOKA will "
+                f"not invent them"}
     if not night["running"]:
-        return night["says"]
-    return ""
-
-
-#: Worst first. Ranked by the same reasoning the night shift ranks findings with (ADR-0027): what
-#: it costs the programme for this to go unseen today.
-URGENCY = ("the ledger chain", "statutory", "No night", "night")
+        return {"urgency": NIGHT, "needs_a_person": night["says"]}
+    return {"urgency": NOTHING, "needs_a_person": ""}
 
 
 @router.get("")
@@ -72,19 +75,12 @@ def portfolio(identity: Identity = Depends(require("read"))):
     roll-up that gets screenshotted into a slide once a month and is wrong by the meeting.
     """
     rows = [_row(e) for e in STORE.list()]
-    rows.sort(key=lambda r: (_rank(r["needs_a_person"]), r["name"]))
+    rows.sort(key=lambda r: (r["urgency"], r["name"]))
     attention = [r for r in rows if r["needs_a_person"]]
     return {"engagements": rows,
             "total": len(rows),
             "need_a_person": len(attention),
             "says": _says(rows, attention)}
-
-
-def _rank(needs: str) -> int:
-    for i, word in enumerate(URGENCY):
-        if word in needs:
-            return i
-    return len(URGENCY) if needs else len(URGENCY) + 1
 
 
 def _says(rows: list, attention: list) -> str:

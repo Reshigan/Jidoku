@@ -4,6 +4,7 @@ every state change returns a dict the caller appends."""
 from dataclasses import dataclass, field
 import time
 
+from .clock import stamp
 from .registry import WRITE_FORBIDDEN_ROLES
 
 MODIFIABLE, RELEASED, IMPORTED = "MODIFIABLE", "RELEASED", "IMPORTED"
@@ -11,7 +12,7 @@ MODIFIABLE, RELEASED, IMPORTED = "MODIFIABLE", "RELEASED", "IMPORTED"
 class TransportError(Exception): ...
 
 def _now() -> str:
-    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    return stamp()
 
 @dataclass
 class TransportRequest:
