@@ -139,23 +139,69 @@ class Rollback(Step):
     reason: str = ""
 
 
+class NotArmed(Exception):
+    """A write with no armed target. Undoing one is still a write (ADR-0009)."""
+
+
+class NoSnapshotHeld(Exception):
+    """Nothing proven to restore. Invariant 4 refuses rather than writing a guess."""
+
+
+def rollback_step(e, identity: Identity, key: str, reason: str):
+    """Put back exactly what the snapshot read. The single implementation, shared with the crew.
+
+    Every gate an execute wears, because the direction of a change is irrelevant to the
+    invariants: invariant 3 via the registry, invariant 4 via the snapshot the executor refuses to
+    proceed without, invariant 6 via the armed target, invariant 7 via armed_by != actor — all
+    checked by the executor's own arming gate rather than re-implemented here.
+    """
+    r = _record_or_404(e, key)
+    target = _ARMED.get((e.engagement_id, r.system_binding))
+    ex_ = _executor(e, identity)
+    if not ex_._assert_armed(r, target):
+        raise NotArmed(
+            f"{r.system_binding} is not armed. A rollback writes to a live system, so it needs an "
+            f"armed target exactly as an execute does — ask an approver to arm it.")
+    before = _BEFORE.get((e.engagement_id, key))
+    if before is None:
+        raise NoSnapshotHeld(
+            f"{key}: rollback refused — this process holds no snapshot for this step. Take a "
+            f"before-snapshot first; there is nothing proven to restore.")
+    if r.system_binding not in e.connectors:
+        raise NoSnapshotHeld(
+            f"{r.system_binding}: armed, but no connector is bound for {r.product}. A rollback "
+            f"with no substrate would report a restore that never happened.")
+    return ex_.rollback(key, before, e.connectors[r.system_binding].apply, r, reason)
+
+
+def snapshot_step(e, identity: Identity, key: str) -> list[dict]:
+    """Read live state, chain its fingerprint, and hold the rows server-side.
+
+    The holding is the load-bearing part: a rollback restores what the platform itself read, never
+    a "before" a caller supplied (ADR-0009). The crew's operator snapshots through this same
+    function, so a run that writes is a run that can be undone — one that snapshotted by some
+    other route would leave the rollback path with nothing to restore.
+    """
+    r = _record_or_404(e, key)
+    system = e.registry.get(r.system_binding)
+    rows = _executor(e, identity).snapshot(
+        key, _adapter_for(r.product, e.connectors.get(r.system_binding)), r, system)
+    _BEFORE[(e.engagement_id, key)] = [dict(x) for x in rows]
+    return rows
+
+
 @router.post("/snapshot")
 def snapshot(eid: str, body: Step, identity: Identity = Depends(require("snapshot"))):
     """Read live state and chain its fingerprint. Nothing may be written until this has run."""
     e = get_or_404(eid)
-    r = _record_or_404(e, body.key)
     try:
-        system = e.registry.get(r.system_binding)
+        rows = snapshot_step(e, identity, body.key)
     except RegistryError as ex:
         raise HTTPException(404, str(ex))
-    try:
-        rows = _executor(e, identity).snapshot(
-            body.key, _adapter_for(r.product, e.connectors.get(r.system_binding)), r, system)
     except RuntimeError as ex:
         # The adapter has no reader bound. A snapshot that cannot read is not a snapshot, and
         # letting it pass would satisfy invariant 4 with an empty before-state — worse than failing.
-        raise HTTPException(409, f"{r.system_binding}: cannot snapshot — {ex}")
-    _BEFORE[(eid, body.key)] = [dict(x) for x in rows]
+        raise HTTPException(409, f"cannot snapshot — {ex}")
     return {"key": body.key, "rows": len(rows), "before": rows}
 
 
@@ -234,37 +280,18 @@ def rollback(eid: str, body: Rollback, identity: Identity = Depends(require("exe
     armed_by != actor, checked by the executor's own arming gate rather than re-implemented here.
     """
     e = get_or_404(eid)
-    r = _record_or_404(e, body.key)
-    target = _ARMED.get((eid, r.system_binding))
-    ex_ = _executor(e, identity)
     try:
-        # The arming gate, verbatim: right target, someone other than the operator armed it,
-        # and the registry still says the system may be written.
-        if not ex_._assert_armed(r, target):
-            raise HTTPException(
-                403, f"{r.system_binding} is not armed. A rollback writes to a live system, so it "
-                     f"needs an armed target exactly as an execute does — ask an approver to arm it.")
-    except ExecutionRefused as exc:
+        res = rollback_step(e, identity, body.key, body.reason or "rolled back from the console")
+    except NotArmed as exc:
         raise HTTPException(403, str(exc))
+    except NoSnapshotHeld as exc:
+        raise HTTPException(409, str(exc))
+    except ExecutionRefused as exc:
+        raise HTTPException(409 if "refused" in str(exc) else 403, str(exc))
     except WriteLockViolation as exc:
         raise HTTPException(403, str(exc))
     except RegistryError as exc:
         raise HTTPException(404, str(exc))
-
-    before = _BEFORE.get((eid, body.key))
-    if before is None:
-        raise HTTPException(
-            409, f"{body.key}: rollback refused — this process holds no snapshot for this step. "
-                 f"Take a before-snapshot first; there is nothing proven to restore.")
-    if r.system_binding not in e.connectors:
-        raise HTTPException(
-            409, f"{r.system_binding}: armed, but no connector is bound for {r.product}. "
-                 f"A rollback with no substrate would report a restore that never happened.")
-    try:
-        res = ex_.rollback(body.key, before, e.connectors[r.system_binding].apply, r,
-                           body.reason or "rolled back from the console")
-    except ExecutionRefused as exc:
-        raise HTTPException(409, str(exc))
     except ConnectorError as exc:
         raise HTTPException(422, str(exc))
     return {"key": res.key, "tier": res.tier, "system": res.system, "status": res.status,

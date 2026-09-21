@@ -337,3 +337,50 @@ def test_the_latest_verdict_wins_over_an_earlier_one():
     findings = {o["body"]["finding"] for o in run(kernel(ledger=led))["objections"]}
     assert "rests on an attestation, not a check" in findings
     assert "cannot be checked, and nobody has attested" not in findings
+
+
+# --- a crew that writes has to be able to undo (ADR-0024) -----------------------------------------
+
+def _partial(proc, **kw):
+    return {"key": kw.get("key"), "tier": "A", "system": "SYS-DEV", "status": "PARTIAL",
+            "detail": "2 of 5 operations failed"}
+
+
+def test_a_half_landed_batch_is_put_back_rather_than_left():
+    undone = []
+    report = run(kernel(sys_write_tier_a=_partial,
+                        sys_rollback=lambda proc, **kw: undone.append(kw.get("key")) or
+                        {"key": kw.get("key"), "status": "ROLLED_BACK", "rows": 3}))
+    assert undone == ["P:Obj:X"]
+    assert report["steps"][0]["status"] == "ROLLED_BACK"
+    assert "put back the state its own snapshot recorded" in report["steps"][0]["detail"]
+
+
+def test_a_refused_rollback_after_a_half_landed_write_is_said_loudly():
+    """The worst state this platform can reach. It cannot fix it; it can refuse to be quiet."""
+    def refuse(proc, **kw):
+        raise RuntimeError("KOM-SF-DEV is not armed.")
+
+    report = run(kernel(sys_write_tier_a=_partial, sys_rollback=refuse))
+    assert report["steps"][0]["status"] == "PARTIAL"
+    assert "The rollback was refused" in report["steps"][0]["detail"]
+    item = next(w for w in report["waiting_on_a_person"] if w["who"] == "an operator, now")
+    assert "state nobody designed" in item["why"]
+
+
+def test_undoing_costs_the_same_capability_as_writing():
+    """Ring 3 cannot undo any more than it can write: the direction is irrelevant."""
+    from jidoka_os.capabilities import Cap
+    from jidoka_os.syscalls import SYSCALL_TABLE
+
+    assert SYSCALL_TABLE["sys_rollback"] == Cap.WRITE_TARGET
+    k = kernel()
+    proc = k.supervisor.spawn(auditor(), "test")
+    with pytest.raises(CapabilityError):
+        k.dispatch(proc, "sys_rollback", key="P:Obj:X")
+
+
+def test_a_clean_write_is_never_rolled_back():
+    called = []
+    run(kernel(sys_rollback=lambda proc, **kw: called.append(1)))
+    assert called == []

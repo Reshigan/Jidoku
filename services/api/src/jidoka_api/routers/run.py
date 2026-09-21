@@ -27,7 +27,8 @@ from jidoka_os.syscalls import Kernel
 
 from ..auth import Identity, require
 from .engagements import get_or_404
-from .execution import _adapter_for, _executor, _record_or_404, advance_step, execute_step
+from .execution import (_adapter_for, _executor, _record_or_404, advance_step, execute_step,
+                        rollback_step, snapshot_step)
 from .verification import run_verification
 
 router = APIRouter(prefix="/engagements/{eid}/run", tags=["run"])
@@ -52,13 +53,11 @@ def _handlers(e, identity: Identity, kernel: Kernel) -> None:
             raise PlanBlocked(str(err))
 
     def sys_extract(proc, key: str = "", **_):
-        """A snapshot. The executor writes the SNAPSHOT entry, so invariant 4's precondition is
-        established by reading the system rather than by anybody saying they did."""
-        rec = _record_or_404(e, key)
-        system = e.registry.get(rec.system_binding)
-        rows = ex.snapshot(key, _adapter_for(rec.product, e.connectors.get(rec.system_binding)),
-                           rec, system)
-        return {"key": key, "rows": len(rows)}
+        """A snapshot, through the same call the console's button makes. The executor writes the
+        SNAPSHOT entry, so invariant 4's precondition is established by reading the system rather
+        than by anybody saying they did — and the rows are held server-side, which is what makes
+        the rollback below possible at all."""
+        return {"key": key, "rows": len(snapshot_step(e, identity, key))}
 
     def sys_write_tier_a(proc, key: str = "", **_):
         """The real write, when an approver has armed the target — and a rehearsal when nobody has.
@@ -80,6 +79,13 @@ def _handlers(e, identity: Identity, kernel: Kernel) -> None:
         because an armed write was captured in it, so this finishes an authorised change rather
         than starting a new one (ADR-0006, ADR-0009)."""
         return advance_step(e, identity, key)
+
+    def sys_rollback(proc, key: str = "", reason: str = "", **_):
+        """Put back what the snapshot read. Same gates as the write that needed undoing, and the
+        rows come from the platform's own snapshot rather than from anything an agent holds."""
+        res = rollback_step(e, identity, key, reason or "rolled back by the crew")
+        return {"key": res.key, "tier": res.tier, "system": res.system, "status": res.status,
+                "detail": res.detail, "rows": len(res.before)}
 
     def sys_emit_artefact(proc, key: str = "", **_):
         """Tier B and C: the executor hands off to a person and ledgers that it did."""
@@ -105,6 +111,7 @@ def _handlers(e, identity: Identity, kernel: Kernel) -> None:
     for name, fn in (("sys_plan", sys_plan), ("sys_extract", sys_extract),
                      ("sys_write_tier_a", sys_write_tier_a),
                      ("sys_advance_transport", sys_advance_transport),
+                     ("sys_rollback", sys_rollback),
                      ("sys_emit_artefact", sys_emit_artefact), ("sys_raise_dp", sys_raise_dp),
                      ("sys_ledger_append", sys_ledger_append), ("sys_halt", sys_halt)):
         kernel.register(name, fn)

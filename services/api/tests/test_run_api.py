@@ -497,3 +497,76 @@ def test_the_auditor_names_an_attestation_for_what_it_is():
     report = c.post(f"/engagements/{eid}/run").json()
     findings = {o["body"]["finding"] for o in report["objections"]}
     assert "rests on an attestation, not a check" in findings
+
+
+# --- undoing is a write, and the crew can do it (ADR-0024) ----------------------------------------
+
+def test_the_crew_puts_back_a_half_landed_batch_end_to_end():
+    """The substrate accepts some operations and rejects others — the one state where doing
+    nothing is worse than acting."""
+    eid = _ready()
+    _armed(eid)
+    conn = STORE.get(eid).connectors[SYSTEM]
+    landed = conn.apply
+
+    def half_lands(payload):
+        if payload.get("kind") == "restore":
+            return landed(payload)          # the undo itself must really run
+        out = landed(payload)               # the write half-lands: rows are in the tenant
+        return {**out, "failed_operations": 1, "total_operations": 2}
+
+    conn.apply = half_lands
+    before = len(conn.mock.collections.get("TimeAccountType", []))
+
+    report = c.post(f"/engagements/{eid}/run", headers=hdr("a.builder", "builder")).json()
+
+    assert {s["status"] for s in report["steps"]} == {"ROLLED_BACK"}
+    # the tenant is back to what the platform's own snapshot recorded
+    assert len(conn.mock.collections.get("TimeAccountType", [])) == before
+    actions = [e["action"] for e in c.get(f"/engagements/{eid}/ledger").json()["entries"]]
+    assert "PARTIAL" in actions and "ROLLED_BACK" in actions
+
+
+def test_a_substrate_that_refuses_the_undo_is_reported_loudly():
+    """The worst state reachable: the write half-landed and the restore would not run. Nothing
+    here can fix that, so the run says so in the step and in the handover."""
+    eid = _ready()
+    _armed(eid)
+    conn = STORE.get(eid).connectors[SYSTEM]
+    landed = conn.apply
+
+    def half_lands_and_refuses_the_undo(payload):
+        if payload.get("kind") == "restore":
+            raise RuntimeError("the tenant rejected the restore")
+        return {**landed(payload), "failed_operations": 1, "total_operations": 2}
+
+    conn.apply = half_lands_and_refuses_the_undo
+    report = c.post(f"/engagements/{eid}/run", headers=hdr("a.builder", "builder")).json()
+
+    step = report["steps"][0]
+    assert step["status"] == "PARTIAL" and "rollback was refused" in step["detail"]
+    item = next(w for w in report["waiting_on_a_person"] if w["who"] == "an operator, now")
+    assert "state nobody designed" in item["why"]
+
+
+def test_a_crew_rollback_restores_the_platforms_own_snapshot_not_a_supplied_one():
+    """Invariant 4: the rows come from the SNAPSHOT this platform took, never from a caller."""
+    eid = _ready()
+    _armed(eid)
+    conn = STORE.get(eid).connectors[SYSTEM]
+    landed, restores = conn.apply, {}
+
+    def half_lands(payload):
+        if payload.get("kind") == "restore":
+            restores[payload["object"]] = payload["rows"]
+            return landed(payload)
+        return {**landed(payload), "failed_operations": 1, "total_operations": 2}
+
+    conn.apply = half_lands
+    report = c.post(f"/engagements/{eid}/run", headers=hdr("a.builder", "builder")).json()
+    from jidoka_api.routers.execution import _BEFORE
+
+    assert restores, "nothing was restored"
+    for step in report["steps"]:
+        obj = step["key"].split(":")[1]
+        assert restores[obj] == _BEFORE[(eid, step["key"])]

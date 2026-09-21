@@ -27,8 +27,8 @@ from .syscalls import HaltedError, SyscallError
 #: The step states this module reasons about. Spelled here rather than imported: jidoka-os does
 #: not depend on jidoka-core, and these are the words the handler hands back across the syscall
 #: boundary. `jidoka_core.executor` is where they are defined for the executor's own use.
-DRY_RUN, APPLIED, VERIFIED, IN_TRANSPORT, PARTIAL = (
-    "DRY_RUN", "APPLIED", "VERIFIED", "IN_TRANSPORT", "PARTIAL")
+DRY_RUN, APPLIED, VERIFIED, IN_TRANSPORT, PARTIAL, ROLLED_BACK = (
+    "DRY_RUN", "APPLIED", "VERIFIED", "IN_TRANSPORT", "PARTIAL", "ROLLED_BACK")
 
 #: Field-name markers that make a value statutory until proven otherwise. Published here, like the
 #: scrubber's patterns, because a gate nobody can read is a gate nobody can argue with. A signed
@@ -227,9 +227,31 @@ def run(kernel, *, records, open_dp_ids, actor: str, bus: MessageBus | None = No
             waiting.append({"what": step["key"], "who": "whoever owns the transport route",
                             "why": res.get("detail") or "verified but not yet in production"})
         elif status == PARTIAL:
-            waiting.append({"what": step["key"], "who": "an operator",
-                            "why": "some operations landed and some were rejected — the substrate "
-                                   "is in a partial state and needs a rollback from the snapshot"})
+            # The one case where doing nothing is worse than acting. A changeset that half-landed
+            # leaves a customer's system in a state nobody designed, and the operator's objective
+            # is to minimise execution risk — so it puts back what the platform itself read
+            # moments earlier, under the same arming that authorised the write (ADR-0024).
+            undone, err = _call(kernel, ops, "sys_rollback", log,
+                                f"rolled {step['key']} back to its snapshot",
+                                system_id=step["system"], key=step["key"], detail=step["key"],
+                                reason="partial batch: some operations landed, some were rejected")
+            if err:
+                # The write half-landed and the undo was refused. Nothing here can fix that, and
+                # saying so loudly is the whole job.
+                steps[-1] = {**res, "detail": f"{res.get('detail', '')} The rollback was refused: "
+                                              f"{err[1]}".strip()}
+                waiting.append({"what": step["key"], "who": "an operator, now",
+                                "why": f"some operations landed and some were rejected, and the "
+                                       f"rollback was refused: {err[1]} The system is in a state "
+                                       f"nobody designed."})
+            else:
+                steps[-1] = {**res, "status": ROLLED_BACK,
+                             "detail": "some operations landed and some were rejected; the "
+                                       "platform put back the state its own snapshot recorded"}
+                waiting.append({"what": step["key"], "who": "whoever signed this record",
+                                "why": "the write half-landed and was rolled back to the "
+                                       "snapshot. Nothing is broken and nothing is done — the "
+                                       "rejected operations need a look before it runs again."})
     crew.append(_card(ops, log))
 
     # --- auditor: objections, from a ring that cannot write anything --------------------------
