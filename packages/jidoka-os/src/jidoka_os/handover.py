@@ -18,9 +18,9 @@ Pure over its inputs: the night's findings arrive as data, and what comes back i
 to say and a handover to say it in. Nothing here reads a system or writes a ledger.
 """
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 
-from .people import Ask, Person, route
+from .people import TS, Ask, Person, route
 from .scheduler import Scheduler, Shift
 
 #: What a finding costs if nobody hears it until tomorrow. Published, because the whole point of
@@ -39,6 +39,14 @@ COST_OF_SILENCE = {
 
 #: Above this, a finding is worth waking somebody for. Below it, the morning is soon enough.
 INTERRUPT_ABOVE = 55
+
+#: A night runs daily. Longer than this without one and a night was missed — the clock is not
+#: firing, the token it calls with was rotated, or the edge was never deployed. Generous enough
+#: that a late run is not an alarm, tight enough that two missed nights cannot pass unnoticed.
+SILENT_AFTER_HOURS = 36
+
+#: What the night leaves behind on every run. The one durable record that a night happened.
+HANDOVER_ACTION = "HANDOVER"
 
 
 @dataclass
@@ -103,6 +111,42 @@ def run(night: Night, *, budget: int = 3, interrupt_above: int = INTERRUPT_ABOVE
                        "held_back": len(scheduler.handover()["deferred"]),
                        "threshold": interrupt_above},
             "cost_of_silence": dict(COST_OF_SILENCE)}
+
+
+def clock(entries: list[dict], now: datetime | None = None) -> dict:
+    """When a night last ran, read off the ledger rather than out of this process's memory.
+
+    A night shift nobody knows stopped happening is worse than one that never started, and every
+    way it stops — a rotated token, a cron that is not firing, an edge that was never deployed, a
+    kernel the edge cannot reach — is invisible from inside the night that did not run. Nothing
+    inside the night can report its own absence, so the chain reports it instead: a handover is
+    written on every run, and its absence is the signal.
+
+    Restart-proof for the same reason. The last handover is held in memory for the console to
+    render; whether a night *happened* is a fact about the ledger.
+    """
+    now = now or datetime.now(timezone.utc)
+    worked = [e.get("ts", "") for e in entries if e.get("action") == HANDOVER_ACTION]
+    if not worked:
+        return {"last_worked": "", "silent_for_hours": None, "running": False,
+                "says": "No night has ever been worked here. Either nobody has run one yet, or "
+                        "the clock that runs them is not deployed."}
+    last = max(worked)
+    try:
+        hours = (now - datetime.strptime(last, TS).replace(tzinfo=timezone.utc)).total_seconds() / 3600
+    except ValueError:
+        return {"last_worked": last, "silent_for_hours": None, "running": True,
+                "says": f"A night was worked at {last}."}
+    hours = round(max(hours, 0.0), 1)
+    if hours <= SILENT_AFTER_HOURS:
+        return {"last_worked": last, "silent_for_hours": hours, "running": True,
+                "says": f"The last night was worked {hours:g}h ago."}
+    # Days past a couple of them: "no night in 496h" is a number, "in 21 days" is a fact.
+    span = f"{hours:g}h" if hours < 48 else f"{hours / 24:.0f} days"
+    return {"last_worked": last, "silent_for_hours": hours, "running": False,
+            "says": f"No night has been worked in {span}, and one runs daily. The clock is "
+                    f"not firing, the token it calls with was rotated, or the edge is not "
+                    f"deployed — nothing here can tell which, and all three are silent."}
 
 
 def _finding_dict(f: Finding) -> dict:

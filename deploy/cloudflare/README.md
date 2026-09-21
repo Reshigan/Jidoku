@@ -39,10 +39,20 @@ cd deploy/cloudflare && npx wrangler secret put NIGHT_TOKEN --env production
 It is a builder token and nothing more — the night reads, verifies and chases, and every gate it
 meets is the gate a person's token meets (the agent is never an approver, invariant 7). Until it
 is set, the 02:00 cron refuses and logs *"KERNEL_URL or NIGHT_TOKEN is not configured — no night
-was worked"* rather than calling a customer's kernel unauthenticated. Check it is there with
-`npx wrangler secret list --env production`, and check the night actually ran with
-`npx wrangler tail --env production`; a night shift nobody knows stopped happening is worse than
-one that never started.
+was worked"* rather than calling a customer's kernel unauthenticated. Check it is there the minute the deploy finishes:
+
+```
+curl -s https://jidoka.vantax.co.za/__edge
+{"kernel_url":true,"night_token":true,"night_armed":true,"detail":"The edge is configured and the night shift will run."}
+```
+
+Booleans only, never the values — the point is to catch a secret that was never set or has since
+been rotated, and printing it would be the leak the check exists to prevent. `night_armed: false`
+means the 02:00 cron will fire and do nothing.
+
+After that the platform watches itself: the Crew screen reports when no night has been worked in
+over 36 hours, read off the ledger rather than out of the API's memory (ADR-0030). A night shift
+nobody knows stopped happening is worse than one that never started.
 
 ## The kernel origin
 Phase 1 runs `services/api/Dockerfile` wherever containers run (`deploy/docker`, Cloudflare

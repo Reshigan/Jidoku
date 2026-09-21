@@ -40,7 +40,7 @@ export async function workTheNight(env: Env): Promise<{ worked: number; failed: 
 
 // Kept in step with vite.config.ts. Anything not on this list is console routing and falls
 // through to the SPA, so a typo'd API path renders the app rather than silently 404-ing as JSON.
-const API_PREFIXES = ["/engagements", "/health", "/auth", "/schema", "/openapi.json"];
+const API_PREFIXES = ["/engagements", "/health", "/auth", "/schema", "/openapi.json", "/__edge"];
 
 /** Kernel or console. Exported so src/routing.check.mjs can assert it without a test framework:
  *  a prefix match that forgets the "/" separator sends /healthz and /authors to the kernel. */
@@ -79,6 +79,21 @@ export default {
 
     if (!API_PREFIXES.some((p) => url.pathname === p || url.pathname.startsWith(p + "/"))) {
       return env.ASSETS.fetch(request);
+    }
+
+    if (url.pathname === "/__edge") {
+      // Whether this deployment is wired up, answerable the minute it is published rather than
+      // at 02:00 the next morning. Booleans only, never the values: the point is to catch a
+      // secret that was never set or has since been rotated, and printing it would be the leak
+      // the check exists to prevent. The kernel's own /health passes through above this.
+      return Response.json({
+        kernel_url: Boolean(env.KERNEL_URL),
+        night_token: Boolean(env.NIGHT_TOKEN),
+        night_armed: Boolean(env.KERNEL_URL && env.NIGHT_TOKEN),
+        detail: env.KERNEL_URL && env.NIGHT_TOKEN
+          ? "The edge is configured and the night shift will run."
+          : "The night shift will not run: see deploy/cloudflare/README.md for the one secret CI cannot set.",
+      });
     }
 
     if (!env.KERNEL_URL) {

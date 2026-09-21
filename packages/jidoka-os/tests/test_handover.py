@@ -1,5 +1,8 @@
 """The night shift: what it says now, what it saves for the morning, and what it never says."""
-from jidoka_os.handover import COST_OF_SILENCE, Finding, Night, compose, run
+from datetime import datetime, timezone
+
+from jidoka_os.handover import (COST_OF_SILENCE, SILENT_AFTER_HOURS, Finding, Night, clock,
+                                compose, run)
 
 
 def night(*findings, did=("read the systems",)):
@@ -121,3 +124,41 @@ def test_a_finding_that_needs_nobody_is_never_routed():
               people=TEAM, now=WED)
     assert out["waited"][0]["who"] == ""
     assert "Nothing from me. I will keep checking." in compose(out, "E", "C")
+
+
+# --- the clock: nothing inside a night can report its own absence (ADR-0030) --------------------
+
+def test_a_night_that_never_ran_says_the_clock_may_not_be_deployed():
+    c = clock([])
+    assert c["running"] is False and c["last_worked"] == ""
+    assert "not deployed" in c["says"]
+
+
+def test_a_night_worked_this_morning_is_a_running_clock():
+    now = datetime(2026, 9, 21, 9, 0, tzinfo=timezone.utc)
+    c = clock([{"ts": "2026-09-21T02:00:00Z", "action": "HANDOVER"}], now)
+    assert c["running"] is True and c["silent_for_hours"] == 7.0
+
+
+def test_two_missed_nights_cannot_pass_unnoticed():
+    """Every way the night stops — a rotated token, a cron that is not firing, an edge that was
+    never deployed — is invisible from inside the night that did not run."""
+    now = datetime(2026, 9, 21, 9, 0, tzinfo=timezone.utc)
+    c = clock([{"ts": "2026-09-18T02:00:00Z", "action": "HANDOVER"}], now)
+    assert c["running"] is False and c["silent_for_hours"] > SILENT_AFTER_HOURS
+    assert "rotated" in c["says"] and "not deployed" in c["says"]
+
+
+def test_a_long_silence_is_said_in_days_because_hours_stop_being_a_fact():
+    now = datetime(2026, 10, 12, 9, 0, tzinfo=timezone.utc)
+    assert "21 days" in clock([{"ts": "2026-09-21T09:00:00Z", "action": "HANDOVER"}], now)["says"]
+
+
+def test_the_clock_reads_the_ledger_not_this_process():
+    """The regression: the handover was held in memory, so a restart reported that no night had
+    ever been worked on an engagement that had been worked every night for a month."""
+    entries = [{"ts": "2026-09-20T02:00:00Z", "action": "HANDOVER"},
+               {"ts": "2026-09-21T02:00:00Z", "action": "HANDOVER"},
+               {"ts": "2026-09-21T02:00:01Z", "action": "ASKED", "person": "A. Silva"}]
+    assert clock(entries, datetime(2026, 9, 21, 9, 0, tzinfo=timezone.utc))["last_worked"] == \
+        "2026-09-21T02:00:00Z"

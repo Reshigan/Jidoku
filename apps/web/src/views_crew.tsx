@@ -10,7 +10,7 @@
    crew has no way to arm one. What is waiting on a person is the first thing on the screen,
    because it is the only part somebody has to act on. */
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, CrewCard, CrewRun, NightShift, TeamMember, platform } from "./api";
+import { ApiError, CrewCard, CrewRun, NightClock, NightShift, TeamMember, platform } from "./api";
 import { Empty, Field, Pill, Section } from "./ui";
 
 /** Ring 3 reads as the loudest badge on the card: the auditor's whole power is that it has none. */
@@ -36,6 +36,7 @@ export function CrewView(props: {
   const { eid, onRefusal } = props;
   const [run, setRun] = useState<CrewRun | null>(null);
   const [night, setNight] = useState<NightShift | null>(null);
+  const [clock, setClock] = useState<NightClock | null>(null);
   const [team, setTeam] = useState<TeamMember[] | null>(null);
   const [week, setWeek] = useState<Record<string, number>>({});
   const [answers, setAnswers] = useState<Record<string, number>>({});
@@ -49,14 +50,14 @@ export function CrewView(props: {
       .then((r) => setRun(r.crew.length ? r : null))
       .catch((e) => { if (e instanceof ApiError && !e.notAvailable) onRefusal("The last run", e.detail); });
     platform.lastNight(eid)
-      .then((n) => setNight(n.handover ? n : null))
+      .then((n) => { setNight(n.handover ? n : null); setClock(n.clock); })
       .catch((e) => { if (e instanceof ApiError && !e.notAvailable) onRefusal("The handover", e.detail); });
     platform.team(eid)
       .then((t) => { setTeam(t.people); setWeek(t.asked_this_week); setAnswers(t.answers_in_hours); })
       .catch((e) => { if (e instanceof ApiError && !e.notAvailable) onRefusal("The team", e.detail); });
   }, [eid, onRefusal]);
 
-  useEffect(() => { setRun(null); setNight(null); setTeam(null); load(); }, [load]);
+  useEffect(() => { setRun(null); setNight(null); setClock(null); setTeam(null); load(); }, [load]);
 
   if (!eid) return <Empty title="No engagement" body="Choose an engagement to put the crew on it." />;
 
@@ -97,7 +98,9 @@ export function CrewView(props: {
   const workTheNight = async () => {
     setBusy(true);
     try {
-      setNight(await platform.runNight(eid));
+      const n = await platform.runNight(eid);
+      setNight(n);
+      setClock(n.clock);
       await props.onChanged();
     } catch (e) {
       if (e instanceof ApiError) onRefusal("The night shift did not run", e.detail);
@@ -129,7 +132,7 @@ export function CrewView(props: {
       <Section
         title="The night shift"
         note="The work that needs no person, done while nobody is watching — and a handover in the morning. Everything found is ranked by what it costs to stay quiet, and the interruption budget is hard."
-        lamp={night ? (night.interrupted.length ? "stop" : "run") : undefined}
+        lamp={clock && !clock.running ? "stop" : night ? (night.interrupted.length ? "stop" : "run") : undefined}
         status={night?.budget
           ? night.budget.spent
             ? `woke somebody ${night.budget.spent} of ${night.budget.of} times`
@@ -141,6 +144,11 @@ export function CrewView(props: {
           </button>
         }
       >
+        {clock && !clock.running && (
+          /* The night cannot report its own absence, so the ledger does. Said before the handover
+             rather than after it: a stale handover read as today's is the failure this prevents. */
+          <p className="verbatim" style={{ marginBottom: 12 }}>{clock.says}</p>
+        )}
         {!night ? (
           <p className="mut">
             No night has been worked on this engagement. A night reads every system, checks signed

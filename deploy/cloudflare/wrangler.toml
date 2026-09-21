@@ -29,6 +29,7 @@ not_found_handling = "single-page-application"   # client-side routing: unknown 
 run_worker_first = [
   "/engagements", "/engagements/*",
   "/health",
+  "/__edge",          # is this deployment wired up? booleans only — see src/index.ts
   "/auth", "/auth/*",
   "/schema", "/schema/*",
   "/openapi.json",

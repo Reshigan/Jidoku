@@ -11,7 +11,7 @@ unspent budget stays unspent.
 from fastapi import APIRouter, Depends
 from jidoka_core.controls import run_all
 from jidoka_core.twin import fidelity
-from jidoka_os.handover import Finding, Night, compose, run as run_night
+from jidoka_os.handover import Finding, Night, clock, compose, run as run_night
 from jidoka_os.people import ASKED, asked_this_week, load as load_people, observed_latency, \
     week_start
 
@@ -135,12 +135,19 @@ def nightshift(eid: str, budget: int = 3, identity: Identity = Depends(require("
                     f"{out['budget']['spent']} time(s) of {budget}",
                     findings=len(night.findings), interrupted=out["budget"]["spent"])
     _NIGHTS[eid] = out
+    out["clock"] = clock(e.ledger.entries)
     return out
 
 
 @router.get("")
 def last_night(eid: str, identity: Identity = Depends(require("read"))):
-    """Last night's handover, or nothing. A handover nobody has earned is not composed."""
-    get_or_404(eid)
-    return _NIGHTS.get(eid) or {"did": [], "interrupted": [], "deferred": [], "waited": [],
-                                "budget": None, "handover": "", "cost_of_silence": {}}
+    """Last night's handover, or nothing — and whether the clock that runs them is still running.
+
+    The handover itself is held in memory for the console to render, so a restart loses the text.
+    Whether a night *happened* is a fact about the ledger, and the clock reads it there: every way
+    the night stops is invisible from inside the night that did not run (ADR-0030).
+    """
+    e = get_or_404(eid)
+    out = _NIGHTS.get(eid) or {"did": [], "interrupted": [], "deferred": [], "waited": [],
+                               "budget": None, "handover": "", "cost_of_silence": {}}
+    return {**out, "clock": clock(e.ledger.entries)}

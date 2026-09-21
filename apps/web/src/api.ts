@@ -104,6 +104,16 @@ export type NightShift = {
   budget: { of: number; spent: number; held_back: number; threshold: number } | null;
   handover: string;
   cost_of_silence: Record<string, number>;
+  /** Whether the clock that runs the nights is still running, read off the ledger rather than out
+      of the API's memory. Nothing inside a night can report its own absence. */
+  clock: NightClock;
+};
+
+export type NightClock = {
+  last_worked: string;
+  silent_for_hours: number | null;
+  running: boolean;
+  says: string;
 };
 
 export type NightFinding = {

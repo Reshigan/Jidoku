@@ -124,3 +124,25 @@ def test_somebody_at_capacity_is_not_asked_and_the_queue_is_the_handover():
     rows = out["interrupted"] + out["waited"] + out["deferred"]
     assert any("at the week's capacity" in f["why"] for f in rows if f["needs"] == "execute")
     assert "(nobody I can ask)" in out["handover"]
+
+
+def test_the_console_is_told_when_the_clock_has_stopped():
+    """A stale handover read as today's is the failure this prevents: nothing inside a night can
+    report its own absence, so the ledger reports it."""
+    eid = _eng()
+    assert c.get(f"/engagements/{eid}/nightshift").json()["clock"]["running"] is False
+    out = c.post(f"/engagements/{eid}/nightshift").json()
+    assert out["clock"]["running"] is True
+    assert c.get(f"/engagements/{eid}/nightshift").json()["clock"]["running"] is True
+
+
+def test_a_restart_loses_the_handover_text_and_not_the_fact_that_a_night_ran():
+    """The regression: the last handover lives in memory for the console to render, and the API
+    reported that no night had ever run on an engagement worked every night for a month."""
+    eid = _eng()
+    c.post(f"/engagements/{eid}/nightshift")
+    from jidoka_api.routers.nightshift import _NIGHTS
+    _NIGHTS.pop(eid)                                  # what a restart does
+    out = c.get(f"/engagements/{eid}/nightshift").json()
+    assert out["handover"] == "" and out["clock"]["running"] is True
+    assert out["clock"]["last_worked"]

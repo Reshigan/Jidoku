@@ -1,7 +1,7 @@
 // Self-check for the Worker's one branch: kernel or console. `node src/routing.check.mjs`.
 // Wrong answers here are silent — an API call returns index.html with a 200 — so it gets a check.
 // Duplicated rather than imported because the Worker is TS and this must run with bare node.
-const API_PREFIXES = ["/engagements", "/health", "/auth", "/schema", "/openapi.json"];
+const API_PREFIXES = ["/engagements", "/health", "/auth", "/schema", "/openapi.json", "/__edge"];
 const isApi = (p) => API_PREFIXES.some((x) => p === x || p.startsWith(x + "/"));
 
 import { readFileSync } from "node:fs";
@@ -33,8 +33,21 @@ assert.match(src, /export const nightTargets/, "nightTargets drifted from this c
 assert.match(src, /NIGHT_TOKEN/, "the scheduled run must carry a token");
 assert.match(src, /no night was worked/,
   "an unconfigured night must say so: a silent no-op is a shift nobody knows stopped happening");
-assert.match(readFileSync(new URL("../wrangler.toml", import.meta.url), "utf8"), /crons\s*=/,
-  "the worker has a scheduled handler and no cron to fire it");
+const toml = readFileSync(new URL("../wrangler.toml", import.meta.url), "utf8");
+assert.match(toml, /crons\s*=/, "the worker has a scheduled handler and no cron to fire it");
+
+// --- is this deployment wired up? -------------------------------------------------------------
+// A missing NIGHT_TOKEN is invisible until the first night does not happen. /__edge makes it
+// answerable at publish time — booleans only, because printing the value would be the leak the
+// check exists to prevent.
+assert.equal(isApi("/__edge"), true, "the readiness path must run the Worker, not the console");
+assert.match(src, /url\.pathname === "\/__edge"/, "the readiness path is declared and not served");
+assert.match(src, /night_armed: Boolean\(env\.KERNEL_URL && env\.NIGHT_TOKEN\)/,
+  "readiness must report both halves: a kernel with no token is a night that will not run");
+assert.doesNotMatch(src.split('url.pathname === "/__edge"')[1].split("}")[0] ?? "", /\$\{env\./,
+  "readiness must report whether a secret is set, never what it is");
+for (const p of ["/__edge", "/health"])
+  assert.match(toml, new RegExp(`"${p}"`), `${p} must be in run_worker_first or assets answer it first`);
 
 console.log("routing ok");
 console.log("night shift clock ok");
