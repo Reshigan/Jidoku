@@ -2,7 +2,7 @@
    Split out of views.tsx: nine screens in one file meant every rebuild collided. views.tsx is now
    the barrel App.tsx imports from. */
 import type { ReactNode } from "react";
-import type { Evidence } from "./api";
+import type { ControlsView, Evidence } from "./api";
 import { type Milestone } from "./derive";
 import { Empty, Pill, Seal, Section, Skeleton } from "./ui";
 import { Facts, Hash, Meter, Track } from "./viz";
@@ -15,8 +15,11 @@ import "./views_record.css";
    hashes go through `Hash`, which shows head and tail with the full value on the title: the v1
    screen rendered 64 literal zeroes at full width, which was the loudest and least informative
    thing on the page and told the reader nothing they could compare. */
+const CONTROL_LAMP: Record<string, string> = { PASS: "run", FAIL: "stop", NOT_EXERCISED: "idle" };
+
 export function EvidenceView(props: {
   evidence: Evidence | null;
+  controls: ControlsView | null;
   onRefresh: () => void;
   onDownload: () => void;
 }) {
@@ -170,6 +173,49 @@ export function EvidenceView(props: {
             </>
           )}
         </Section>
+
+        {props.controls && (
+          <Section
+            title="Controls"
+            note="Each one is a predicate over every row on the chain. No sampling, and a violation is listed rather than counted."
+            className="span2"
+            lamp={props.controls.failing.length ? "stop" : "run"}
+            status={props.controls.failing.length
+              ? `${props.controls.failing.length} failing`
+              : `${props.controls.controls.length - props.controls.not_exercised.length} holding`}
+          >
+            <div className="tblwrap">
+              <table className="tbl">
+                <thead>
+                  <tr><th>Control</th><th>Must be true</th><th>Tested</th><th>Result</th></tr>
+                </thead>
+                <tbody>
+                  {props.controls.controls.map((x) => (
+                    <tr key={x.control_id}>
+                      <td className="mono">{x.control_id}</td>
+                      <td style={{ fontSize: 12.5 }}>
+                        {x.statement}
+                        <div className="mut" style={{ fontSize: 11.5 }}>over {x.population}</div>
+                        {x.violations.map((v, i) => (
+                          <div key={i} className="mut" style={{ fontSize: 12 }}>
+                            <span className="mono">{v.task}</span> · {v.actor} · {v.ts} — {v.why}
+                          </div>
+                        ))}
+                      </td>
+                      <td className="num">{x.tested}</td>
+                      <td>
+                        <Pill lamp={CONTROL_LAMP[x.status]}>
+                          {x.status === "NOT_EXERCISED" ? "nothing to test" : x.status.toLowerCase()}
+                        </Pill>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="mut" style={{ marginTop: 12, fontSize: 12.5 }}>{props.controls.method}</p>
+          </Section>
+        )}
 
         <Section title="How to verify this yourself"
                  note="Reimplementable in any language, without JIDOKA running"

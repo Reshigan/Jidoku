@@ -177,3 +177,48 @@ def test_the_verification_report_leads_with_what_can_be_proven():
     assert "2 of 3 records that claim to be done are proven" in doc
     # and the report does not contradict its own headline further down
     assert "unconfirmable" in doc.lower()
+
+
+# --- controls, over the whole population (C6) -----------------------------------------------------
+
+def test_controls_run_over_the_engagements_whole_chain():
+    eid = _eng()
+    out = c.get(f"/engagements/{eid}/controls").json()
+    assert {x["control_id"] for x in out["controls"]} >= {"C-EXE-01", "C-SOD-01", "C-ARM-01"}
+    assert out["population_complete"] is True
+    # nothing has happened, so nothing passed — every control says it was not exercised
+    assert out["failing"] == [] and len(out["not_exercised"]) == len(out["controls"])
+
+
+def test_a_real_self_approval_attempt_never_reaches_the_control_because_the_ledger_refuses():
+    """The control is the second line. The first is that `approve` refuses (invariant 4)."""
+    eid = _eng()
+    STORE.get(eid).ledger.append("t", "SNAPSHOT", "a.builder", "3 rows")
+    STORE.get(eid).ledger.append("t", "EXECUTED", "a.builder", "live write")
+    refused = c.post(f"/engagements/{eid}/ledger/approve", json={"task": "t"},
+                     headers=hdr("a.builder", "approver"))
+    assert refused.status_code == 403
+
+    out = c.get(f"/engagements/{eid}/controls").json()
+    sod = next(x for x in out["controls"] if x["control_id"] == "C-SOD-01")
+    assert sod["status"] == "NOT_EXERCISED"       # no approval exists to test
+    arm = next(x for x in out["controls"] if x["control_id"] == "C-ARM-01")
+    assert arm["status"] == "FAIL"                # the seeded write names no arming
+
+
+def test_the_write_locked_systems_come_from_the_registry_not_from_the_control():
+    eid = _eng()
+    c.post(f"/engagements/{eid}/systems", json={
+        "system_id": "KOM-ECC-PRD", "product": "SuccessFactors", "role": "SOURCE_LEGACY",
+        "environment": "PROD", "connectivity": {}})
+    STORE.get(eid).ledger.append("t", "EXECUTED", "a.builder", "live write",
+                                 system="KOM-ECC-PRD", armed_by="an.approver")
+    reg = next(x for x in c.get(f"/engagements/{eid}/controls").json()["controls"]
+               if x["control_id"] == "C-REG-01")
+    assert reg["status"] == "FAIL" and "KOM-ECC-PRD" in reg["violations"][0]["why"]
+
+
+def test_an_auditor_may_read_the_controls():
+    eid = _eng()
+    assert c.get(f"/engagements/{eid}/controls",
+                 headers=hdr("an.auditor", "auditor")).status_code == 200

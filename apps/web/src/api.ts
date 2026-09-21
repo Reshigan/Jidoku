@@ -401,6 +401,27 @@ export type AssuranceView = {
   not_counted: string[];
 };
 
+/** A control written as a predicate over the whole ledger (C6). Violations are enumerated in
+    full, never counted: a control that cannot show its violations is prose again. */
+export type ControlResult = {
+  control_id: string;
+  statement: string;
+  population: string;
+  tested: number;
+  passed: boolean;
+  /** NOT_EXERCISED is not a pass — there was nothing on the chain to test. */
+  status: "PASS" | "FAIL" | "NOT_EXERCISED";
+  violations: { task: string; actor: string; ts: string; why: string }[];
+};
+
+export type ControlsView = {
+  controls: ControlResult[];
+  failing: string[];
+  not_exercised: string[];
+  population_complete: boolean;
+  method: string;
+};
+
 export type NumberRangeView = {
   range_id: string; object_type: string; prefix: string;
   start: number; end: number; width: number; next_free: string | null;
@@ -622,6 +643,8 @@ const api2 = {
     call<VerificationRun>(`/engagements/${eid}/verification`, { method: "POST" }),
   /** A read of the chain: it costs nothing and cannot disagree with the ledger it is drawn from. */
   assurance: (eid: string) => call<AssuranceView>(`/engagements/${eid}/verification/assurance`),
+  /** Every control, over every row. Read-only, and an auditor asks it more than anybody. */
+  controls: (eid: string) => call<ControlsView>(`/engagements/${eid}/controls`),
   numbering: (eid: string) => call<NumberingSnapshot>(`/engagements/${eid}/numbering`),
   registerRange: (eid: string, body: {
     range_id: string; object_type: string; prefix: string; start: number; end: number; width?: number;

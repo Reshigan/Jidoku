@@ -60,7 +60,15 @@ of it.
    tool that reports its own assurance as a fraction it can be argued with about. (ADR-0023;
    `packages/jidoka-core/src/jidoka_core/assurance.py`; `test_assurance.py`.)
 
-6. **Unsigned intent is unexecutable by construction.** IR records without a signed source do not
+6. **Controls are predicates over the whole population, not prose with a sample attached.** Six
+   controls — prior snapshot, no self-approval, armed by a second person, two approvers on a
+   one-way decision, transports that reached production, no write to a write-locked system — run
+   over every row of the engagement's ledger on demand, enumerate their violations in full rather
+   than counting them, and distinguish "nothing to test" from "passed". The population is complete
+   because every act that touched a customer's system is on the chain or did not happen through
+   this platform. (ADR-0025; `packages/jidoka-core/src/jidoka_core/controls.py`; `test_controls.py`.)
+
+7. **Unsigned intent is unexecutable by construction.** IR records without a signed source do not
    load; open decision points — whether from the IR or raised later, including by drift — hard-block
    planning through one gate; the agent is always builder and never approver; approval requires a
    different reviewer and a prior snapshot; live Tier-A writes require an explicitly armed target
@@ -84,7 +92,7 @@ of it.
 - **"An LLM that fully understands SAP."** The knowledge subsystem is evidence-grounded and the
   scrubber gate works, but the corpus question (DP-K01 — entitlement to SAP documentation) is an
   open legal decision point and remains blocked until counsel answers it.
-- **"World first" as a totality.** The six claims above are shapes we believe are new. The only
+- **"World first" as a totality.** The seven claims above are shapes we believe are new. The only
   honest form of the headline is: *the first SAP configuration platform we know of where drift,
   documents, tests and number ranges are all projections of one signed, hash-chained record — and
   where the machine can never approve its own work.*

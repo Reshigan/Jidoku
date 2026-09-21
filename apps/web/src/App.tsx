@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiError, platform, setSession, getSession,
   type Claim, type DecisionPoint, type EngagementDetail, type EngagementSummary, type Evidence,
-  type ArmedTarget, type Connector, type ExecutionResult, type MemoryView as Memory,
+  type ArmedTarget, type Connector, type ControlsView, type ExecutionResult,
+  type MemoryView as Memory,
   type StepTransport, type IRRecordView, type Landscape, type LedgerEntry, type Plan,
 } from "./api";
 import { LINE_STOP, LINE_RESUME, buildLanes, lineStop, milestones, type Lane, type Station } from "./derive";
@@ -587,9 +588,15 @@ function EvidenceLoader(props: {
   guard: <T,>(t: string, fn: () => Promise<T>) => Promise<T | null>;
   onLoaded: (e: Evidence) => void;
 }) {
+  // The controls come with the bundle rather than behind a button: an auditor reading the
+  // evidence is asking exactly the question the controls answer, and a control nobody ran is a
+  // control nobody trusts.
+  const [controls, setControls] = useState<ControlsView | null>(null);
   const fetchIt = useCallback(async () => {
     const ev = await props.guard("Evidence export refused", () => platform.evidence(props.eid));
     if (ev) props.onLoaded(ev);
+    const cs = await props.guard("The controls did not run", () => platform.controls(props.eid));
+    if (cs) setControls(cs);
   }, [props]);
   useEffect(() => { if (!props.evidence) fetchIt(); }, [props.evidence, fetchIt]);
 
@@ -602,7 +609,8 @@ function EvidenceLoader(props: {
     a.click();
     URL.revokeObjectURL(a.href);
   };
-  return <EvidenceView evidence={props.evidence} onRefresh={fetchIt} onDownload={download} />;
+  return <EvidenceView evidence={props.evidence} controls={controls}
+                       onRefresh={fetchIt} onDownload={download} />;
 }
 
 /* ---------------- every write the platform accepts ---------------- */
