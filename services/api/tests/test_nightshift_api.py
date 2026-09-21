@@ -97,3 +97,30 @@ def test_an_auditor_may_read_the_handover_and_may_not_work_the_night():
                  headers=hdr("an.auditor", "auditor")).status_code == 200
     assert c.post(f"/engagements/{eid}/nightshift",
                   headers=hdr("an.auditor", "auditor")).status_code == 403
+
+
+def test_the_night_records_who_it_asked_so_next_week_knows_about_this_week():
+    """Capacity is a real constraint, and spending it correctly needs a record of what each
+    person has already been asked. The same finding on two nights is one thing they owe."""
+    eid = _eng()
+    c.post(f"/engagements/{eid}/people",
+           json=[{"name": "A. Silva", "authority": ["execute", "read"], "utc_offset": 2}])
+    c.post(f"/engagements/{eid}/nightshift")
+    asked = [e for e in STORE.get(eid).ledger.entries if e["action"] == "ASKED"]
+    assert asked and all(e["person"] == "A. Silva" for e in asked)
+    c.post(f"/engagements/{eid}/nightshift")
+    again = [e for e in STORE.get(eid).ledger.entries if e["action"] == "ASKED"]
+    assert len(again) == len(asked), "the same question on a second night is not a second ask"
+
+
+def test_somebody_at_capacity_is_not_asked_and_the_queue_is_the_handover():
+    """A person full for the week is passed over, and when nobody else can sign it the handover
+    says so instead of quietly adding to the pile."""
+    eid = _eng()
+    c.post(f"/engagements/{eid}/people",
+           json=[{"name": "A. Silva", "authority": ["execute", "read"], "utc_offset": 2,
+                  "capacity_per_week": 0}])
+    out = c.post(f"/engagements/{eid}/nightshift").json()
+    rows = out["interrupted"] + out["waited"] + out["deferred"]
+    assert any("at the week's capacity" in f["why"] for f in rows if f["needs"] == "execute")
+    assert "(nobody I can ask)" in out["handover"]

@@ -67,9 +67,10 @@ for weeks after they were built, until somebody checked.
       `python -m jidoka_api.nightly` under compose, a Worker `scheduled()` handler at the edge (ADR-0028)
 - [x] Interruption budget ranked by cost-of-silence — published table, hard budget, and what it held back is in
       the handover rather than dropped (ADR-0027)
-- [~] Person profiles: authority, working hours and cheapest-sufficient-authority routing are built
-      (`jidoka_os.people`, `routers/people.py` — ADR-0029). Capacity is declared and unused; latency is not
-      modelled at all, though the ledger's DP_RAISED/DP_RESOLVED pairs would support learning it.
+- [x] Person profiles: authority, named-zone working hours, cheapest-sufficient-authority routing, weekly
+      capacity read off the ledger's `ASKED` entries, and observed latency from its DP_RAISED/DP_RESOLVED
+      pairs (`jidoka_os.people`, `routers/people.py` — ADR-0029). Capacity changes who is asked and a full
+      team is the finding; latency is reported in the handover and deliberately never routed on.
 - [ ] Self-accountability page: fidelity defects, forecast calibration, refusal review
 - [ ] Objection records with scheduled revisit triggers
 ## E13 Insight & team (built: jidoka-insight; docs/JIDOKA_PROJECT_TEAM_AND_ALIGNMENT.md)

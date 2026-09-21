@@ -12,7 +12,8 @@ from fastapi import APIRouter, Depends
 from jidoka_core.controls import run_all
 from jidoka_core.twin import fidelity
 from jidoka_os.handover import Finding, Night, compose, run as run_night
-from jidoka_os.people import load as load_people
+from jidoka_os.people import ASKED, asked_this_week, load as load_people, observed_latency, \
+    week_start
 
 from ..auth import Identity, require
 from .engagements import get_or_404
@@ -80,6 +81,23 @@ def _findings(e, verification: dict, controls: dict) -> list[Finding]:
     return out
 
 
+def _record_asks(e, out: dict, people, actor: str) -> None:
+    """Put this night's asks on the ledger, so next week's capacity knows about this week's.
+
+    Only asks that reached a registered person: a finding that named a role was addressed to
+    nobody and consumed nobody's week. Only ones not already recorded this week, because the same
+    unanswered question found on five consecutive nights is one thing that person owes.
+    """
+    names = {p.name for p in people}
+    since = week_start()
+    already = {(x.get("person"), x.get("detail")) for x in e.ledger.entries
+               if x.get("action") == ASKED and x.get("ts", "") >= since}
+    for row in out["interrupted"] + out["deferred"] + out["waited"]:
+        if row["who"] in names and (row["who"], row["what"]) not in already:
+            e.ledger.append(row["kind"], ASKED, actor, row["what"], person=row["who"])
+            already.add((row["who"], row["what"]))
+
+
 @router.post("")
 def nightshift(eid: str, budget: int = 3, identity: Identity = Depends(require("ledger_append"))):
     """Work the night, then compose the morning's handover."""
@@ -103,9 +121,14 @@ def nightshift(eid: str, budget: int = 3, identity: Identity = Depends(require("
         findings=_findings(e, verification, controls))
 
     # With a team registered the handover addresses people by name, asks the least senior person
-    # who may actually sign the thing, and respects their clock (M4, ADR-0029). With none, it
-    # names a role exactly as it did before rather than pretending somebody was asked.
-    out = run_night(night, budget=budget, people=load_people(e.people))
+    # who may actually sign the thing with capacity left this week, and respects their clock
+    # (M4, ADR-0029). With none, it names a role exactly as it did before rather than pretending
+    # somebody was asked.
+    people = load_people(e.people)
+    out = run_night(night, budget=budget, people=people,
+                    load=asked_this_week(e.ledger.entries),
+                    latency=observed_latency(e.ledger.entries))
+    _record_asks(e, out, people, identity.subject)
     out["handover"] = compose(out, e.name, e.client)
     e.ledger.append("NIGHTSHIFT", "HANDOVER", identity.subject,
                     f"{len(night.findings)} finding(s); woke somebody "

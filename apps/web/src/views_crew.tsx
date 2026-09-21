@@ -37,7 +37,10 @@ export function CrewView(props: {
   const [run, setRun] = useState<CrewRun | null>(null);
   const [night, setNight] = useState<NightShift | null>(null);
   const [team, setTeam] = useState<TeamMember[] | null>(null);
-  const [joiner, setJoiner] = useState({ name: "", authority: "", cost: "1", utc_offset: "0" });
+  const [week, setWeek] = useState<Record<string, number>>({});
+  const [answers, setAnswers] = useState<Record<string, number>>({});
+  const [joiner, setJoiner] = useState({ name: "", authority: "", cost: "1", tz: "",
+                                         capacity_per_week: "20" });
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(() => {
@@ -49,7 +52,7 @@ export function CrewView(props: {
       .then((n) => setNight(n.handover ? n : null))
       .catch((e) => { if (e instanceof ApiError && !e.notAvailable) onRefusal("The handover", e.detail); });
     platform.team(eid)
-      .then((t) => setTeam(t.people))
+      .then((t) => { setTeam(t.people); setWeek(t.asked_this_week); setAnswers(t.answers_in_hours); })
       .catch((e) => { if (e instanceof ApiError && !e.notAvailable) onRefusal("The team", e.detail); });
   }, [eid, onRefusal]);
 
@@ -80,11 +83,12 @@ export function CrewView(props: {
         name: joiner.name.trim(),
         authority: joiner.authority.split(/[,\s]+/).filter(Boolean),
         cost: Number(joiner.cost) || 1,
-        utc_offset: Number(joiner.utc_offset) || 0,
+        tz: joiner.tz.trim(),
+        capacity_per_week: Number(joiner.capacity_per_week) || 20,
       };
       const out = await platform.registerTeam(eid, [...(team ?? []), person]);
       setTeam(out.people);
-      setJoiner({ name: "", authority: "", cost: "1", utc_offset: "0" });
+      setJoiner({ name: "", authority: "", cost: "1", tz: "", capacity_per_week: "20" });
     } catch (e) {
       if (e instanceof ApiError) onRefusal("That person was not registered", e.detail);
     }
@@ -161,7 +165,14 @@ export function CrewView(props: {
                   ? "Nobody is registered on this engagement, so the handover names a role rather " +
                     "than a person — honest, and nobody answers a request addressed to nobody."
                   : `Asks go to the least senior person registered who may sign the thing, in their own ` +
-                    `working hours: ${team.map((p) => `${p.name} (${p.authority.join(", ") || "no authority"})`).join(" · ")}.`}
+                    `working hours, and nobody is asked past the capacity their organisation ` +
+                    `declared: ${team.map((p) => {
+                      const asked = week[p.name] ?? 0;
+                      const speed = answers[p.name];
+                      return `${p.name} (${p.authority.join(", ") || "no authority"}` +
+                        `, ${asked}/${p.capacity_per_week} this week` +
+                        `${speed === undefined ? "" : `, answers in ~${speed}h`})`;
+                    }).join(" · ")}.`}
               </p>
             )}
             {night.interrupted.length > 0 && (
@@ -181,8 +192,10 @@ export function CrewView(props: {
                    onChange={(v) => setJoiner({ ...joiner, authority: v })} />
             <Field label="Costs" value={joiner.cost}
                    onChange={(v) => setJoiner({ ...joiner, cost: v })} />
-            <Field label="Hours east of UTC" value={joiner.utc_offset}
-                   onChange={(v) => setJoiner({ ...joiner, utc_offset: v })} />
+            <Field label="Timezone" value={joiner.tz} placeholder="Africa/Maputo"
+                   onChange={(v) => setJoiner({ ...joiner, tz: v })} />
+            <Field label="Asks a week" value={joiner.capacity_per_week}
+                   onChange={(v) => setJoiner({ ...joiner, capacity_per_week: v })} />
             <button className="btn" disabled={!joiner.name.trim() || !joiner.authority.trim()}
                     onClick={() => void addPerson()}>
               Add to the team

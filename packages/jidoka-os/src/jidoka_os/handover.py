@@ -66,12 +66,17 @@ class Night:
 
 
 def run(night: Night, *, budget: int = 3, interrupt_above: int = INTERRUPT_ABOVE,
-        people: list[Person] | None = None, now: datetime | None = None) -> dict:
+        people: list[Person] | None = None, now: datetime | None = None,
+        load: dict | None = None, latency: dict | None = None) -> dict:
     """Rank the night's findings, spend the interruption budget, leave the rest for the morning.
 
     The budget is spent on cost, not on order of discovery — a chain break found at 04:00 outranks
     a stale attestation found at 22:00, and a night that finds four urgent things still only
     interrupts three times and says so in the handover rather than quietly dropping the fourth.
+
+    `load` is what each person has already been asked this week, and the night spends it as it
+    routes: the costliest findings take capacity first, so a night that fills somebody up does it
+    on the things that mattered most.
     """
     scheduler = Scheduler(interruption_budget=budget)
     for f in sorted(night.findings, key=lambda f: -f.cost):
@@ -81,12 +86,18 @@ def run(night: Night, *, budget: int = 3, interrupt_above: int = INTERRUPT_ABOVE
     interrupted = [t.name for t in ran if t.interrupts_human]
     by_name = {f.what: f for f in night.findings}
 
-    def rows(names):
-        return [_routed(by_name[n], people, now, interrupt_above) for n in names if n in by_name]
+    running = dict(load or {})
 
+    def rows(names):
+        return [_routed(by_name[n], people, now, interrupt_above, running, latency)
+                for n in names if n in by_name]
+
+    # Order matters: capacity is spent on the costliest findings first, so what is left unasked
+    # when somebody fills up is the thing that mattered least.
+    urgent, held = rows(interrupted), rows(scheduler.handover()["deferred"])
     return {"did": list(night.did),
-            "interrupted": rows(interrupted),
-            "deferred": rows(scheduler.handover()["deferred"]),
+            "interrupted": urgent,
+            "deferred": held,
             "waited": rows([t.name for t in ran if not t.interrupts_human]),
             "budget": {"of": budget, "spent": len(interrupted),
                        "held_back": len(scheduler.handover()["deferred"]),
@@ -99,7 +110,7 @@ def _finding_dict(f: Finding) -> dict:
             "needs": f.needs, "when": "", "why": ""}
 
 
-def _routed(f: Finding, people, now, interrupt_above: int) -> dict:
+def _routed(f: Finding, people, now, interrupt_above: int, running: dict, latency) -> dict:
     """Put a name to it where one is registered, and keep the role where none is.
 
     Routing never invents a person. With no team registered the handover says what it always
@@ -108,9 +119,11 @@ def _routed(f: Finding, people, now, interrupt_above: int) -> dict:
     out = _finding_dict(f)
     if not people or not f.needs:
         return out
-    r = route(Ask(f.what, f.needs, f.cost, f.detail), people, now, interrupt_above)
+    r = route(Ask(f.what, f.needs, f.cost, f.detail), people, now, interrupt_above, running,
+              latency)
     if r.person is None:
         return {**out, "why": r.why}
+    running[r.person.name] = running.get(r.person.name, 0) + 1
     return {**out, "who": r.person.name, "when": r.when, "why": r.why}
 
 
@@ -136,7 +149,11 @@ def compose(night: dict, engagement: str, client: str) -> str:
     lines.append("")
 
     lines.append("**What I need from you today**")
-    asks = [f for f in found if f["who"]]
+    # A finding routing could not place: it was put to somebody and came back — nobody holds the
+    # authority, or everybody who does is at the week's capacity. It keeps its role for context
+    # and is listed as unasked, because a bottleneck printed as an ask is a bottleneck hidden.
+    unplaced = [f for f in found if f.get("why") and not f.get("when")]
+    asks = [f for f in found if f["who"] and f not in unplaced]
     if not asks:
         lines.append("- Nothing from me. I will keep checking.")
     else:
@@ -144,10 +161,8 @@ def compose(night: dict, engagement: str, client: str) -> str:
             when = f.get("when")
             lines.append(f"- {f['who']}{' — ' + when if when and when != 'now' else ''}: "
                          f"{f['what']}")
-    unaddressed = [f for f in found if not f["who"] and f.get("why")]
-    for f in unaddressed:
-        # Nobody registered can answer it. Say that plainly rather than dropping it: an ask with
-        # no owner is the finding.
+    for f in unplaced:
+        # Say it plainly rather than dropping it: an ask with no owner is the finding.
         lines.append(f"- (nobody I can ask) {f['what']} — {f['why']}")
     lines.append("")
 

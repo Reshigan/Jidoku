@@ -117,6 +117,9 @@ export type TeamMember = {
   authority: string[];
   cost: number;
   hours: [number, number];
+  /** IANA zone name. Named, so their hours move with daylight saving; empty falls back to the
+      offset, which does not. */
+  tz: string;
   utc_offset: number;
   days: number[];
   capacity_per_week: number;
@@ -746,8 +749,13 @@ const api3 = {
   /** Work the night and compose the morning's handover. Writes the ledger, like any check does. */
   runNight: (eid: string) => call<NightShift>(`/engagements/${eid}/nightshift`, { method: "POST" }),
   lastNight: (eid: string) => call<NightShift>(`/engagements/${eid}/nightshift`),
+  /** The team as declared, plus two things observed rather than declared: how long each person
+      has taken to answer a decision here, and how much of this week they have been asked for.
+      Reported so a queue behind one name is visible — never used to route around anybody. */
   team: (eid: string) =>
-    call<{ people: TeamMember[]; can_be_asked_for: string[] }>(`/engagements/${eid}/people`),
+    call<{ people: TeamMember[]; can_be_asked_for: string[];
+           answers_in_hours: Record<string, number>;
+           asked_this_week: Record<string, number> }>(`/engagements/${eid}/people`),
   /** Replaces the team: it is a statement about now, not an append log. */
   registerTeam: (eid: string, people: unknown[]) =>
     call<{ people: TeamMember[] }>(`/engagements/${eid}/people`,

@@ -5,6 +5,7 @@ import pathlib
 from fastapi.testclient import TestClient
 from jidoka_api.auth import issue_token
 from jidoka_api.main import app
+from jidoka_api.routers.engagements import STORE
 
 c = TestClient(app)
 IR = json.load(open(pathlib.Path(__file__).parents[3] /
@@ -88,3 +89,30 @@ def test_an_auditor_may_read_the_team():
     eid = _eng()
     assert c.get(f"/engagements/{eid}/people",
                  headers=hdr("an.auditor", "auditor")).status_code == 200
+
+
+def test_a_timezone_the_database_does_not_know_is_refused_at_registration():
+    """A named zone is what makes working hours move with daylight saving. A typo would silently
+    fall back to an offset, and somebody would be pinged an hour early in March."""
+    eid = _eng()
+    r = c.post(f"/engagements/{eid}/people",
+               json=[{"name": "A. Silva", "authority": ["execute"], "tz": "Africa/Maptuo"}])
+    assert r.status_code == 422 and "Unknown timezone" in r.json()["detail"]
+    assert c.post(f"/engagements/{eid}/people",
+                  json=[{"name": "A. Silva", "authority": ["execute"],
+                         "tz": "Africa/Maputo"}]).status_code == 200
+
+
+def test_the_team_reports_what_it_has_been_asked_and_how_fast_it_answers():
+    """Observed, not declared — and reported so a queue behind one name is visible before it
+    bites, never used to route around anybody."""
+    eid = _eng()
+    c.post(f"/engagements/{eid}/people", json=TEAM)
+    led = STORE.get(eid).ledger
+    led.append("DP-1", "DP_RAISED", "jidoka", "STATUTORY: what rate?")
+    led.entries[-1]["ts"] = "2026-09-14T09:00:00Z"
+    led.append("DP-1", "DP_RESOLVED", "T. Mabaso", "value=0.01")
+    led.entries[-1]["ts"] = "2026-09-14T12:00:00Z"
+    out = c.get(f"/engagements/{eid}/people").json()
+    assert out["answers_in_hours"]["T. Mabaso"] == 3.0
+    assert out["asked_this_week"] == {}

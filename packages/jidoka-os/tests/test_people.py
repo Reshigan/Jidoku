@@ -1,7 +1,8 @@
 """Routing: the cheapest sufficient authority, on their clock, never invented."""
 from datetime import datetime, timezone
 
-from jidoka_os.people import Ask, Person, load, route, route_all
+from jidoka_os.people import (Ask, Person, asked_this_week, load, observed_latency, route,
+                              route_all, zone)
 
 WED = datetime(2026, 9, 16, 9, 0, tzinfo=timezone.utc)      # 11:00 in Maputo
 SAT = datetime(2026, 9, 19, 5, 0, tzinfo=timezone.utc)      # 07:00 in Maputo, a Saturday
@@ -80,3 +81,84 @@ def test_people_load_from_rows_and_ignore_what_they_do_not_need():
 def test_routing_many_asks_keeps_them_in_order():
     asks = [Ask("first", "approve"), Ask("second", "resolve_dp")]
     assert [r.ask.what for r in route_all(asks, TEAM, WED)] == ["first", "second"]
+
+
+# --- capacity: the queue behind one name is the finding (ADR-0029) ------------------------------
+
+def test_somebody_at_their_weeks_capacity_is_passed_over_for_the_next_cheapest():
+    """Capacity is the one thing that does change *who* — a person at their declared limit is
+    not asked again, and the ask goes up, not into a queue."""
+    r = route(Ask("DP-X", "resolve_dp"), TEAM, WED, load={"A. Silva": 20})
+    assert r.person.name == "T. Mabaso"
+    assert "past A. Silva at the week's capacity" in r.why
+
+
+def test_everybody_full_is_said_out_loud_rather_than_queued_behind_one_name():
+    r = route(Ask("DP-X", "resolve_dp"), TEAM, WED,
+              load={"A. Silva": 20, "T. Mabaso": 20})
+    assert r.person is None
+    assert "at the week's capacity" in r.why and "A. Silva 20/20" in r.why
+
+
+def test_a_batch_spends_the_capacity_it_uses_as_it_goes():
+    """A night that ignored its own effect on the week would hand one person everything."""
+    solo = Person("Only. One", frozenset({"approve"}), capacity_per_week=2)
+    out = route_all([Ask(f"thing {i}", "approve") for i in range(3)], [solo], WED)
+    assert [r.person.name if r.person else None for r in out] == ["Only. One", "Only. One", None]
+
+
+def test_capacity_is_counted_from_the_ledger_and_a_repeat_ask_is_one_thing_owed():
+    """The same unanswered question found on five nights is one thing that person owes."""
+    week = [{"ts": "2026-09-14T09:00:00Z", "action": "ASKED", "person": "A. Silva",
+             "detail": "DP-X needs a value"} for _ in range(5)]
+    week.append({"ts": "2026-09-16T09:00:00Z", "action": "ASKED", "person": "A. Silva",
+                 "detail": "DP-Y needs a value"})
+    assert asked_this_week(week, WED) == {"A. Silva": 2}
+
+
+def test_last_weeks_asks_are_not_this_weeks_capacity():
+    last = [{"ts": "2026-09-09T09:00:00Z", "action": "ASKED", "person": "A. Silva",
+             "detail": "DP-old"}]
+    assert asked_this_week(last, WED) == {}
+
+
+# --- the clock moves with daylight saving -------------------------------------------------------
+
+def test_a_named_zone_moves_with_daylight_saving_and_an_offset_does_not():
+    """09:00 UTC is inside a London working day in July and outside it in January. A fixed +0
+    offset says the same thing in both months, and is wrong in one of them."""
+    named = Person("L. Ondon", frozenset({"approve"}), tz="Europe/London", hours=(9, 10))
+    fixed = Person("O. Ffset", frozenset({"approve"}), utc_offset=0, hours=(9, 10))
+    july = datetime(2026, 7, 15, 9, 30, tzinfo=timezone.utc)      # 10:30 BST — after hours
+    january = datetime(2026, 1, 14, 9, 30, tzinfo=timezone.utc)   # 09:30 GMT — at work
+    assert named.available(july) is False and named.available(january) is True
+    assert fixed.available(july) is True and fixed.available(january) is True
+
+
+def test_an_unknown_zone_falls_back_to_the_declared_offset_rather_than_refusing_to_route():
+    """The API refuses an unknown name at registration. If one reaches here — a slim image with
+    no tz database — being an hour out beats routing nothing."""
+    assert zone("Mars/Olympus") is None
+    stranded = Person("S. Tranded", frozenset({"approve"}), tz="Mars/Olympus", utc_offset=2)
+    assert stranded.available(WED) is True       # 11:00 in Maputo
+
+
+# --- latency: observed, reported, never ranked on -----------------------------------------------
+
+def test_how_long_somebody_takes_to_answer_is_read_off_the_ledger():
+    entries = [{"ts": "2026-09-14T09:00:00Z", "task": "DP-1", "action": "DP_RAISED"},
+               {"ts": "2026-09-14T13:00:00Z", "task": "DP-1", "action": "DP_RESOLVED",
+                "actor": "A. Silva"},
+               {"ts": "2026-09-15T09:00:00Z", "task": "DP-2", "action": "DP_RAISED"},
+               {"ts": "2026-09-15T11:00:00Z", "task": "DP-2", "action": "DP_RESOLVED",
+                "actor": "A. Silva"}]
+    assert observed_latency(entries) == {"A. Silva": 3.0}
+
+
+def test_being_slow_never_routes_around_anybody():
+    """Reassigning somebody's work on the strength of a median is an organisational decision the
+    platform has no standing to make. It is said out loud instead."""
+    slow = {"A. Silva": 72.0}
+    r = route(Ask("DP-X", "resolve_dp"), TEAM, WED, latency=slow)
+    assert r.person.name == "A. Silva"
+    assert "answered in 72h on this engagement" in r.why

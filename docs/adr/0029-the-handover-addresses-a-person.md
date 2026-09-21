@@ -18,7 +18,7 @@ sufficient authority* while respecting the clock.
 ## Decision
 
 **People are declared, never inferred.** `POST /engagements/{eid}/people` takes a team: name,
-authority, cost, working hours, timezone offset, days, capacity. Cost is what the organisation
+authority, cost, working hours, timezone, days, capacity. Cost is what the organisation
 says an hour of that person's attention is worth to the programme — a platform that guessed at
 somebody's seniority would be guessing about a person.
 
@@ -37,6 +37,24 @@ hours says when they will see it; an ask whose cost of silence is above the inte
 goes now regardless, because at that price the person would rather be woken (ADR-0027 already
 prices this).
 
+**Capacity changes who; being slow never does.** What each person has already been asked this
+week is read off the ledger — the night writes an `ASKED` entry per person per thing, and the same
+unanswered question found on five consecutive nights is one thing they owe, not five. Somebody at
+the capacity their organisation declared is passed over for the next cheapest sufficient
+authority, and when everybody who could sign it is full, nobody is asked and the queue is the
+finding. Observed latency is the opposite case: it is computed from the ledger's
+`DP_RAISED`/`DP_RESOLVED` pairs and printed in the reason the handover gives — *"they have
+answered in 72h on this engagement"* — and it is never an input to routing. Quietly reassigning
+somebody's work on the strength of a median is an organisational decision the platform has no
+standing to make, and the person routed around would never know it happened.
+
+**The clock is a named zone, not an offset.** `tz` is an IANA name, so working hours move with
+daylight saving rather than being right eleven months of the year. An unknown name is a 422 at
+registration, next to the unknown-authority refusal and for the same reason. `utc_offset` remains
+as the fallback for a team that has not named a zone and for an image with no tz database, and
+`jidoka-os` depends on `tzdata` so the second case is the deployer's choice rather than an
+accident.
+
 **Nobody to ask is the finding.** With no team registered the handover names the role exactly as
 before — no pretence that somebody was asked. Where a team exists but nobody in it holds the
 authority, the handover says *"(nobody I can ask)"* and names the permission that is missing.
@@ -45,15 +63,20 @@ authority, the handover says *"(nobody I can ask)"* and names the permission tha
 
 - The handover reads like a colleague's note: *"A. Silva — at Mon 08:00 their time: the CSDM
   change is still not in the system"*.
-- `capacity_per_week` is declared and not yet used. Capacity is the real bottleneck at scale, and
-  spending it correctly needs a record of what each person has already been asked this week —
-  which the ledger could support and this does not yet do. It is in the shape rather than in the
-  behaviour, and saying so is better than dropping the field or pretending it works.
-- Latency — M4's "observed decision speed" — is not modelled at all. It is learnable from the
-  ledger's DP_RAISED/DP_RESOLVED pairs and nothing here learns it.
-- Timezone is an integer offset, not a zone name, so it does not move with daylight saving. Real
-  for the programmes this targets and wrong in March; a tz database belongs here the day somebody
-  is actually missed by an hour.
+- The ledger carries a new action, `ASKED`. It is a projection input like every other entry —
+  capacity is recomputed from the chain rather than stored — and it is written only for asks that
+  reached a registered person, because a finding addressed to a role consumed nobody's week.
+- A night spends capacity on its own findings as it routes them, costliest first. So when
+  somebody fills up mid-night, what goes unasked is what mattered least, and a batch that ignored
+  its own effect on the week cannot hand one person everything it found.
+- `GET /engagements/{eid}/people` reports `asked_this_week` and `answers_in_hours` beside the
+  declared team. The console prints both on the night-shift card, so a queue behind one name is
+  visible before it bites.
+- A handover the router could not place now says *"(nobody I can ask)"* and gives the reason,
+  where before it printed the fallback role and hid the refusal. A bottleneck printed as an ask
+  is a bottleneck hidden.
+- Latency is measured and shown and does nothing. That is the decision, not an omission: see
+  above. If a programme wants slow approvers routed around, a human changes `cost` or the team.
 
 ## Alternatives rejected
 
