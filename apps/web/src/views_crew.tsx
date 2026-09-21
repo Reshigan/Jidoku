@@ -10,7 +10,7 @@
    crew has no way to arm one. What is waiting on a person is the first thing on the screen,
    because it is the only part somebody has to act on. */
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, CrewCard, CrewRun, platform } from "./api";
+import { ApiError, CrewCard, CrewRun, NightShift, platform } from "./api";
 import { Empty, Pill, Section } from "./ui";
 
 /** Ring 3 reads as the loudest badge on the card: the auditor's whole power is that it has none. */
@@ -35,6 +35,7 @@ export function CrewView(props: {
 }) {
   const { eid, onRefusal } = props;
   const [run, setRun] = useState<CrewRun | null>(null);
+  const [night, setNight] = useState<NightShift | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(() => {
@@ -42,9 +43,12 @@ export function CrewView(props: {
     platform.lastRun(eid)
       .then((r) => setRun(r.crew.length ? r : null))
       .catch((e) => { if (e instanceof ApiError && !e.notAvailable) onRefusal("The last run", e.detail); });
+    platform.lastNight(eid)
+      .then((n) => setNight(n.handover ? n : null))
+      .catch((e) => { if (e instanceof ApiError && !e.notAvailable) onRefusal("The handover", e.detail); });
   }, [eid, onRefusal]);
 
-  useEffect(() => { setRun(null); load(); }, [load]);
+  useEffect(() => { setRun(null); setNight(null); load(); }, [load]);
 
   if (!eid) return <Empty title="No engagement" body="Choose an engagement to put the crew on it." />;
 
@@ -58,6 +62,18 @@ export function CrewView(props: {
       await props.onChanged();
     } catch (e) {
       if (e instanceof ApiError) onRefusal("The attestation was not recorded", e.detail);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const workTheNight = async () => {
+    setBusy(true);
+    try {
+      setNight(await platform.runNight(eid));
+      await props.onChanged();
+    } catch (e) {
+      if (e instanceof ApiError) onRefusal("The night shift did not run", e.detail);
     } finally {
       setBusy(false);
     }
@@ -83,6 +99,42 @@ export function CrewView(props: {
 
   return (
     <>
+      <Section
+        title="The night shift"
+        note="The work that needs no person, done while nobody is watching — and a handover in the morning. Everything found is ranked by what it costs to stay quiet, and the interruption budget is hard."
+        lamp={night ? (night.interrupted.length ? "stop" : "run") : undefined}
+        status={night?.budget
+          ? night.budget.spent
+            ? `woke somebody ${night.budget.spent} of ${night.budget.of} times`
+            : "nobody was woken"
+          : undefined}
+        actions={
+          <button className="btn" disabled={!props.canRun || busy} onClick={() => void workTheNight()}>
+            {busy ? "Working…" : night ? "Work another night" : "Work the night"}
+          </button>
+        }
+      >
+        {!night ? (
+          <p className="mut">
+            No night has been worked on this engagement. A night reads every system, checks signed
+            intent against them, chases what was handed to a person, re-scores the twin and runs
+            the controls — then writes the morning a note in first person: what I did, what I
+            found, what I need from you today.
+          </p>
+        ) : (
+          <>
+            <div className="verbatim calm" style={{ whiteSpace: "pre-wrap" }}>{night.handover}</div>
+            {night.interrupted.length > 0 && (
+              <p className="mut" style={{ marginTop: 12, fontSize: 12.5 }}>
+                Woken for:{" "}
+                {night.interrupted.map((f) => `${f.what} (cost ${f.cost})`).join("; ")}. Anything
+                below {night.budget?.threshold} waits for the morning.
+              </p>
+            )}
+          </>
+        )}
+      </Section>
+
       <Section
         title="The crew"
         note="Five agents, opposed objectives, no shared memory. Each one holds only what its ring permits — and no ring an agent can occupy can approve."

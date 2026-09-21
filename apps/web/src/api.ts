@@ -94,6 +94,22 @@ export type CrewRun = {
   halt_reason: string;
 };
 
+/** A night's work and the handover it left. `interrupted` earned a wake-up; everything else
+    waited for the morning, which is the whole point of the budget (M3). */
+export type NightShift = {
+  did: string[];
+  interrupted: NightFinding[];
+  waited: NightFinding[];
+  deferred: NightFinding[];
+  budget: { of: number; spent: number; held_back: number; threshold: number } | null;
+  handover: string;
+  cost_of_silence: Record<string, number>;
+};
+
+export type NightFinding = {
+  kind: string; what: string; who: string; detail: string; cost: number;
+};
+
 export type Blast = {
   population: number;
   affected: number;
@@ -715,6 +731,9 @@ const api3 = {
   /* ---- the crew run (ADR-0018). The team takes the engagement as far as it can go alone and
      stops at every human gate: it cannot arm a live write and no ring it can occupy can approve. ---- */
   runCrew: (eid: string) => call<CrewRun>(`/engagements/${eid}/run`, { method: "POST" }),
+  /** Work the night and compose the morning's handover. Writes the ledger, like any check does. */
+  runNight: (eid: string) => call<NightShift>(`/engagements/${eid}/nightshift`, { method: "POST" }),
+  lastNight: (eid: string) => call<NightShift>(`/engagements/${eid}/nightshift`),
   lastRun: (eid: string) => call<CrewRun>(`/engagements/${eid}/run`),
 };
 

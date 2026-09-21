@@ -218,6 +218,9 @@ test("the console reaches every endpoint the API publishes", async ({ page, requ
   await page.getByRole("tab", { name: /^Crew/ }).click();
   await page.getByRole("button", { name: "Run again" }).click();
   await dismissScrim(page);
+  // The night shift: the same checks, unattended, and a handover in the morning.
+  await page.getByRole("button", { name: /^(Work the night|Work another night)$/ }).click();
+  await dismissScrim(page);
   // An object the product publishes no read path for is never chased: a person attests to it.
   // Not guarded by a count check — the walk loads a Tier-C record precisely so this path runs,
   // and a silently skipped step is how a spec stops covering the thing it claims to cover.

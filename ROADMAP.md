@@ -46,8 +46,11 @@
       runs the pass, `routers/run.py` binds the syscalls to the executor, the Crew view shows who held what authority (ADR-0018)
 - [ ] C4/C7 (research): causal defect graph; DP routing mechanism design
 ## E12 Team-member behaviours (docs/JIDOKA_TEAM_MEMBER_MODEL.md)
-- [ ] Shift scheduler + night jobs + first-person handover composer
-- [ ] Interruption budget ranked by cost-of-silence
+- [x] Shift scheduler + night jobs + first-person handover composer (`jidoka_os.handover`,
+      `routers/nightshift.py`, the Crew screen — ADR-0027). Nothing schedules itself yet: running the night is
+      still a call, and the cron belongs to deployment.
+- [x] Interruption budget ranked by cost-of-silence — published table, hard budget, and what it held back is in
+      the handover rather than dropped (ADR-0027)
 - [ ] Person profiles: authority, capacity, latency, working hours; cheapest-sufficient-authority routing
 - [ ] Self-accountability page: fidelity defects, forecast calibration, refusal review
 - [ ] Objection records with scheduled revisit triggers
