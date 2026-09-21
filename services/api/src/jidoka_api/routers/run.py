@@ -29,6 +29,7 @@ from ..auth import Identity, require
 from .engagements import get_or_404
 from .execution import (_adapter_for, _executor, _record_or_404, advance_step, execute_step,
                         rollback_step, snapshot_step)
+from .twin import run_twin
 from .verification import run_verification
 
 router = APIRouter(prefix="/engagements/{eid}/run", tags=["run"])
@@ -140,6 +141,8 @@ def start(eid: str, identity: Identity = Depends(require("execute"))):
             actor=identity.subject,
             bus=MessageBus(e.ledger),
             verify=lambda: run_verification(e, identity.subject),
+            # Predicted before anything is written, reported, and never acted on (ADR-0026).
+            twin=lambda: run_twin(eid, identity),
         )
     except (RegistryError, WriteLockViolation) as err:
         # The landscape refusing is a finding about the engagement, not a server fault.

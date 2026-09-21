@@ -68,7 +68,15 @@ of it.
    because every act that touched a customer's system is on the chain or did not happen through
    this platform. (ADR-0025; `packages/jidoka-core/src/jidoka_core/controls.py`; `test_controls.py`.)
 
-7. **Unsigned intent is unexecutable by construction.** IR records without a signed source do not
+7. **The twin publishes how often it is right, and is never allowed to act on it.** Rules are
+   evaluated from a declared subset that refuses what it cannot read rather than approximating it;
+   metadata comes from the system itself; every prediction is ledgered and paired afterwards with
+   what the substrate actually did. Below ten settled predictions there is no fidelity rate at
+   all, and where a prediction is quoted the same sentence says how much weight it has earned. A
+   prediction never blocks a write. (ADR-0026; `packages/jidoka-core/src/jidoka_core/twin.py`;
+   `test_twin.py`.)
+
+8. **Unsigned intent is unexecutable by construction.** IR records without a signed source do not
    load; open decision points — whether from the IR or raised later, including by drift — hard-block
    planning through one gate; the agent is always builder and never approver; approval requires a
    different reviewer and a prior snapshot; live Tier-A writes require an explicitly armed target
@@ -92,7 +100,7 @@ of it.
 - **"An LLM that fully understands SAP."** The knowledge subsystem is evidence-grounded and the
   scrubber gate works, but the corpus question (DP-K01 — entitlement to SAP documentation) is an
   open legal decision point and remains blocked until counsel answers it.
-- **"World first" as a totality.** The seven claims above are shapes we believe are new. The only
+- **"World first" as a totality.** The eight claims above are shapes we believe are new. The only
   honest form of the headline is: *the first SAP configuration platform we know of where drift,
   documents, tests and number ranges are all projections of one signed, hash-chained record — and
   where the machine can never approve its own work.*

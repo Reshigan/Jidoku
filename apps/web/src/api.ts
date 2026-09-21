@@ -422,6 +422,22 @@ export type ControlsView = {
   method: string;
 };
 
+/** What the twin predicts, and how much that is worth. `fidelity` is null until the twin has
+    scored enough predictions to have earned a rate — a percentage from four comparisons is the
+    kind of number that gets quoted (ADR-0026). */
+export type TwinView = {
+  predictions: { key: string; verdict: "ACCEPT" | "REJECT"; reasons: string[]; at?: string }[];
+  rules_evaluatable: number;
+  refused_rules: { rule_id: string; why: string }[];
+  skipped?: { key: string; reason: string }[];
+  fidelity: {
+    scored: number; agreed: number; disagreed: number; unsettled: number;
+    fidelity: number | null; status: "CALIBRATED" | "UNCALIBRATED"; min_scored: number;
+    misses: { task: string; predicted: string; outcome: string }[];
+    method: string;
+  };
+};
+
 export type NumberRangeView = {
   range_id: string; object_type: string; prefix: string;
   start: number; end: number; width: number; next_free: string | null;
@@ -645,6 +661,15 @@ const api2 = {
   assurance: (eid: string) => call<AssuranceView>(`/engagements/${eid}/verification/assurance`),
   /** Every control, over every row. Read-only, and an auditor asks it more than anybody. */
   controls: (eid: string) => call<ControlsView>(`/engagements/${eid}/controls`),
+  twin: (eid: string) => call<TwinView>(`/engagements/${eid}/twin`),
+  /** Predicts and ledgers the prediction. It never blocks — see the view's own note. */
+  runTwin: (eid: string) => call<TwinView>(`/engagements/${eid}/twin`, { method: "POST" }),
+  /** Rules outside the evaluatable subset come back named, and are shown rather than swallowed. */
+  loadTwinRules: (eid: string, rules: unknown[], source = "") =>
+    call<{ evaluatable: number; refused: { rule_id: string; why: string }[] }>(
+      `/engagements/${eid}/twin/rules`,
+      { method: "POST", body: JSON.stringify({ rules, source }) },
+    ),
   numbering: (eid: string) => call<NumberingSnapshot>(`/engagements/${eid}/numbering`),
   registerRange: (eid: string, body: {
     range_id: string; object_type: string; prefix: string; start: number; end: number; width?: number;

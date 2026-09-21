@@ -52,6 +52,16 @@ def _agent(kernel, manifest, by: str):
     return proc
 
 
+def _fidelity_words(prediction: dict) -> str:
+    """How much weight the reader should put on it, in the same breath as the prediction."""
+    f = (prediction or {}).get("fidelity") or {}
+    if f.get("status") != "CALIBRATED":
+        return (f"this twin is uncalibrated ({f.get('scored', 0)} of {f.get('min_scored', '?')} "
+                f"scored predictions), so it has earned no weight at all yet")
+    return (f"this twin has matched the system on {f['fidelity'] * 100:.0f}% of "
+            f"{f['scored']} scored predictions")
+
+
 def _card(proc, did: list[str]) -> dict:
     """What one agent did, and what it was allowed to do. Both, always — a report that lists the
     work without the authority reads like a person's and hides the whole point."""
@@ -91,7 +101,7 @@ def _call(kernel, proc, call: str, log: list[str], note: str, **kw):
 
 
 def run(kernel, *, records, open_dp_ids, actor: str, bus: MessageBus | None = None,
-        verify=None) -> dict:
+        verify=None, twin=None) -> dict:
     """One crew pass over one engagement.
 
     `records` are the engagement's loaded IR records, `open_dp_ids` every decision point that
@@ -99,6 +109,9 @@ def run(kernel, *, records, open_dp_ids, actor: str, bus: MessageBus | None = No
     already answered — a second run that wiped a human's decision would be worse than no run.
     `verify` is the engagement's verification pass, called last and never by an agent: reading a
     customer's systems to check them is the platform's act, and its findings belong to everybody.
+    `twin` is the same arrangement at the other end — a prediction, before anything is written,
+    which nothing here is allowed to act on (ADR-0026). It is reported and it never gates: a
+    model's opinion does not stop a signed, armed, snapshotted write.
     """
     bus = bus or MessageBus(kernel.ledger)
     crew, waiting, raised, steps, artefacts = [], [], [], [], []
@@ -125,6 +138,8 @@ def run(kernel, *, records, open_dp_ids, actor: str, bus: MessageBus | None = No
                 waiting.append({"what": dp_id, "who": (rec.source or {}).get("signed_by", "") or "client",
                                 "why": f"statutory value {field!r} on {rec.key} has no evidence reference"})
     crew.append(_card(sen, log))
+
+    prediction = twin() if twin else None
 
     # --- architect: sequence the work --------------------------------------------------------
     arc = _agent(kernel, architect(), actor)
@@ -344,7 +359,18 @@ def run(kernel, *, records, open_dp_ids, actor: str, bus: MessageBus | None = No
                                f"this one, so the record is a named person's attestation or "
                                f"nothing at all."})
 
+    for p in (prediction or {}).get("predictions", []):
+        if p.get("verdict") == "REJECT":
+            # Not a blocker and not a decision: a heads-up with reasons, before somebody spends a
+            # cutover window finding out the same thing from the substrate.
+            waiting.append({"what": p["key"], "who": "whoever signed this record, to look before it runs",
+                            "why": "the twin predicts the system will reject this: "
+                                   + "; ".join(p.get("reasons", [])) +
+                                   ". A prediction is not a verdict — "
+                                   + _fidelity_words(prediction)})
+
     return {"crew": crew, "plan": plan, "plan_blocked": plan_block, "steps": steps,
+            "twin": prediction,
             "artefacts": artefacts, "decisions_raised": raised,
             "objections": [{"from": m.frm, "kind": m.kind, "body": m.body} for m in bus.objections()],
             "economics": economics, "verification": verification,

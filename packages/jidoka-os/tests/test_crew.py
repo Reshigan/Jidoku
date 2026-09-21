@@ -66,10 +66,10 @@ def kernel(ledger=None, **handlers):
     return k
 
 
-def run(k, records=None, dps=(), verify=None):
+def run(k, records=None, dps=(), verify=None, twin=None):
     return crew.run(k, records=records if records is not None else [Rec()],
                     open_dp_ids=set(dps), actor="lead@gonxt",
-                    bus=MessageBus(k.ledger), verify=verify)
+                    bus=MessageBus(k.ledger), verify=verify, twin=twin)
 
 
 # --- what the crew may never do ------------------------------------------------------------------
@@ -384,3 +384,46 @@ def test_a_clean_write_is_never_rolled_back():
     called = []
     run(kernel(sys_rollback=lambda proc, **kw: called.append(1)))
     assert called == []
+
+
+# --- the twin predicts, and the crew does not act on it (ADR-0026) --------------------------------
+
+def _twin(verdict="REJECT", status="UNCALIBRATED", scored=2, rate=None):
+    return lambda: {"predictions": [{"key": "P:Obj:X", "verdict": verdict,
+                                     "reasons": ["R-107: accrual_frequency must be set"]}],
+                    "fidelity": {"status": status, "scored": scored, "min_scored": 10,
+                                 "fidelity": rate}}
+
+
+def test_a_predicted_rejection_does_not_stop_the_write():
+    report = run(kernel(), twin=_twin())
+    assert [s["status"] for s in report["steps"]] == ["DRY_RUN"], "the step still ran"
+    assert report["twin"]["predictions"][0]["verdict"] == "REJECT"
+
+
+def test_a_predicted_rejection_reaches_the_handover_with_its_reasons():
+    item = next(w for w in run(kernel(), twin=_twin())["waiting_on_a_person"]
+                if w["what"] == "P:Obj:X" and "twin predicts" in w["why"])
+    assert "accrual_frequency must be set" in item["why"]
+
+
+def test_an_uncalibrated_twin_says_it_has_earned_no_weight():
+    item = next(w for w in run(kernel(), twin=_twin())["waiting_on_a_person"]
+                if "twin predicts" in w["why"])
+    assert "uncalibrated (2 of 10 scored predictions)" in item["why"]
+    assert "earned no weight" in item["why"]
+
+
+def test_a_calibrated_twin_carries_its_rate_beside_the_prediction():
+    item = next(w for w in run(kernel(), twin=_twin(status="CALIBRATED", scored=40, rate=0.9))
+                ["waiting_on_a_person"] if "twin predicts" in w["why"])
+    assert "matched the system on 90% of 40 scored predictions" in item["why"]
+
+
+def test_a_predicted_acceptance_says_nothing():
+    report = run(kernel(), twin=_twin(verdict="ACCEPT"))
+    assert not any("twin predicts" in w["why"] for w in report["waiting_on_a_person"])
+
+
+def test_a_run_without_a_twin_is_unchanged():
+    assert run(kernel())["twin"] is None

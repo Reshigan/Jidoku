@@ -57,6 +57,8 @@ class Engagement:
     # counted as it — a draft becomes executable only when a named human signs it, which is the
     # one path that moves a record from this list into `ir`.
     drafts: list = field(default_factory=list)
+    # The twin's rule export, as handed over. Parsed on use, never on load: one parser.
+    rules: list = field(default_factory=list)
     # Number ranges rebuild from the ledger (their registrations and allocations ride in entries),
     # so they need no table of their own.
     numbering: NumberRanges = None
@@ -105,6 +107,10 @@ class Engagement:
     def persist_drafts(self) -> None:
         if self.repo:
             self.repo.save_drafts(self.engagement_id, [dict(d) for d in self.drafts])
+
+    def persist_rules(self) -> None:
+        if self.repo:
+            self.repo.save_rules(self.engagement_id, [dict(r) for r in self.rules])
 
     def persist_memory(self) -> None:
         if self.repo:
@@ -160,6 +166,7 @@ class Store:
         for raw in self.repo.load_claims(eid):
             e.memory._claims.append(Claim.from_dict(raw))
         e.drafts = self.repo.load_drafts(eid)
+        e.rules = self.repo.load_rules(eid)
         raw_ir, e.open_dps = self.repo.load_ir(eid)
         e.ir = [IRRecord(**r) for r in raw_ir]
         systems, paths = self.repo.load_systems(eid)

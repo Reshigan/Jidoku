@@ -182,6 +182,16 @@ test("the console reaches every endpoint the API publishes", async ({ page, requ
   await page.getByRole("tab", { name: /^Verify/ }).click();
   await page.getByRole("button", { name: /^(Run verification|Verify again)$/ }).click();
   await dismissScrim(page);
+  // The twin: load a rule export, predict, and read the fidelity it has not earned yet.
+  await page.getByLabel("Rule export").fill(JSON.stringify([{
+    rule_id: "R-COV", entity: "FOPayComponent",
+    then: [{ field: "code", op: "required" }],
+  }]));
+  await page.getByRole("button", { name: "Load rules" }).click();
+  await dismissScrim(page);
+  await page.getByRole("button", { name: /^(Run the twin|Predict again)$/ }).click();
+  await dismissScrim(page);
+
   await page.getByLabel("Range id").fill("TT-COV");
   await page.getByLabel("Object type").fill("TimeType");
   await page.getByLabel("Prefix").fill("TT_COV_");

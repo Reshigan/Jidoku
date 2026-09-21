@@ -17,7 +17,9 @@
 - [ ] Anthropic tool-use loop over API endpoints (agent = builder only)
 - [ ] K5 exam runner: YAML scenarios, human-graded rubric ingestion, pass-gate for skill promotion
 ## E6 Twin v1
-- [ ] Rule-export parser → executable rule eval, calibrated against DEV probes; fidelity metric published
+- [x] Rule-export parser → executable rule eval; fidelity published as a projection over the chain and withheld
+      below ten settled predictions; the twin never blocks a write (ADR-0026). SAP's own rule XML is not parsed —
+      the evaluatable subset is JIDOKA's shape and refuses what it cannot read.
 ## E7 Web app
 - [ ] Port checkpoint console to React on live API; milestone rail; DP queues; landscape graph
 ## E8 New adapters
