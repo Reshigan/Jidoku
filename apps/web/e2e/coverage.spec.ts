@@ -10,6 +10,13 @@ const OUT_OF_BAND = new Set([
 ]);
 
 test("the console reaches every endpoint the API publishes", async ({ page, request }) => {
+  // This one walks the whole product in a single session — register a landscape, load intent,
+  // plan, run the crew, work a night, override an objection, advance four phases and revisit it —
+  // so it is the one test whose runtime grows every time the platform does. It sat at 30.2s
+  // against the 30s default and failed about half the time, which reads as a flake and is not
+  // one: the walk really is that long, and the right answer is a budget that says so rather than
+  // a shorter walk that covers less.
+  test.setTimeout(120_000);
   const spec = await (await request.get("/openapi.json")).json() as {
     paths: Record<string, Record<string, unknown>>;
   };

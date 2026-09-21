@@ -117,8 +117,11 @@ of it.
   Komatsu fixtures are fixtures.
 - **"Writes to real SAP systems."** The OData connector exists and is tested against mocks; no
   live SuccessFactors or S/4HANA tenant has been written to from this codebase.
-- **"Covers the SAP portfolio."** One reference adapter (SuccessFactors) is real; other products
-  are tier-mapped but not implemented end to end.
+- **"Covers the SAP portfolio."** Three adapters exist — SuccessFactors (the reference, with a
+  live OData client), S/4HANA (OData plus transport-aware completion) and BTP (Terraform-declared,
+  Tier B by design). None has been pointed at a live tenant from this codebase, and BTP has no
+  live connector at all: `_live` refuses it by name rather than shipping an untested write path
+  into a customer's control plane.
 - **"The crew replaces a consulting team."** It does a team's *mechanical* pass: sequencing,
   writing, transporting, artefact production, statutory challenge, objection, pricing and
   verification — deterministically, and only ever against a mock SAP double, because no live
