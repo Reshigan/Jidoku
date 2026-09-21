@@ -1,29 +1,45 @@
 # JIDOKA Roadmap — epics broken to Claude-Code-sized issues
-## E1 Core hardening (now)
-- [ ] Persist ledger/IR/registry to SQLite behind repository interfaces (keep in-memory impl for tests)
-- [ ] IR JSON Schema published + versioned (ir/v1)
-- [ ] Planner: parallel-branch output (independent subgraphs → concurrent lanes)
+
+A box is ticked only against code that exists and tests that run. Under-reporting misleads exactly
+as much as over-claiming, which is why `docs/CLAIMS.md` exists — and why E1–E5 and E7 sat unticked
+for weeks after they were built, until somebody checked.
+
+## E1 Core hardening
+- [x] Persist ledger/IR/registry to SQLite behind repository interfaces (keep in-memory impl for tests)
+      — `jidoka_core.repository`, both implementations held to one suite by `test_repository.py`
+- [x] IR JSON Schema published + versioned (ir/v1) — `jidoka_core.schema`, served at `/schema/ir`
+- [x] Planner: parallel-branch output (independent subgraphs → concurrent lanes) — `plan()["lanes"]`
 ## E2 API completeness
-- [ ] Engagement lifecycle states (DISCOVER→SCOPE→BUILD→CUTOVER→HYPERCARE)
-- [ ] AuthN/Z: OIDC, roles (builder/reviewer/approver/auditor); SoD enforced server-side
-- [ ] Evidence export endpoint (ledger chain + artefact bundle, auditor-verifiable offline)
+- [x] Engagement lifecycle states (DISCOVER→SCOPE→BUILD→CUTOVER→HYPERCARE) — `jidoka_core.lifecycle`,
+      forward-only and ledgered
+- [x] AuthN/Z: OIDC, roles (builder/reviewer/approver/auditor); SoD enforced server-side — `oidc.py`,
+      `auth.py`; a group map granting a builder `approve` is refused at config load (ADR-0008)
+- [x] Evidence export endpoint (ledger chain + artefact bundle, auditor-verifiable offline) — `evidence.py`,
+      with the verification procedure shipped inside the bundle
 ## E3 SuccessFactors live path
-- [ ] OData client (OAuth SAML bearer), $metadata fetch, live extract behind adapter fetcher
-- [ ] $batch loader with per-record error journal + idempotent replay
-- [ ] Instance file importers for Tier B artefact handoff
+- [x] OData client (OAuth SAML bearer), $metadata fetch, live extract behind adapter fetcher
+- [x] $batch loader with per-record error journal + idempotent replay
+- [x] Instance file importers for Tier B artefact handoff
+- [ ] Nothing above has ever spoken to a live tenant. Every test injects a transport; the SAML assertion is
+      read from an env var and nothing mints or refreshes one. See docs/CLAIMS.md.
 ## E4 Compiler
-- [ ] XLSX workbook → IR with cell-level provenance (openpyxl), gap questionnaire for prose docs
+- [x] XLSX workbook → IR with cell-level provenance (openpyxl), gap questionnaire for prose docs
+- [x] Documents projected from signed state, including the archaeology backlog (ADR-0017)
 ## E5 Agent (K5 consultant)
-- [ ] Anthropic tool-use loop over API endpoints (agent = builder only)
-- [ ] K5 exam runner: YAML scenarios, human-graded rubric ingestion, pass-gate for skill promotion
+- [x] Anthropic tool-use loop over API endpoints (agent = builder only) — `consultant.py`; the tool list
+      excludes approval, and no ring an agent occupies holds the capability
+- [x] K5 exam runner: YAML scenarios, human-graded rubric ingestion, pass-gate for skill promotion —
+      `exam.py`, `grader.py`; a skill is examined only on its own syllabus (ADR-0011)
 ## E6 Twin v1
 - [x] Rule-export parser → executable rule eval; fidelity published as a projection over the chain and withheld
       below ten settled predictions; the twin never blocks a write (ADR-0026). SAP's own rule XML is not parsed —
       the evaluatable subset is JIDOKA's shape and refuses what it cannot read.
 ## E7 Web app
-- [ ] Port checkpoint console to React on live API; milestone rail; DP queues; landscape graph
+- [x] Port checkpoint console to React on live API; milestone rail; DP queues; landscape graph — 15 screens,
+      state from the API and never local truth, every endpoint walked by a browser in `e2e/coverage.spec.ts`
 ## E8 New adapters
-- [ ] S/4HANA/ECC transport-native adapter (BC Set generation, TMS release hooks)
+- [~] S/4HANA adapter: OData writes, CSRF, and transport-aware completion DEV→QA→PROD are built (ADR-0006,
+      ADR-0009). BC Set generation and TMS release hooks are not.
 - [ ] BTP adapter via Terraform provider
 ## E9 Deployment & SaaS
 - [ ] EngagementLedger Durable Object (TS port of ledger semantics + Access-identity SoD)
