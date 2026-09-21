@@ -1,7 +1,7 @@
 // Self-check for the Worker's one branch: kernel or console. `node src/routing.check.mjs`.
 // Wrong answers here are silent — an API call returns index.html with a 200 — so it gets a check.
 // Duplicated rather than imported because the Worker is TS and this must run with bare node.
-const API_PREFIXES = ["/engagements", "/health", "/auth", "/schema", "/openapi.json", "/__edge"];
+const API_PREFIXES = ["/engagements", "/portfolio", "/health", "/auth", "/schema", "/openapi.json", "/__edge"];
 const isApi = (p) => API_PREFIXES.some((x) => p === x || p.startsWith(x + "/"));
 
 import { readFileSync } from "node:fs";
@@ -12,7 +12,7 @@ const src = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
 assert.match(src, new RegExp(`API_PREFIXES = ${JSON.stringify(API_PREFIXES).replace(/[[\]]/g, "\\$&").replace(/,/g, ", ")}`),
   "API_PREFIXES drifted from this check");
 
-for (const p of ["/engagements", "/engagements/e1/ledger", "/health", "/auth/token", "/openapi.json"])
+for (const p of ["/engagements", "/engagements/e1/ledger", "/health", "/auth/token", "/openapi.json", "/portfolio"])
   assert.equal(isApi(p), true, `${p} must reach the kernel`);
 for (const p of ["/", "/ledger", "/assets/app.js", "/healthz", "/schemas", "/authors"])
   assert.equal(isApi(p), false, `${p} must be served as the console`);
@@ -46,8 +46,20 @@ assert.match(src, /night_armed: Boolean\(env\.KERNEL_URL && env\.NIGHT_TOKEN\)/,
   "readiness must report both halves: a kernel with no token is a night that will not run");
 assert.doesNotMatch(src.split('url.pathname === "/__edge"')[1].split("}")[0] ?? "", /\$\{env\./,
   "readiness must report whether a secret is set, never what it is");
-for (const p of ["/__edge", "/health"])
-  assert.match(toml, new RegExp(`"${p}"`), `${p} must be in run_worker_first or assets answer it first`);
+
+
+// --- the three lists that must be one list ------------------------------------------------------
+// The dev server proxies, the Worker forwards, and the Worker runs before the assets. A path in
+// one and not the others is served the console's index.html with a 200 and the caller parses a
+// web page as JSON — which reads as a bug in the view rather than as a missing route.
+const vite = readFileSync(new URL("../../../apps/web/vite.config.ts", import.meta.url), "utf8");
+for (const p of API_PREFIXES) {
+  if (p === "/__edge") continue;             // edge-local: the kernel has no such path to proxy
+  assert.ok(vite.includes(`"${p}"`), `${p} reaches the kernel in production and not in dev`);
+}
+for (const p of ["/engagements", "/portfolio", "/health", "/auth", "/schema", "/openapi.json"])
+  assert.match(toml, new RegExp(`"${p}(/\\*)?"`),
+    `${p} is an API path and the assets would answer it before the Worker`);
 
 console.log("routing ok");
 console.log("night shift clock ok");

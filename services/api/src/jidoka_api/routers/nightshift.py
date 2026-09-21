@@ -8,10 +8,12 @@ What it adds is restraint. Every finding is ranked by cost of silence and the in
 is hard, so a chain break earns a wake-up and a stale attestation waits for the handover. An
 unspent budget stays unspent.
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from jidoka_core.controls import run_all
 from jidoka_core.twin import fidelity
-from jidoka_os.handover import Finding, Night, clock, compose, run as run_night
+from jidoka_os.handover import (CADENCE_ACTION, DEFAULT_CADENCE_HOURS, FAILED_ACTION,
+                                Finding, Night, cadence, clock, compose,
+                                run as run_night)
 from jidoka_os.people import ASKED, asked_this_week, load as load_people, observed_latency, \
     week_start
 
@@ -100,8 +102,22 @@ def _record_asks(e, out: dict, people, actor: str) -> None:
 
 @router.post("")
 def nightshift(eid: str, budget: int = 3, identity: Identity = Depends(require("ledger_append"))):
-    """Work the night, then compose the morning's handover."""
+    """Work the night, then compose the morning's handover.
+
+    A run that raises writes that it raised before it propagates. Otherwise a night that started
+    and died halfway is indistinguishable from a clock that never fired, and the two have
+    different fixes — one is a fault in the run, the other is a deployment nobody finished.
+    """
     e = get_or_404(eid)
+    try:
+        return _work(e, budget, identity)
+    except Exception as ex:                  # noqa: BLE001 — the failure is the thing to record
+        # The class, never the message: an exception string can carry a DSN or a bearer.
+        e.ledger.append("NIGHTSHIFT", FAILED_ACTION, identity.subject, type(ex).__name__)
+        raise
+
+
+def _work(e, budget: int, identity: Identity) -> dict:
     verification = run_verification(e, identity.subject)
     from jidoka_core.registry import WRITE_FORBIDDEN_ROLES
 
@@ -134,9 +150,23 @@ def nightshift(eid: str, budget: int = 3, identity: Identity = Depends(require("
                     f"{len(night.findings)} finding(s); woke somebody "
                     f"{out['budget']['spent']} time(s) of {budget}",
                     findings=len(night.findings), interrupted=out["budget"]["spent"])
-    _NIGHTS[eid] = out
+    _NIGHTS[e.engagement_id] = out
     out["clock"] = clock(e.ledger.entries)
     return out
+
+
+@router.post("/cadence")
+def set_cadence(eid: str, hours: int = DEFAULT_CADENCE_HOURS,
+                identity: Identity = Depends(require("ledger_append"))):
+    """How often nights run here. Declared on the ledger rather than stored beside it: the clock
+    reads the cadence and the runs off one chain, so there is no second copy to disagree."""
+    e = get_or_404(eid)
+    if hours < 1 or hours > 24 * 30:
+        raise HTTPException(422, "A cadence is between 1 hour and 30 days. Outside that it is not "
+                                 "a schedule, and a clock nobody believes is not a clock.")
+    e.ledger.append("NIGHTSHIFT", CADENCE_ACTION, identity.subject,
+                    f"nights run every {hours}h here", hours=hours)
+    return {"every_hours": cadence(e.ledger.entries)}
 
 
 @router.get("")

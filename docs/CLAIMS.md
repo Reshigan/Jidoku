@@ -82,6 +82,28 @@ of it.
    different reviewer and a prior snapshot; live Tier-A writes require an explicitly armed target
    plus a ledger snapshot. These are the seven invariants in the root CLAUDE.md, each with tests.
 
+9. **The platform records what it refused, and reports how often its own gates were friction.**
+   Every 403, 409 and 422 is a `REFUSED` entry on the same hash-chained ledger as the work it
+   declined, named by route template so the same gate across eleven engagements is one gate; when
+   the same person later gets past it, that is a `CLEARED` entry at the same seam. From those two,
+   `GET .../accountability` reports each gate as *cleared fast every time* — friction wearing a
+   governance costume — or *never cleared* — stopping something real. Nothing is scored, because a
+   number would be quoted; and what the record cannot see is printed beside it, starting with the
+   consultant who saw a refusal coming and made the change by hand in the SAP GUI. We know of no
+   compliance or configuration tool that publishes its own false-friction rate. ADR-0031.
+
+10. **The platform reports its own silence.** A night shift writes a handover on every run, a
+    failure when one raises, and nothing when the clock stops — so `clock()` reads the absence off
+    the chain and the console says *"no night has been worked in 21 days"* against a cadence the
+    engagement declared. Every way a scheduled job dies is invisible from inside the run that did
+    not happen; at the edge, `GET /__edge` answers whether the deployment is wired up in booleans,
+    never values. ADR-0030.
+
+11. **One roll-up, no second opinion.** `GET /portfolio` shows every engagement worst-first with
+    the same projections each engagement's own screen runs — no stored aggregate, no portfolio
+    average, and one sentence per row saying what needs a person rather than a colour they have to
+    decode. ADR-0032.
+
 ## Claims we cannot yet make
 
 - **"Proven on real engagements."** Zero production engagements have run on this platform. The
@@ -100,9 +122,15 @@ of it.
 - **"An LLM that fully understands SAP."** The knowledge subsystem is evidence-grounded and the
   scrubber gate works, but the corpus question (DP-K01 — entitlement to SAP documentation) is an
   open legal decision point and remains blocked until counsel answers it.
-- **"World first" as a totality.** The eight claims above are shapes we believe are new. The only
+- **"We measure whether our gates are correct."** The refusal record counts how fast each gate was
+  cleared, which is a proxy for friction and not a verdict: a gate cleared in a minute may have
+  caught a real mistake a minute before it landed. Nothing on the chain distinguishes the two.
+- **"We measure harm avoided."** A change that was never made because the platform blocked it
+  cannot be compared against the world where it was made. Any number claiming otherwise is
+  invented, and none is published.
+- **"World first" as a totality.** The eleven claims above are shapes we believe are new. The only
   honest form of the headline is: *the first SAP configuration platform we know of where drift,
   documents, tests and number ranges are all projections of one signed, hash-chained record — and
   where the machine can never approve its own work.*
 
-*Last reviewed 2026-09-20. If a claim above stops being true, edit this file in the same PR.*
+*Last reviewed 2026-09-21. If a claim above stops being true, edit this file in the same PR.*

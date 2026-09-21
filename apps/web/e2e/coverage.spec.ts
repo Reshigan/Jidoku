@@ -261,6 +261,15 @@ test("the console reaches every endpoint the API publishes", async ({ page, requ
   await page.locator(".doc-tab").nth(1).click();
   await dismissScrim(page);
 
+  // The night's cadence: a statement about this programme, and what the clock measures against.
+  await page.getByRole("tab", { name: /^Crew/ }).click();
+  await page.getByRole("button", { name: "Set the cadence" }).click();
+  await dismissScrim(page);
+
+  // Every engagement at once — the partner's screen, and the only one that reads the whole store.
+  await page.getByRole("tab", { name: /^Portfolio/ }).click();
+  await expect(page.getByRole("heading", { name: "Every engagement" })).toBeVisible();
+
   // Phase advance, ledger, evidence
   await page.getByRole("tab", { name: /^Line/ }).click();
   await page.getByRole("button", { name: /^Advance to/ }).first().click();

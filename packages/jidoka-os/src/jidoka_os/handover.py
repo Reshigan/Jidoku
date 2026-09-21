@@ -40,13 +40,26 @@ COST_OF_SILENCE = {
 #: Above this, a finding is worth waking somebody for. Below it, the morning is soon enough.
 INTERRUPT_ABOVE = 55
 
-#: A night runs daily. Longer than this without one and a night was missed — the clock is not
-#: firing, the token it calls with was rotated, or the edge was never deployed. Generous enough
-#: that a late run is not an alarm, tight enough that two missed nights cannot pass unnoticed.
-SILENT_AFTER_HOURS = 36
+#: How often a night runs where nobody has said otherwise. Daily, because that is what both
+#: deployment shapes ship with — a 02:00 cron at the edge, a sleep loop under compose.
+DEFAULT_CADENCE_HOURS = 24
+
+#: Silence is measured against the cadence, not against a constant: a programme that works its
+#: engagement weekly is not failing on a Tuesday. Half a cycle of slack, so a late run is not an
+#: alarm and a missed one cannot hide behind the next.
+SILENCE_FACTOR = 1.5
+
+#: Where a cadence other than the default is declared. A projection input like everything else —
+#: the declaration is a ledger entry, so the clock reads it from the same chain it reads the runs
+#: from and no second store has to agree with the first.
+CADENCE_ACTION = "NIGHT_CADENCE"
 
 #: What the night leaves behind on every run. The one durable record that a night happened.
 HANDOVER_ACTION = "HANDOVER"
+
+#: A night that started and did not finish. Written by the kernel when the run raises, so a
+#: failure is a fact on the chain rather than an exit code one deployment shape happens to read.
+FAILED_ACTION = "NIGHT_FAILED"
 
 
 @dataclass
@@ -113,40 +126,75 @@ def run(night: Night, *, budget: int = 3, interrupt_above: int = INTERRUPT_ABOVE
             "cost_of_silence": dict(COST_OF_SILENCE)}
 
 
+def cadence(entries: list[dict]) -> int:
+    """How often this engagement has said its nights run, in hours. The last declaration wins."""
+    declared = [e for e in entries if e.get("action") == CADENCE_ACTION]
+    if not declared:
+        return DEFAULT_CADENCE_HOURS
+    try:
+        return max(1, int(declared[-1].get("hours", DEFAULT_CADENCE_HOURS)))
+    except (TypeError, ValueError):
+        return DEFAULT_CADENCE_HOURS
+
+
 def clock(entries: list[dict], now: datetime | None = None) -> dict:
-    """When a night last ran, read off the ledger rather than out of this process's memory.
+    """When a night last ran, whether it finished, and whether one is overdue — all off the ledger.
 
     A night shift nobody knows stopped happening is worse than one that never started, and every
     way it stops — a rotated token, a cron that is not firing, an edge that was never deployed, a
     kernel the edge cannot reach — is invisible from inside the night that did not run. Nothing
     inside the night can report its own absence, so the chain reports it instead: a handover is
-    written on every run, and its absence is the signal.
+    written on every run, a failure is written when one raises, and the absence of both is the
+    signal.
 
     Restart-proof for the same reason. The last handover is held in memory for the console to
     render; whether a night *happened* is a fact about the ledger.
     """
     now = now or datetime.now(timezone.utc)
+    every = cadence(entries)
+    overdue_after = every * SILENCE_FACTOR
     worked = [e.get("ts", "") for e in entries if e.get("action") == HANDOVER_ACTION]
+    broke = [e for e in entries if e.get("action") == FAILED_ACTION]
+    # A failure after the last success is the one still standing; a failure before it was fixed by
+    # the night that followed, and reporting it would be a platform nursing a grudge.
+    failed = broke[-1] if broke and (not worked or broke[-1].get("ts", "") > max(worked)) else None
+
+    base = {"every_hours": every, "overdue_after_hours": round(overdue_after, 1),
+            "failed_at": failed.get("ts", "") if failed else "",
+            "failed_with": failed.get("detail", "") if failed else ""}
+
     if not worked:
-        return {"last_worked": "", "silent_for_hours": None, "running": False,
-                "says": "No night has ever been worked here. Either nobody has run one yet, or "
-                        "the clock that runs them is not deployed."}
+        says = ("No night has ever been worked here. Either nobody has run one yet, or the clock "
+                "that runs them is not deployed.")
+        if failed:
+            says = (f"No night has ever finished here. The last one started and raised "
+                    f"{failed.get('detail', 'an error')} — that is a fault in the run, not a "
+                    f"clock that is not firing.")
+        return {**base, "last_worked": "", "silent_for_hours": None, "running": False,
+                "says": says}
+
     last = max(worked)
     try:
         hours = (now - datetime.strptime(last, TS).replace(tzinfo=timezone.utc)).total_seconds() / 3600
     except ValueError:
-        return {"last_worked": last, "silent_for_hours": None, "running": True,
+        return {**base, "last_worked": last, "silent_for_hours": None, "running": True,
                 "says": f"A night was worked at {last}."}
     hours = round(max(hours, 0.0), 1)
-    if hours <= SILENT_AFTER_HOURS:
-        return {"last_worked": last, "silent_for_hours": hours, "running": True,
-                "says": f"The last night was worked {hours:g}h ago."}
+
+    if failed:
+        return {**base, "last_worked": last, "silent_for_hours": hours, "running": False,
+                "says": f"The last night raised {failed.get('detail', 'an error')} and did not "
+                        f"finish. One completed {hours:g}h ago, and what it found may be stale."}
+    if hours <= overdue_after:
+        return {**base, "last_worked": last, "silent_for_hours": hours, "running": True,
+                "says": f"The last night was worked {hours:g}h ago, and nights run every "
+                        f"{every}h here."}
     # Days past a couple of them: "no night in 496h" is a number, "in 21 days" is a fact.
     span = f"{hours:g}h" if hours < 48 else f"{hours / 24:.0f} days"
-    return {"last_worked": last, "silent_for_hours": hours, "running": False,
-            "says": f"No night has been worked in {span}, and one runs daily. The clock is "
-                    f"not firing, the token it calls with was rotated, or the edge is not "
-                    f"deployed — nothing here can tell which, and all three are silent."}
+    return {**base, "last_worked": last, "silent_for_hours": hours, "running": False,
+            "says": f"No night has been worked in {span}, and one runs every {every}h here. The "
+                    f"clock is not firing, the token it calls with was rotated, or the edge is "
+                    f"not deployed — nothing here can tell which, and all three are silent."}
 
 
 def _finding_dict(f: Finding) -> dict:

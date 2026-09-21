@@ -40,7 +40,7 @@ export async function workTheNight(env: Env): Promise<{ worked: number; failed: 
 
 // Kept in step with vite.config.ts. Anything not on this list is console routing and falls
 // through to the SPA, so a typo'd API path renders the app rather than silently 404-ing as JSON.
-const API_PREFIXES = ["/engagements", "/health", "/auth", "/schema", "/openapi.json", "/__edge"];
+const API_PREFIXES = ["/engagements", "/portfolio", "/health", "/auth", "/schema", "/openapi.json", "/__edge"];
 
 /** Kernel or console. Exported so src/routing.check.mjs can assert it without a test framework:
  *  a prefix match that forgets the "/" separator sends /healthz and /authors to the kernel. */

@@ -28,6 +28,7 @@ not_found_handling = "single-page-application"   # client-side routing: unknown 
 # would return index.html instead of reaching the kernel. The API prefixes must run the Worker first.
 run_worker_first = [
   "/engagements", "/engagements/*",
+  "/portfolio",
   "/health",
   "/__edge",          # is this deployment wired up? booleans only — see src/index.ts
   "/auth", "/auth/*",

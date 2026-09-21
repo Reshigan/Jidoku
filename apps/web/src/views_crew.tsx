@@ -42,6 +42,7 @@ export function CrewView(props: {
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [joiner, setJoiner] = useState({ name: "", authority: "", cost: "1", tz: "",
                                          capacity_per_week: "20" });
+  const [cadenceInput, setCadenceInput] = useState("24");
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(() => {
@@ -92,6 +93,17 @@ export function CrewView(props: {
       setJoiner({ name: "", authority: "", cost: "1", tz: "", capacity_per_week: "20" });
     } catch (e) {
       if (e instanceof ApiError) onRefusal("That person was not registered", e.detail);
+    }
+  };
+
+  /** A cadence is a statement about this programme, not a platform-wide constant: an engagement
+      worked weekly is not failing on a Tuesday. It is what the clock measures silence against. */
+  const setCadence = async (hours: string) => {
+    try {
+      await platform.setCadence(eid, Number(hours) || 24);
+      setClock((await platform.lastNight(eid)).clock);
+    } catch (e) {
+      if (e instanceof ApiError) onRefusal("That cadence was not accepted", e.detail);
     }
   };
 
@@ -194,6 +206,11 @@ export function CrewView(props: {
         )}
         {props.canRun && (
           <div className="row" style={{ gap: 12, alignItems: "flex-end", marginTop: 14, flexWrap: "wrap" }}>
+            <Field label="Nights run every (hours)" value={cadenceInput}
+                   onChange={setCadenceInput} />
+            <button className="btn" disabled={busy} onClick={() => void setCadence(cadenceInput)}>
+              Set the cadence
+            </button>
             <Field label="Who" value={joiner.name} placeholder="T. Mabaso"
                    onChange={(v) => setJoiner({ ...joiner, name: v })} />
             <Field label="May" value={joiner.authority} placeholder="approve, resolve_dp"

@@ -71,7 +71,12 @@ for weeks after they were built, until somebody checked.
       capacity read off the ledger's `ASKED` entries, and observed latency from its DP_RAISED/DP_RESOLVED
       pairs (`jidoka_os.people`, `routers/people.py` — ADR-0029). Capacity changes who is asked and a full
       team is the finding; latency is reported in the handover and deliberately never routed on.
-- [ ] Self-accountability page: fidelity defects, forecast calibration, refusal review
+- [x] Self-accountability page: refusals and clearings on the ledger, gates read as friction or as
+      holding, drift after a verification counted apart from drift, twin fidelity reused rather
+      than recomputed, and what it cannot measure printed beside the numbers
+      (`jidoka_core.accountability`, `routers/accountability.py`, the Evidence screen — ADR-0031)
+- [x] Portfolio: every engagement at once, worst first, each number the same projection its own
+      screen shows (`routers/portfolio.py`, the Portfolio screen — ADR-0032)
 - [ ] Objection records with scheduled revisit triggers
 ## E13 Insight & team (built: jidoka-insight; docs/JIDOKA_PROJECT_TEAM_AND_ALIGNMENT.md)
 - [x] Archaeology reverse-IR (unsigned by construction) · time-travel as_of · person-level blast radius · debt index

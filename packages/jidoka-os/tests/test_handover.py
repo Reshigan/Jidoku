@@ -1,8 +1,8 @@
 """The night shift: what it says now, what it saves for the morning, and what it never says."""
 from datetime import datetime, timezone
 
-from jidoka_os.handover import (COST_OF_SILENCE, SILENT_AFTER_HOURS, Finding, Night, clock,
-                                compose, run)
+from jidoka_os.handover import (COST_OF_SILENCE, DEFAULT_CADENCE_HOURS, SILENCE_FACTOR,
+                                Finding, Night, cadence, clock, compose, run)
 
 
 def night(*findings, did=("read the systems",)):
@@ -145,7 +145,8 @@ def test_two_missed_nights_cannot_pass_unnoticed():
     never deployed — is invisible from inside the night that did not run."""
     now = datetime(2026, 9, 21, 9, 0, tzinfo=timezone.utc)
     c = clock([{"ts": "2026-09-18T02:00:00Z", "action": "HANDOVER"}], now)
-    assert c["running"] is False and c["silent_for_hours"] > SILENT_AFTER_HOURS
+    assert c["running"] is False
+    assert c["silent_for_hours"] > DEFAULT_CADENCE_HOURS * SILENCE_FACTOR
     assert "rotated" in c["says"] and "not deployed" in c["says"]
 
 
@@ -162,3 +163,33 @@ def test_the_clock_reads_the_ledger_not_this_process():
                {"ts": "2026-09-21T02:00:01Z", "action": "ASKED", "person": "A. Silva"}]
     assert clock(entries, datetime(2026, 9, 21, 9, 0, tzinfo=timezone.utc))["last_worked"] == \
         "2026-09-21T02:00:00Z"
+
+
+def test_a_programme_that_works_its_engagement_weekly_is_not_failing_on_a_tuesday():
+    """Silence is measured against the cadence this engagement declared, not against a constant."""
+    entries = [{"ts": "2026-09-14T02:00:00Z", "action": "NIGHT_CADENCE", "hours": 168},
+               {"ts": "2026-09-14T02:00:00Z", "action": "HANDOVER"}]
+    now = datetime(2026, 9, 18, 9, 0, tzinfo=timezone.utc)      # four days later
+    assert cadence(entries) == 168
+    assert clock(entries, now)["running"] is True
+    assert clock([entries[1]], now)["running"] is False, "the same silence, at the default cadence"
+
+
+def test_a_night_that_started_and_raised_is_not_a_clock_that_never_fired():
+    """The two have different fixes — one is a fault in the run, the other is a deployment
+    nobody finished — and a platform that reported them the same way would send somebody to
+    check the cron for a connection error."""
+    now = datetime(2026, 9, 21, 9, 0, tzinfo=timezone.utc)
+    c = clock([{"ts": "2026-09-21T02:00:00Z", "action": "NIGHT_FAILED",
+                "detail": "ConnectionError"}], now)
+    assert c["running"] is False and c["failed_with"] == "ConnectionError"
+    assert "fault in the run" in c["says"]
+
+
+def test_a_failure_the_next_night_fixed_is_not_reported_forever():
+    """A platform nursing a grudge about a failure that has since been superseded is a platform
+    people learn to dismiss."""
+    now = datetime(2026, 9, 21, 9, 0, tzinfo=timezone.utc)
+    c = clock([{"ts": "2026-09-20T02:00:00Z", "action": "NIGHT_FAILED", "detail": "Timeout"},
+               {"ts": "2026-09-21T02:00:00Z", "action": "HANDOVER"}], now)
+    assert c["running"] is True and c["failed_at"] == ""

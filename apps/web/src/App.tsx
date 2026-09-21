@@ -16,6 +16,7 @@ import {
 } from "./views";
 import { DocumentsView } from "./views_document";
 import { CrewView } from "./views_crew";
+import { AccountabilityPanel, PortfolioView } from "./views_account";
 import { InsightView } from "./views_insight";
 import { VerifyView } from "./views_verify";
 import { DP_KINDS, SYSTEM_ROLES, kindWords, roleLabel } from "./viewkit";
@@ -491,8 +492,18 @@ export default function App() {
               )}
               {view === "Ledger" && <LedgerView entries={d.entries} chainBroken={d.chainBroken} />}
               {view === "Evidence" && (
-                <EvidenceLoader eid={eid} evidence={d.evidence} guard={guard}
-                                onLoaded={(ev) => setD((x) => ({ ...x, evidence: ev }))} />
+                <>
+                  <EvidenceLoader eid={eid} evidence={d.evidence} guard={guard}
+                                  onLoaded={(ev) => setD((x) => ({ ...x, evidence: ev }))} />
+                  {/* Beside the evidence, not on a screen of its own: somebody weighing what this
+                      engagement can prove should meet the platform's own error record there,
+                      rather than having to go looking for it. */}
+                  <AccountabilityPanel eid={eid}
+                                       onRefusal={(title, text) => setRefusal({ title, text })} />
+                </>
+              )}
+              {view === "Portfolio" && (
+                <PortfolioView onRefusal={(title, text) => setRefusal({ title, text })} />
               )}
               {view === "Milestones" && (
                 <MilestonesView milestones={milestones(lanes)} planBlock={d.planBlock} />

@@ -21,7 +21,7 @@ import time
 from base64 import urlsafe_b64decode, urlsafe_b64encode
 from dataclasses import dataclass, field
 
-from fastapi import Depends, Header, HTTPException
+from fastapi import Depends, Header, HTTPException, Request
 
 ROLES = ("builder", "reviewer", "approver", "auditor")
 
@@ -135,9 +135,21 @@ def authenticate(token: str) -> Identity:
 ANONYMOUS = Identity(subject="anonymous", roles=("builder", "reviewer", "approver", "auditor"))
 
 
-def current_identity(authorization: str | None = Header(default=None)) -> Identity:
+def current_identity(request: Request,
+                     authorization: str | None = Header(default=None)) -> Identity:
     """FastAPI dependency. With auth optional (dev), an unauthenticated call runs as ANONYMOUS so the
-    console and tests work out of the box; with auth required, a missing or bad token is a 401."""
+    console and tests work out of the box; with auth required, a missing or bad token is a 401.
+
+    The subject is stashed on the request so a refusal further down can be recorded against the
+    person it refused (ADR-0031). The name only — never the token, never the roles: a ledger entry
+    is read by everybody who can read the chain.
+    """
+    identity = _resolve(authorization)
+    request.state.subject = identity.subject
+    return identity
+
+
+def _resolve(authorization: str | None) -> Identity:
     if not authorization:
         if auth_enabled():
             raise HTTPException(401, "Authentication required — present a bearer token.")

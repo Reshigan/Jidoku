@@ -135,6 +135,46 @@ export type TeamMember = {
   capacity_per_week: number;
 };
 
+/** The platform's account of itself: where it was wrong, and where its gates were friction.
+    Nothing here is scored — a single number would be quoted, and the questions are the product. */
+export type Accountability = {
+  refusals: {
+    gates: RefusedGate[];
+    fired: number;
+    cleared: number;
+    still_standing: number;
+    friction_within_hours: number;
+    method: string;
+  };
+  mistakes: { drift_after_verified: string[]; landed_in_part: string[]; rolled_back: string[]; method: string };
+  twin: Record<string, unknown>;
+  unmeasurable: string[];
+  says: string;
+};
+
+export type RefusedGate = {
+  gate: string; kind: string; status: number; fired: number; cleared: number;
+  cleared_fast: number; standing: number; words: string; people: number; reads_as: string;
+};
+
+/** Every engagement on this kernel, worst first. Each number is the same projection the
+    engagement's own screen shows — a roll-up with a second opinion is an argument, not a view. */
+export type Portfolio = {
+  engagements: PortfolioRow[];
+  total: number;
+  need_a_person: number;
+  says: string;
+};
+
+export type PortfolioRow = {
+  engagement_id: string; name: string; client: string; phase: string;
+  records: number; people: number; chain_ok: boolean;
+  night_running: boolean; night_says: string;
+  statutory_open: string[]; decisions_open: string[];
+  proven: number | null; claimed: number;
+  refusals_standing: number; needs_a_person: string;
+};
+
 export type Blast = {
   population: number;
   affected: number;
@@ -759,6 +799,11 @@ const api3 = {
   /** Work the night and compose the morning's handover. Writes the ledger, like any check does. */
   runNight: (eid: string) => call<NightShift>(`/engagements/${eid}/nightshift`, { method: "POST" }),
   lastNight: (eid: string) => call<NightShift>(`/engagements/${eid}/nightshift`),
+  /** How often nights run here. Declared on the ledger, so the clock reads the cadence and the
+      runs off one chain and there is no second copy to disagree. */
+  setCadence: (eid: string, hours: number) =>
+    call<{ every_hours: number }>(`/engagements/${eid}/nightshift/cadence?hours=${hours}`,
+      { method: "POST" }),
   /** The team as declared, plus two things observed rather than declared: how long each person
       has taken to answer a decision here, and how much of this week they have been asked for.
       Reported so a queue behind one name is visible — never used to route around anybody. */
@@ -771,6 +816,12 @@ const api3 = {
     call<{ people: TeamMember[] }>(`/engagements/${eid}/people`,
       { method: "POST", body: JSON.stringify(people) }),
   lastRun: (eid: string) => call<CrewRun>(`/engagements/${eid}/run`),
+  /** Where this platform was wrong, and where its gates were friction. Read access on purpose:
+      somebody deciding whether to trust it should not need a privileged role to see. */
+  accountability: (eid: string) =>
+    call<Accountability>(`/engagements/${eid}/accountability`),
+  /** Every engagement at once, worst first. */
+  portfolio: () => call<Portfolio>("/portfolio"),
 };
 
 /** One client surface. Typed by construction, so a missing endpoint is a compile error. */
