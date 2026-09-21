@@ -91,4 +91,7 @@ for weeks after they were built, until somebody checked.
       decision point uses; an undeclared reader is a finding that names the owner; standard
       configuration needs no contract (`jidoka_core.contracts`, `routers/contracts.py`, the Intent
       screen — ADR-0034)
-- [ ] Module agent manifests (RCM/ONB/PMGM/TO) + PMO/migration agent manifests in economy.py
+- [~] Module agent manifests: derived from the design rather than hardcoded — `crew.run` spawns one
+      Ring-2 agent per contract owner in the signed intent, each objecting only about its own
+      objects (ADR-0035). PMO (Ring 3, writes nothing), migration (no WRITE_TARGET) and integration
+      (Ring 1) manifests exist and have no caller yet; they are shapes, not behaviour.

@@ -19,8 +19,11 @@ stamp with a budget.
 Pure over its inputs. Every effect goes through `kernel.dispatch`, and the handlers behind it are
 registered by the caller, so this module knows nothing about adapters, HTTP or SAP.
 """
+from jidoka_core.contracts import registry, undeclared_readers
+
 from .capabilities import CapabilityError
-from .economy import Message, MessageBus, architect, auditor, economist, operator, sentinel
+from .economy import (Message, MessageBus, architect, auditor, economist,
+                      module_agent, operator, sentinel)
 from .process import BudgetExceeded, State
 from .syscalls import HaltedError, SyscallError
 
@@ -348,6 +351,33 @@ def run(kernel, *, records, open_dp_ids, actor: str, bus: MessageBus | None = No
         waiting.append({"what": "the line", "who": "whoever can clear a halt",
                         "why": "the auditor halted the line: the ledger chain does not verify"})
     crew.append(_card(aud, log))
+
+    # --- module agents: one process per module the design declares an owner for ----------------
+    # Not a hardcoded list. A second statement of which modules exist would be stale the day a
+    # programme added one, and the whole alignment argument rests on there being one graph
+    # (§4.1). Each agent objects only about its own objects, because that is the only thing it
+    # has standing to object about — and because a module agent that spoke for the programme
+    # would agree with everybody, which is exactly how cross-module collisions survive.
+    reads = undeclared_readers(records)
+    for module in sorted({c["owner"] for c in registry(records).values()}):
+        mod = _agent(kernel, module_agent(module), actor)
+        log = []
+        mine = [r for r in reads if r["owner"] == module]
+        for finding in mine:
+            bus.send(Message(frm=mod.manifest.name, to="engagement", kind="OBJECTION",
+                             body={"key": finding["reads"], "about": finding["reads"],
+                                   "finding": f"{finding['module']} reads this and is not "
+                                              f"registered against it",
+                                   "grounds": "unsafe",
+                                   "consequence": "I will change an object I own without knowing "
+                                                  "who breaks, and they will find out in "
+                                                  "production",
+                                   "recommendation": f"register {finding['module']} as a consumer "
+                                                     f"of this object, or remove the dependency"}))
+            log.append(f"objected: {finding['says']}")
+        if not mine:
+            log.append(f"every declared read of {module}'s objects is registered")
+        crew.append(_card(mod, log))
 
     # --- economist: price what is left, and say what was not priced ---------------------------
     eco = _agent(kernel, economist(), actor)

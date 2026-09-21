@@ -427,3 +427,58 @@ def test_a_predicted_acceptance_says_nothing():
 
 def test_a_run_without_a_twin_is_unchanged():
     assert run(kernel())["twin"] is None
+
+
+# --- module agents: one process per module the design declares (ADR-0035) ----------------------
+
+def _contracted(owner, consumers=(), depends=(), code="c4", object_="CustomString"):
+    """A real IRRecord, through the real loader: a stub with a contract attribute would prove the
+    crew reads an attribute, not that a contract survives validation."""
+    from jidoka_core.ir import validate_record
+
+    return validate_record(_raw(owner, consumers, depends, code, object_))[0]
+
+
+def _raw(owner, consumers, depends, code, object_):
+    return {"object": object_, "product": "SuccessFactors", "system_binding": "SYS",
+            "intent": {"externalCode": code}, "tier": "A", "external_code": code,
+            "depends_on": list(depends),
+            "source": {"workbook": "w.xlsx", "signed_by": "T. Mabaso", "date": "2026-09-01"},
+            "contract": {"owner": owner, "consumers": list(consumers)}}
+
+
+def test_there_is_one_module_agent_per_module_the_design_declares():
+    """Not a hardcoded list: a second statement of which modules exist would be stale the day a
+    programme added one, and the alignment argument rests on there being one graph."""
+    out = run(kernel(), records=[_contracted("EC"),
+                                 _contracted("Time Off", code="ta1",
+                                             object_="TimeAccountType")])
+    names = {c["name"] for c in out["crew"]}
+    assert "module:EC" in names and "module:Time Off" in names
+
+
+def test_a_module_agent_objects_only_about_its_own_objects():
+    """A module agent that spoke for the programme would agree with everybody, which is exactly
+    how cross-module collisions survive."""
+    out = run(kernel(), records=[_contracted("EC"),
+                                 _contracted("Time Off", code="ta1",
+                                             object_="TimeAccountType",
+                                             depends=["CustomString:c4"])])
+    ec = next(c for c in out["crew"] if c["name"] == "module:EC")
+    to = next(c for c in out["crew"] if c["name"] == "module:Time Off")
+    assert any("objected" in d for d in ec["did"]), "EC owns the object being read"
+    assert all("objected" not in d for d in to["did"]), "Time Off owns nothing being read"
+
+
+def test_a_module_agent_is_ring_two_and_can_never_approve():
+    out = run(kernel(), records=[_contracted("EC")])
+    ec = next(c for c in out["crew"] if c["name"] == "module:EC")
+    assert ec["ring"] == "AGENT"
+    assert "approve" not in ec["capabilities"] and "resolve_dp" not in ec["capabilities"]
+
+
+def test_an_engagement_with_no_contracts_spawns_no_module_agents():
+    """Standard configuration needs no contract, and a module agent for a module nobody declared
+    would be the platform inventing an org chart."""
+    out = run(kernel())
+    assert not any(c["name"].startswith("module:") for c in out["crew"])
