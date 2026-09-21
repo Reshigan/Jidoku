@@ -10,6 +10,7 @@ unspent budget stays unspent.
 """
 from fastapi import APIRouter, Depends, HTTPException
 from jidoka_core.controls import run_all
+from jidoka_core.objections import due
 from jidoka_core.twin import fidelity
 from jidoka_os.handover import (CADENCE_ACTION, DEFAULT_CADENCE_HOURS, FAILED_ACTION,
                                 Finding, Night, cadence, clock, compose,
@@ -75,6 +76,17 @@ def _findings(e, verification: dict, controls: dict) -> list[Finding]:
             out.append(Finding("arming_lapsed", f"the arming of {system_id} has lapsed",
                                target.armed_by, "work against it is back to rehearsal",
                                needs="arm"))
+
+    # The loop closing is what makes the next objection worth hearing (M6, ADR-0033). The night
+    # is where it closes: an objection somebody set aside, at the phase where the thing it
+    # predicted becomes observable, with what the chain says actually happened.
+    for o in due(e.ledger.entries, e.phase):
+        out.append(Finding("objection_due",
+                           f"{o['objection_id']} is due a revisit: {o['finding']} on {o['about']}",
+                           o["overridden_by"],
+                           f"set aside by {o['overridden_by']} — {o['override_reason']}. It said: "
+                           f"{o['consequence']}",
+                           needs="approve"))
 
     for miss in fidelity(e.ledger.entries)["misses"]:
         out.append(Finding("twin_miss",

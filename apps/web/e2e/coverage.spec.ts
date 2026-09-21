@@ -261,6 +261,15 @@ test("the console reaches every endpoint the API publishes", async ({ page, requ
   await page.locator(".doc-tab").nth(1).click();
   await dismissScrim(page);
 
+  // The platform's own position: overriding one takes a name, and the revisit closes the loop.
+  // Both are reachable only where the crew has actually objected, which the run above ensures.
+  await page.getByRole("tab", { name: /^Decisions/ }).click();
+  await page.getByRole("button", { name: "Override" }).first().click();
+  await page.getByLabel("Overridden by").fill("T. Mabaso");
+  await page.getByLabel("Because").fill("the vendor confirmed it in writing");
+  await page.getByRole("button", { name: "Record the override" }).click();
+  await dismissScrim(page);
+
   // The night's cadence: a statement about this programme, and what the clock measures against.
   await page.getByRole("tab", { name: /^Crew/ }).click();
   await page.getByRole("button", { name: "Set the cadence" }).click();
@@ -276,6 +285,20 @@ test("the console reaches every endpoint the API publishes", async ({ page, requ
   await page.getByRole("tab", { name: /^Ledger/ }).click();
   await page.getByRole("tab", { name: /^Evidence/ }).click();
   await expect(page.getByText(/The chain verifies|The chain breaks/)).toBeVisible();
+
+  // Last, because it is one-way: an objection is revisited at the phase where what it predicted
+  // becomes observable, and that is HYPERCARE. Nothing is due before then — a revisit early is a
+  // platform asking to be told it was right — so the walk has to actually get there.
+  await page.getByRole("tab", { name: /^Line/ }).click();
+  for (let i = 0; i < 4; i += 1) {
+    const advance = page.getByRole("button", { name: /^Advance to/ }).first();
+    if (!(await advance.count())) break;
+    await advance.click();
+    await dismissScrim(page);
+  }
+  await page.getByRole("tab", { name: /^Decisions/ }).click();
+  await page.getByRole("button", { name: "Revisit" }).first().click();
+  await dismissScrim(page);
 
   const missing = [...published].filter((e) => !seen.has(e) && !OUT_OF_BAND.has(e)).sort();
   expect(missing, `endpoints with no path through the console:\n${missing.join("\n")}`).toEqual([]);
@@ -313,6 +336,8 @@ function templated(p: string): string {
     .replace(/^\/engagements\/[^/]+\/decisions\/[^/]+\/resolve$/, "/engagements/{eid}/decisions/{dp_id}/resolve")
     .replace(/^\/engagements\/[^/]+\/execution\/arm\/[^/]+$/, "/engagements/{eid}/execution/arm/{system_id}")
     .replace(/^\/engagements\/[^/]+\/documents\/[^/]+$/, "/engagements/{eid}/documents/{document}")
+    .replace(/^\/engagements\/[^/]+\/objections\/[^/]+\/(override|revisit)$/,
+             (_m, act) => `/engagements/{eid}/objections/{oid}/${act}`)
     .replace(/^\/engagements\/[^/]+\/memory\/[^/]+\/(recheck|correct|promote)$/,
              (_m, act) => `/engagements/{eid}/memory/{claim_id}/${act}`)
     .replace(/^\/engagements\/[^/]+(\/.*)?$/, (_m, rest) => `/engagements/{eid}${rest ?? ""}`)

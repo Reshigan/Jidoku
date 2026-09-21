@@ -25,10 +25,13 @@ from jidoka_os.economy import MessageBus
 from jidoka_os.process import Supervisor
 from jidoka_os.syscalls import Kernel
 
+from jidoka_core.objections import Objection, ObjectionError
+
 from ..auth import Identity, require
 from .engagements import get_or_404
 from .execution import (_adapter_for, _executor, _record_or_404, advance_step, execute_step,
                         rollback_step, snapshot_step)
+from .objections import raise_once, withdraw_what_no_longer_holds
 from .twin import run_twin
 from .verification import run_verification
 
@@ -147,6 +150,28 @@ def start(eid: str, identity: Identity = Depends(require("execute"))):
     except (RegistryError, WriteLockViolation) as err:
         # The landscape refusing is a finding about the engagement, not a server fault.
         raise HTTPException(409, str(err))
+
+    # The auditor objects from a ring that cannot write, so the engagement writes down what the
+    # ring said (ADR-0033). Stated once: an objection already open is not restated at the reader,
+    # only on the chain. Nothing here blocks — an objection is the platform disagreeing with a
+    # decision it has no standing to prevent, and dressing that as a gate would be it voting.
+    still_found = set()
+    for msg in report["objections"]:
+        body = msg.get("body", {})
+        if not body.get("consequence"):
+            continue                         # a finding with no consequence is a complaint
+        try:
+            out = raise_once(e, Objection(about=body["about"], finding=body["finding"],
+                                          grounds=body["grounds"], consequence=body["consequence"],
+                                          recommendation=body["recommendation"]),
+                             f"jidoka.{msg.get('from', 'auditor')}")
+        except ObjectionError:
+            continue                         # malformed objections are the objector's bug, not a 500
+        still_found.add(out["objection_id"])
+
+    # The objector re-states everything it still finds, so anything left open that it did not
+    # restate no longer holds. The platform concedes on its own evidence rather than on a button.
+    report["objections_withdrawn"] = withdraw_what_no_longer_holds(e, still_found, identity.subject)
 
     e.ledger.append("RUN", "CREW_RUN", identity.subject,
                     f"{len(report['steps'])} step(s) rehearsed, "

@@ -177,6 +177,16 @@ export type PortfolioRow = {
   urgency: number;
 };
 
+/** The platform's stated position on something it cannot prevent (M6). Not a gate. */
+export type ObjectionRow = {
+  objection_id: string; about: string; finding: string; grounds: string;
+  consequence: string; recommendation: string; revisit_at: string;
+  status: "open" | "overridden" | "withdrawn" | "revisited";
+  raised_at: string; raised_by: string; restated: number;
+  overridden_by: string; override_reason: string; overridden_at: string;
+  revisited_at: string; what_happened?: string;
+};
+
 export type Blast = {
   population: number;
   affected: number;
@@ -824,6 +834,18 @@ const api3 = {
     call<Accountability>(`/engagements/${eid}/accountability`),
   /** Every engagement at once, worst first. */
   portfolio: () => call<Portfolio>("/portfolio"),
+  objections: (eid: string) =>
+    call<{ objections: ObjectionRow[]; open: ObjectionRow[]; due_for_revisit: ObjectionRow[];
+           phase: string; grounds: string[] }>(`/engagements/${eid}/objections`),
+  /** Setting the platform's position aside takes a name and a reason — never a role. */
+  overrideObjection: (eid: string, oid: string, decided_by: string, reason: string) =>
+    call<{ objection_id: string; status: string; decided_by: string }>(
+      `/engagements/${eid}/objections/${oid}/override`,
+      { method: "POST", body: JSON.stringify({ decided_by, reason }) }),
+  /** The loop closing: what the chain says happened, never a verdict on who was right. */
+  revisitObjection: (eid: string, oid: string) =>
+    call<{ objection_id: string; says: string; objection_said: string; overridden_by: string }>(
+      `/engagements/${eid}/objections/${oid}/revisit`, { method: "POST" }),
 };
 
 /** One client surface. Typed by construction, so a missing endpoint is a compile error. */

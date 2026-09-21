@@ -34,6 +34,7 @@ COST_OF_SILENCE = {
     "arming_lapsed": 30,        # work stopped because an approval window closed
     "awaiting_person": 20,      # somebody's manual step is outstanding
     "unconfirmable": 15,        # nothing can check it and nobody has attested
+    "objection_due": 25,        # the platform said this would happen; it is time to look
     "twin_miss": 10,            # the twin was wrong; worth knowing, worth nobody's night
 }
 

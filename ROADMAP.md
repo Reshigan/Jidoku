@@ -77,7 +77,11 @@ for weeks after they were built, until somebody checked.
       (`jidoka_core.accountability`, `routers/accountability.py`, the Evidence screen — ADR-0031)
 - [x] Portfolio: every engagement at once, worst first, each number the same projection its own
       screen shows (`routers/portfolio.py`, the Portfolio screen — ADR-0032)
-- [ ] Objection records with scheduled revisit triggers
+- [x] Objection records with revisit triggers: stated once by identity, consequence and
+      recommendation required, grounds a closed set, overridden only by a named person holding
+      `approve`, revisited at the phase where the consequence lands — and the revisit reports what
+      the chain says, never who was right (`jidoka_core.objections`, `routers/objections.py`, the
+      night shift's `objection_due`, the Decisions screen — ADR-0033)
 ## E13 Insight & team (built: jidoka-insight; docs/JIDOKA_PROJECT_TEAM_AND_ALIGNMENT.md)
 - [x] Archaeology reverse-IR (unsigned by construction) · time-travel as_of · person-level blast radius · debt index
 - [x] Insight reachable end to end: API (`routers/insight.py`), Insight console view, `archaeology-backlog` document;

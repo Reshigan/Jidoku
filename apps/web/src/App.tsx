@@ -18,6 +18,7 @@ import { DocumentsView } from "./views_document";
 import { CrewView } from "./views_crew";
 import { AccountabilityPanel, PortfolioView } from "./views_account";
 import { InsightView } from "./views_insight";
+import { ObjectionsPanel } from "./views_objections";
 import { VerifyView } from "./views_verify";
 import { DP_KINDS, SYSTEM_ROLES, kindWords, roleLabel } from "./viewkit";
 import "./app.css";
@@ -452,9 +453,17 @@ export default function App() {
                             onChanged={after} />
               )}
               {view === "Decisions" && (
-                <DecisionsView dps={d.dps} irGaps={d.irGaps} writable={writable}
-                               onRaise={() => setDialog({ kind: "raiseDp" })}
-                               onResolve={(dp) => setDialog({ kind: "resolveDp", dp })} />
+                <>
+                  <DecisionsView dps={d.dps} irGaps={d.irGaps} writable={writable}
+                                 onRaise={() => setDialog({ kind: "raiseDp" })}
+                                 onResolve={(dp) => setDialog({ kind: "resolveDp", dp })} />
+                  {/* Beside the decisions, because this is the screen where a person answers the
+                      platform — but a rank below them: a decision point blocks a plan and an
+                      objection blocks nothing, and putting them at the same weight would be the
+                      platform overstating its own standing. */}
+                  <ObjectionsPanel eid={eid} canOverride={can("approve") && !offline && !stopped}
+                                   onRefusal={(title, text) => setRefusal({ title, text })} />
+                </>
               )}
               {view === "Intent" && (
                 <IntentView records={d.records} gaps={d.irGaps} schemaVersion={d.schemaVersion}

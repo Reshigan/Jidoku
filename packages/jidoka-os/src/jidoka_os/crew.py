@@ -288,28 +288,51 @@ def run(kernel, *, records, open_dp_ids, actor: str, bus: MessageBus | None = No
 
     verdict = _verdicts(entries)
 
-    def object_to(kind: str, body: dict, text: str):
-        bus.send(Message(frm=aud.manifest.name, to="engagement", kind=kind, body=body))
+    def object_to(key: str, finding: str, grounds: str, consequence: str, recommendation: str,
+                  text: str):
+        """A finding, the consequence, and what to do instead — never a finding alone.
+
+        M6: a finding with neither is a complaint, and a consequence invented later to justify an
+        objection is not a prediction. The message still goes on the bus and nothing here writes
+        it down: this ring cannot write, and the engagement records what the ring said.
+        """
+        bus.send(Message(frm=aud.manifest.name, to="engagement", kind="OBJECTION",
+                         body={"key": key, "about": key, "finding": finding, "grounds": grounds,
+                               "consequence": consequence, "recommendation": recommendation}))
         log.append(text)
 
     for rec in records:
         last = verdict.get(rec.key)
         if last is None:
-            object_to("OBJECTION", {"key": rec.key, "finding": "never verified"},
+            object_to(rec.key, "never verified", "unevidenced",
+                      "it goes live on the strength of the write having returned 200, and the "
+                      "first thing to read it back will be a user",
+                      "verify it against the system it binds to before the phase advances",
                       f"{rec.key} has signed intent and no verification on the chain")
         elif last == "ATTESTED":
-            object_to("OBJECTION", {"key": rec.key, "finding": "rests on an attestation, not a check"},
+            object_to(rec.key, "rests on an attestation, not a check", "unevidenced",
+                      "if the person is mistaken nobody finds out until the configuration is "
+                      "exercised in production",
+                      "build a read path for this object, or accept it as a person's word in "
+                      "writing and say so in the assurance statement",
                       f"{rec.key} is held true on a person's word; nothing has read the system")
         elif last == "UNCONFIRMABLE":
-            object_to("OBJECTION",
-                      {"key": rec.key, "finding": "cannot be checked, and nobody has attested"},
+            object_to(rec.key, "cannot be checked, and nobody has attested", "unevidenced",
+                      "there is no evidence of any kind that this was done",
+                      "get a named person to attest to it, or drop the claim that it is done",
                       f"{rec.key} has no read path and no attestation — it is unevidenced")
         if not (rec.source or {}).get("cell_range"):
-            object_to("OBJECTION", {"key": rec.key, "finding": "provenance without a location"},
+            object_to(rec.key, "provenance without a location", "unevidenced",
+                      "when somebody asks why this value, the answer is the name of a workbook "
+                      "and a search",
+                      "record the cell range on the record's source when the workbook is compiled",
                       f"{rec.key} names a workbook but not where in it")
     for step in steps:
         if step.get("status") == "DRY_RUN" and step["key"] not in snapshotted:
-            object_to("OBJECTION", {"key": step["key"], "finding": "rehearsed without a snapshot"},
+            object_to(step["key"], "rehearsed without a snapshot", "unsafe",
+                      "if this is armed and the write half-lands, there is no before-state to "
+                      "put it back to",
+                      "take a snapshot before arming this step",
                       f"{step['key']} was rehearsed with no before-state on the chain")
 
     # The strongest thing an auditor can do here, and the only thing it can do at all besides
