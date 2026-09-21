@@ -123,7 +123,15 @@ export function CrewView(props: {
           </p>
         ) : (
           <>
-            <div className="verbatim calm" style={{ whiteSpace: "pre-wrap" }}>{night.handover}</div>
+            {/* The handover is markdown because it is meant to travel — into an email, a channel,
+                the ledger. On screen an operator should read it, not its syntax, so the only
+                markup it uses is rendered rather than shown. */}
+            <div className="verbatim calm" style={{ whiteSpace: "pre-wrap" }}>
+              {night.handover.split(/(\*\*[^*]+\*\*)/).map((part, i) =>
+                part.startsWith("**") && part.endsWith("**")
+                  ? <strong key={i}>{part.slice(2, -2)}</strong>
+                  : <span key={i}>{part}</span>)}
+            </div>
             {night.interrupted.length > 0 && (
               <p className="mut" style={{ marginTop: 12, fontSize: 12.5 }}>
                 Woken for:{" "}
