@@ -104,6 +104,13 @@ of it.
     average, and one sentence per row saying what needs a person rather than a colour they have to
     decode. ADR-0032.
 
+12. **Two implementations of the chain, one spec.** The Durable Object port of the ledger and the
+    Python kernel are both held to the same fixture — the same operations, the same hashes, the
+    same refusal messages, byte for byte — and CI runs both. The drift this prevents is not
+    somebody weakening a rule; it is `JSON.stringify` putting no space after a comma where
+    `json.dumps` does, producing a chain that verifies against itself and fails against every
+    chain the kernel ever wrote. ADR-0037.
+
 ## Claims we cannot yet make
 
 - **"Proven on real engagements."** Zero production engagements have run on this platform. The
@@ -128,7 +135,10 @@ of it.
 - **"We measure harm avoided."** A change that was never made because the platform blocked it
   cannot be compared against the world where it was made. Any number claiming otherwise is
   invented, and none is published.
-- **"World first" as a totality.** The eleven claims above are shapes we believe are new. The only
+- **"The kernel runs at the edge."** The ledger does, and is proven to. The registry's write-lock,
+  the executor's arming and snapshot gates and the decision engine's STATUTORY and ONE_WAY rules
+  are not ported, and `wrangler.phase2.toml` is not deployed.
+- **"World first" as a totality.** The twelve claims above are shapes we believe are new. The only
   honest form of the headline is: *the first SAP configuration platform we know of where drift,
   documents, tests and number ranges are all projections of one signed, hash-chained record — and
   where the machine can never approve its own work.*

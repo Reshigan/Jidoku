@@ -42,7 +42,11 @@ for weeks after they were built, until somebody checked.
       ADR-0009). BC Set generation and TMS release hooks are not.
 - [ ] BTP adapter via Terraform provider
 ## E9 Deployment & SaaS
-- [ ] EngagementLedger Durable Object (TS port of ledger semantics + Access-identity SoD)
+- [x] EngagementLedger Durable Object: the chain in plain JS (`deploy/cloudflare/src/chain.mjs`),
+      one DO per engagement so appends cannot race for the same prev hash, identity from the Access
+      header and never the body — held byte-for-byte to the kernel's own conformance fixture by
+      `src/ledger.check.mjs`, which CI runs beside the Python suite held to the same file
+      (ADR-0037). Not deployed: the registry, executor and decision gates are not ported.
 - [ ] Org onboarding worker: D1-per-tenant, R2 prefix, envelope keys, AI Gateway budgets
 - [ ] Edge Connector: adapter runtime + tunnel client; ro-binding compiled without write capability
 - [ ] Terraform for Access/R2/Queues/DO; GH Actions -> GHCR -> wrangler

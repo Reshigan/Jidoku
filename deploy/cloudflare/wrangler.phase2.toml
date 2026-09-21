@@ -1,9 +1,16 @@
 # Phase 2 — Workers-native kernel. NOT DEPLOYED YET; kept so the target shape stays visible.
 #
 # Promoting this is gated on one thing, from deploy/cloudflare/README.md: "every gate that exists
-# in jidoka-core must exist identically here before any tenant goes live." That means the DO port
-# of ledger.py (append / approve / verify_chain) reproducing invariant 4's hash chain and the
-# reviewer != builder + prior-snapshot rule, with tests, before a single tenant is pointed at it.
+# in jidoka-core must exist identically here before any tenant goes live."
+#
+# The ledger half of that gate is now met and checkable: src/chain.mjs is the DO's chain, and
+# src/ledger.check.mjs holds it to packages/jidoka-core/tests/fixtures/ledger_conformance.json —
+# the same operations, the same hashes, the same refusal messages, byte for byte — beside the
+# Python suite held to the same file. CI runs both (ADR-0037).
+#
+# What is still missing before a tenant: the registry's write-lock, the executor's arming and
+# snapshot gates, the decision engine's STATUTORY and ONE_WAY rules. None of them is ported, and
+# the ledger being done is not the same as the kernel being done.
 name = "jidoka-kernel"
 main = "src/kernel.ts"
 compatibility_date = "2026-08-01"
