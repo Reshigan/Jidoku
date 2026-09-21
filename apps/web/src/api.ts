@@ -187,6 +187,14 @@ export type ObjectionRow = {
   revisited_at: string; what_happened?: string;
 };
 
+/** One writer, declared readers: the cross-module contract a built object carries. */
+export type Contracts = {
+  contracts: { key: string; owner: string; consumers: string[]; feeds: string[]; statutory: string }[];
+  conflicts: { key: string; says: string }[];
+  undeclared_readers: { reader: string; reads: string; module: string; owner: string; says: string }[];
+  rule: string;
+};
+
 export type Blast = {
   population: number;
   affected: number;
@@ -834,6 +842,7 @@ const api3 = {
     call<Accountability>(`/engagements/${eid}/accountability`),
   /** Every engagement at once, worst first. */
   portfolio: () => call<Portfolio>("/portfolio"),
+  contracts: (eid: string) => call<Contracts>(`/engagements/${eid}/contracts`),
   objections: (eid: string) =>
     call<{ objections: ObjectionRow[]; open: ObjectionRow[]; due_for_revisit: ObjectionRow[];
            phase: string; grounds: string[] }>(`/engagements/${eid}/objections`),

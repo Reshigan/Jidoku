@@ -18,6 +18,7 @@ import { DocumentsView } from "./views_document";
 import { CrewView } from "./views_crew";
 import { AccountabilityPanel, PortfolioView } from "./views_account";
 import { InsightView } from "./views_insight";
+import { ContractsPanel } from "./views_contracts";
 import { ObjectionsPanel } from "./views_objections";
 import { VerifyView } from "./views_verify";
 import { DP_KINDS, SYSTEM_ROLES, kindWords, roleLabel } from "./viewkit";
@@ -466,8 +467,14 @@ export default function App() {
                 </>
               )}
               {view === "Intent" && (
-                <IntentView records={d.records} gaps={d.irGaps} schemaVersion={d.schemaVersion}
-                            writable={writable} onLoad={() => setDialog({ kind: "loadIr" })} />
+                <>
+                  <IntentView records={d.records} gaps={d.irGaps} schemaVersion={d.schemaVersion}
+                              writable={writable} onLoad={() => setDialog({ kind: "loadIr" })} />
+                  {/* Beside the intent, because a contract is part of the record rather than a
+                      thing about it: the registry cannot disagree with the design it describes. */}
+                  <ContractsPanel eid={eid}
+                                  onRefusal={(title, text) => setRefusal({ title, text })} />
+                </>
               )}
               {view === "Insight" && (
                 <InsightView eid={eid} landscape={d.landscape}

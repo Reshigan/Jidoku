@@ -86,5 +86,9 @@ for weeks after they were built, until somebody checked.
 - [x] Archaeology reverse-IR (unsigned by construction) · time-travel as_of · person-level blast radius · debt index
 - [x] Insight reachable end to end: API (`routers/insight.py`), Insight console view, `archaeology-backlog` document;
       signing a recovered draft makes it ordinary IR the planner, documents and verification already handle (ADR-0017)
-- [ ] Cross-module contract registry in IR schema (owner module, declared readers)
+- [x] Cross-module contract registry in the IR schema: single owner module, registered consumers,
+      what it feeds, statutory linkage. Two writers block the plan through the same gate an open
+      decision point uses; an undeclared reader is a finding that names the owner; standard
+      configuration needs no contract (`jidoka_core.contracts`, `routers/contracts.py`, the Intent
+      screen — ADR-0034)
 - [ ] Module agent manifests (RCM/ONB/PMGM/TO) + PMO/migration agent manifests in economy.py

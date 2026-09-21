@@ -1,10 +1,20 @@
 """Run-planner: topological sort of the IR dependency graph, tier split, DP hard-block.
 The plan is derived from the work — cycles and open decisions stop the plan, loudly."""
+from .contracts import conflicts as write_conflicts
 from .ir import IRRecord
 
 class PlanError(Exception): ...
 
 def plan(records: list[IRRecord], open_dps: dict[str, list[str]]) -> dict:
+    # One writer, declared readers. Two modules claiming to write the same object is a design
+    # decision nobody has made, and it blocks for the same reason an open decision point does:
+    # JIDOKA refuses to answer it by picking one. Checked before the decision points so the
+    # message names the rule rather than arriving as a mysterious ordering problem later.
+    clash = write_conflicts(records)
+    if clash:
+        lines = [f"  {k}: {v[0]}" for k, v in sorted(clash.items())]
+        raise PlanError("PLAN BLOCKED — two modules claim to write the same object:\n"
+                        + "\n".join(lines))
     if open_dps:
         lines = [f"  {k}: {', '.join(v)}" for k, v in open_dps.items()]
         raise PlanError("PLAN BLOCKED — open Decision Points (JIDOKA will not invent values):\n" + "\n".join(lines))
