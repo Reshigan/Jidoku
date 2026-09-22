@@ -18,7 +18,10 @@ const IR = [{
               statutory: "MIBCO main agreement" },
 }];
 
-async function open(page: Page, who: string) {
+/* These run against one API process and one store, alongside every other spec. Returning the
+   engagement id — rather than reading whatever the selector happens to hold later — is what keeps
+   a test from loading its intent into somebody else's engagement when two workers overlap. */
+async function open(page: Page, who: string): Promise<string> {
   await page.goto("/");
   await page.getByLabel("Name").fill(who);
   for (const r of ROLES) {
@@ -29,14 +32,18 @@ async function open(page: Page, who: string) {
   await expect(page.locator(".topbar")).toContainText(who);
   await page.getByRole("button", { name: "New engagement" }).click();
   await page.getByLabel("Client").fill("Komatsu");
-  await page.getByLabel("Name").last().fill(`Panels ${Date.now()}`);
+  const name = `Panels ${who} ${Date.now()}`;
+  await page.getByLabel("Name").last().fill(name);
   await page.getByRole("button", { name: "Open it" }).click();
   await expect(page.locator(".scrim")).toHaveCount(0);
+  // Opening selects it. Assert that before reading the id, so an overlapping worker moving the
+  // selection fails here rather than quietly redirecting the rest of the test.
+  await expect(page.locator(".head h1")).toHaveText(name);
+  return page.getByLabel("Engagement").inputValue();
 }
 
 test("the type-check prints the statute, the signer and the date it was refused on", async ({ page, request }) => {
-  await open(page, "panel.tester");
-  const eid = await page.getByLabel("Engagement").inputValue();
+  const eid = await open(page, "panel.tester");
   expect((await request.post(`/engagements/${eid}/ir`, { data: IR })).ok()).toBeTruthy();
 
   await page.getByRole("tab", { name: /^Intent/ }).click();
@@ -49,8 +56,7 @@ test("the type-check prints the statute, the signer and the date it was refused 
 });
 
 test("the contract registry names the owner and everyone registered to read it", async ({ page, request }) => {
-  await open(page, "contract.tester");
-  const eid = await page.getByLabel("Engagement").inputValue();
+  const eid = await open(page, "contract.tester");
   await request.post(`/engagements/${eid}/ir`, { data: IR });
 
   await page.getByRole("tab", { name: /^Intent/ }).click();

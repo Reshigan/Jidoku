@@ -268,6 +268,12 @@ test("the console reaches every endpoint the API publishes", async ({ page, requ
   await page.locator(".doc-tab").nth(1).click();
   await dismissScrim(page);
 
+  // The delta pool: a number somebody agreed to, recorded where the contracts it counts are.
+  await page.getByRole("tab", { name: /^Intent/ }).click();
+  await page.getByLabel("Customisations agreed").fill("30");
+  await page.getByRole("button", { name: "Record the pool" }).click();
+  await dismissScrim(page);
+
   // The platform's own position: overriding one takes a name, and the revisit closes the loop.
   // Both are reachable only where the crew has actually objected, which the run above ensures.
   await page.getByRole("tab", { name: /^Decisions/ }).click();

@@ -28,6 +28,14 @@ never passed through any other channel:
 Until `KERNEL_URL` is set the console deploys and serves, and every API call returns a 503 saying
 the kernel is unreachable — deliberately, rather than a blank screen.
 
+### Where the night's interruptions go
+`JIDOKA_NOTIFY_URL` is the webhook the night shift posts an interruption to — Slack, Teams,
+Opsgenie, or anything that accepts a POST. Unset, the night still works and still writes its
+handover; it says plainly that the interruptions had nowhere to go and nobody was told, rather
+than letting "I woke somebody twice" imply otherwise. The URL is a credential in every practical
+sense: set it as a secret, never in a file, and note that only what the interruption budget spent
+is ever sent (ADR-0040).
+
 ### The one secret CI cannot set
 `NIGHT_TOKEN` is a **Worker** secret, not a repository secret, because nothing in the pipeline
 should be able to mint the token the night shift calls the kernel with. Set it once, by hand:

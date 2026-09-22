@@ -94,6 +94,18 @@ for weeks after they were built, until somebody checked.
       `approve`, revisited at the phase where the consequence lands — and the revisit reports what
       the chain says, never who was right (`jidoka_core.objections`, `routers/objections.py`, the
       night shift's `objection_due`, the Decisions screen — ADR-0033)
+## E15 Design lifecycle, reach and commercial gates
+- [x] A new design supersedes the old one: the diff on the chain, and a record the new version
+      dropped that a customer's system still holds becomes an orphan — drift's treatment, two
+      exits, planning halted (`jidoka_core.supersede` — ADR-0039)
+- [x] The night's interruptions reach somebody: one webhook sink, only what the budget spent, a
+      minimal payload, every attempt on the chain, and a failure that never costs the night its
+      work (`jidoka_api.notify` — ADR-0040)
+- [x] The delta pool can be exhausted: a customisation is an object with a contract, counted from
+      the design, and going over is a COMMERCIAL decision that halts the plan
+      (`jidoka_core.delta` — ADR-0041)
+- [ ] Regression grammar: a customisation becomes a test dimension automatically (§3 step 5)
+- [ ] Release-readiness: re-validate every contract when SAP ships a release (§3 step 6)
 ## E13 Insight & team (built: jidoka-insight; docs/JIDOKA_PROJECT_TEAM_AND_ALIGNMENT.md)
 - [x] Archaeology reverse-IR (unsigned by construction) · time-travel as_of · person-level blast radius · debt index
 - [x] Insight reachable end to end: API (`routers/insight.py`), Insight console view, `archaeology-backlog` document;

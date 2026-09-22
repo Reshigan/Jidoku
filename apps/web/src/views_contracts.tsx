@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { ApiError, Contracts, TypeCheck, platform } from "./api";
-import { Empty, Section, useStillHere } from "./ui";
+import { Empty, Field, Section, useStillHere } from "./ui";
 
 /* C1: the rule travels with the value. Every message below is the platform's own — a rejection
    that needed rewording before it could go in a report would be reworded by hand, once, and then
@@ -57,10 +57,12 @@ export function TypesPanel(props: {
 
 export function ContractsPanel(props: {
   eid: string | null;
+  canSetPool: boolean;          // approve — the number is somebody's agreement, not the platform's
   onRefusal: (title: string, text: string) => void;
 }) {
   const { eid, onRefusal } = props;
   const [out, setOut] = useState<Contracts | null>(null);
+  const [pool, setPool] = useState("");
   const stillHere = useStillHere(eid);
 
   const load = useCallback(() => {
@@ -83,6 +85,30 @@ export function ContractsPanel(props: {
         : out.undeclared_readers.length ? `${out.undeclared_readers.length} undeclared reader(s)`
           : out.contracts.length ? `${out.contracts.length} contracted` : undefined}
     >
+      {/* The budget, above the list it is spent on. An empty pool is not a fault — it is a
+          number somebody agreed to, reached. */}
+      <p className={out.delta_pool.over ? "verbatim" : "mut"} style={{ marginBottom: 12 }}>
+        {out.delta_pool.says}
+      </p>
+
+      {props.canSetPool && (
+        <div className="row" style={{ gap: 12, alignItems: "flex-end", marginBottom: 14, flexWrap: "wrap" }}>
+          <Field label="Customisations agreed" value={pool} placeholder={String(out.delta_pool.of)}
+                 onChange={setPool} />
+          <button className="btn" disabled={!pool.trim()} onClick={() => void (async () => {
+            try {
+              await platform.setDeltaPool(eid, Number(pool) || 0);
+              setPool("");
+              load();
+            } catch (e) {
+              if (e instanceof ApiError) onRefusal("That pool was not recorded", e.detail);
+            }
+          })()}>
+            Record the pool
+          </button>
+        </div>
+      )}
+
       {out.conflicts.map((c) => (
         /* The platform's own words: a conflict is a refusal, and a refusal is quoted. */
         <p key={c.key} className="verbatim" style={{ marginBottom: 12 }}>{c.says}</p>

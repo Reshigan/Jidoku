@@ -202,6 +202,12 @@ export function CrewView(props: {
                     }).join(" · ")}.`}
               </p>
             )}
+            {/* "I woke somebody three times" is only true if something was sent. Where no sink
+                is configured the card says nobody was told, rather than letting the budget's
+                own words imply somebody was. */}
+            {night.notified && (night.notified.failed.length > 0 || !night.notified.configured) && (
+              <p className="verbatim" style={{ marginTop: 12 }}>{night.notified.says}</p>
+            )}
             {night.interrupted.length > 0 && (
               <p className="mut" style={{ marginTop: 12, fontSize: 12.5 }}>
                 Woken for:{" "}

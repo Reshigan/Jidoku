@@ -104,6 +104,8 @@ export type NightShift = {
   budget: { of: number; spent: number; held_back: number; threshold: number } | null;
   handover: string;
   cost_of_silence: Record<string, number>;
+  /** Whether the budget's interruptions reached anybody, or had nowhere to go. */
+  notified: Notified;
   /** Whether the clock that runs the nights is still running, read off the ledger rather than out
       of the API's memory. Nothing inside a night can report its own absence. */
   clock: NightClock;
@@ -193,6 +195,7 @@ export type Contracts = {
   conflicts: { key: string; says: string }[];
   undeclared_readers: { reader: string; reads: string; module: string; owner: string; says: string }[];
   rule: string;
+  delta_pool: DeltaPool;
 };
 
 /** C1: refinements that do not hold, and required fields that are empty. Absence and
@@ -206,6 +209,23 @@ export type TypeCheck = {
 };
 
 export type TypeFailure = { key: string; path: string; kind: string; authority: string; says: string };
+
+/** A fixed budget of customisations, debited from the design (ADR-0041). */
+export type DeltaPool = {
+  of: number; spent: number; remaining: number; over: number;
+  objects: string[]; says: string; method: string;
+};
+
+/** Where an interruption actually went (ADR-0040). */
+export type Notified = { configured: boolean; sent: string[]; failed: string[]; says: string };
+
+/** What a new version of the design did to the last one, and what it left live (ADR-0039). */
+export type Superseded = {
+  records: number;
+  superseded?: { added: string[]; removed: string[]; changed: string[]; unchanged: string[] };
+  orphaned?: { key: string; last: string; says: string }[];
+  delta_pool?: DeltaPool;
+};
 
 export type Blast = {
   population: number;
@@ -369,8 +389,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  /** Loading a new version supersedes the old one: what came back says what changed and what it
+      left live in a customer's system with nothing claiming it (ADR-0039). */
   uploadIR: (eid: string, records: unknown[]) =>
-    call<{ records: number; open_decision_points: Record<string, string[]> }>(
+    call<Superseded & { open_decision_points: Record<string, string[]> }>(
       `/engagements/${eid}/ir`,
       { method: "POST", body: JSON.stringify(records) },
     ),
@@ -856,6 +878,9 @@ const api3 = {
   portfolio: () => call<Portfolio>("/portfolio"),
   contracts: (eid: string) => call<Contracts>(`/engagements/${eid}/contracts`),
   types: (eid: string) => call<TypeCheck>(`/engagements/${eid}/types`),
+  /** The number of customisations somebody agreed to. A commercial fact, so it takes `approve`. */
+  setDeltaPool: (eid: string, size: number) =>
+    call<DeltaPool>(`/engagements/${eid}/contracts/pool?size=${size}`, { method: "POST" }),
   objections: (eid: string) =>
     call<{ objections: ObjectionRow[]; open: ObjectionRow[]; due_for_revisit: ObjectionRow[];
            phase: string; grounds: string[] }>(`/engagements/${eid}/objections`),

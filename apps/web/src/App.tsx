@@ -494,6 +494,7 @@ export default function App() {
                   </Boundary>
                   <Boundary where="Cross-module contracts">
                     <ContractsPanel eid={eid}
+                                    canSetPool={can("approve") && !offline && !stopped}
                                     onRefusal={(title, text) => setRefusal({ title, text })} />
                   </Boundary>
                 </>
@@ -832,7 +833,27 @@ function Dialogs(props: {
               try { parsed = JSON.parse(a); } catch (err) { setCheck(String(err)); return; }
               const ok = await guard("The intent was refused",
                 () => platform.uploadIR(eid, parsed as Record<string, unknown>[]));
-              if (ok) onDone();
+              if (!ok) return;
+              /* What this version did to the last one, said before the dialog closes. A record
+                 the new design dropped that is still live in a customer's system is the one
+                 thing nobody should have to go looking for. */
+              const sup = ok.superseded;
+              const lost = ok.orphaned ?? [];
+              if (lost.length) {
+                setCheck([
+                  `${lost.length} record(s) are live and this design no longer contains them. `
+                  + `Each one has raised a decision, and planning is blocked until somebody says `
+                  + `whether to sign it back in or take it out of the system:`,
+                  ...lost.map((o) => `  · ${o.says}`),
+                ].join("\n"));
+                return;                       // the dialog stays open: this is not a clean load
+              }
+              if (sup && (sup.added.length || sup.removed.length || sup.changed.length)) {
+                setCheck(`Superseded the previous design: ${sup.added.length} added, `
+                  + `${sup.removed.length} removed, ${sup.changed.length} changed, `
+                  + `${sup.unchanged.length} unchanged. Nothing was left live and unclaimed.`);
+              }
+              onDone();
             }}>Load it</button>
             <button className="btn ghost" onClick={props.onClose}>Cancel</button>
           </div>

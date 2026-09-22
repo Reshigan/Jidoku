@@ -28,6 +28,7 @@ from .scheduler import Scheduler, Shift
 COST_OF_SILENCE = {
     "chain_broken": 100,        # every statement on the ledger is unproven until this is answered
     "partial_write": 90,        # a customer's system is in a state nobody designed
+    "orphaned": 85,             # a live change the design no longer claims, and nobody is watching
     "control_failing": 70,      # a control that held yesterday does not hold today
     "statutory_open": 60,       # a value nobody may guess is blocking the plan
     "drift": 50,                # the live system disagrees with signed intent

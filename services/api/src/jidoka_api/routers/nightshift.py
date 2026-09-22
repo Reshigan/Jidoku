@@ -19,6 +19,7 @@ from jidoka_os.people import ASKED, asked_this_week, load as load_people, observ
     week_start
 
 from ..auth import Identity, require
+from ..notify import send_interruptions
 from .engagements import get_or_404
 from .execution import _ARMED
 from .verification import run_verification
@@ -53,6 +54,15 @@ def _findings(e, verification: dict, controls: dict) -> list[Finding]:
                            "whoever owns this control",
                            f"{len(result['violations'])} violation(s) over {result['tested']} tested",
                            needs="approve"))
+
+    # A record a later design dropped while a customer's system still holds it (ADR-0039). Its
+    # decision point already blocks planning; this is so nobody has to open the console to find out.
+    claimed = {x.get("task") for x in e.ledger.entries if x.get("action") == "DP_RESOLVED"}
+    for entry in e.ledger.entries:
+        if entry.get("action") == "ORPHANED" and f"DP-ORPHAN-{entry.get('task')}" not in claimed:
+            out.append(Finding("orphaned", f"{entry.get('task')} is live and unclaimed",
+                               "whoever signs this engagement's design",
+                               entry.get("detail", ""), needs="resolve_dp"))
 
     for dp in e.decisions.dps.values():
         if dp.resolution is None and dp.dp_type == "STATUTORY":
@@ -157,6 +167,8 @@ def _work(e, budget: int, identity: Identity) -> dict:
                     load=asked_this_week(e.ledger.entries),
                     latency=observed_latency(e.ledger.entries))
     _record_asks(e, out, people, identity.subject)
+    # The budget said wake somebody; this is where that becomes a thing that happened (ADR-0040).
+    out["notified"] = send_interruptions(e, out, identity.subject)
     out["handover"] = compose(out, e.name, e.client)
     e.ledger.append("NIGHTSHIFT", "HANDOVER", identity.subject,
                     f"{len(night.findings)} finding(s); woke somebody "

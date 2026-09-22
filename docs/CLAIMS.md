@@ -111,6 +111,12 @@ of it.
     `json.dumps` does, producing a chain that verifies against itself and fails against every
     chain the kernel ever wrote. ADR-0037.
 
+13. **A new design cannot silently strand a live change.** Loading intent supersedes rather than
+    replaces: the diff goes on the chain, and a record the new version dropped that a customer's
+    system is still holding becomes an orphan with a blocking decision and exactly two exits —
+    sign it back in, or take it out of the system. Verification and assurance both iterate the
+    current design, so before this the change stayed live and invisible. ADR-0039.
+
 ## Claims we cannot yet make
 
 - **"Proven on real engagements."** Zero production engagements have run on this platform. The
@@ -141,7 +147,10 @@ of it.
 - **"The kernel runs at the edge."** The ledger does, and is proven to. The registry's write-lock,
   the executor's arming and snapshot gates and the decision engine's STATUTORY and ONE_WAY rules
   are not ported, and `wrangler.phase2.toml` is not deployed.
-- **"World first" as a totality.** The twelve claims above are shapes we believe are new. The only
+- **"The night shift reaches people."** It posts to one webhook if one is configured, and says so
+  when none is. There is no escalation, no acknowledgement, no on-call rotation and no retry: an
+  interruption that is not read is not chased.
+- **"World first" as a totality.** The thirteen claims above are shapes we believe are new. The only
   honest form of the headline is: *the first SAP configuration platform we know of where drift,
   documents, tests and number ranges are all projections of one signed, hash-chained record — and
   where the machine can never approve its own work.*
