@@ -8,6 +8,7 @@ import {
   type MemoryView as Memory,
   type StepTransport, type IRRecordView, type Landscape, type LedgerEntry, type Plan,
 } from "./api";
+import { Boundary } from "./boundary";
 import { LINE_STOP, LINE_RESUME, buildLanes, lineStop, milestones, type Lane, type Station } from "./derive";
 import { AndonRail, Empty, Field, Modal, Skeleton, VIEWS, type ViewName } from "./ui";
 import {
@@ -132,7 +133,15 @@ export default function App() {
     }
   }, [guard]);
 
+  /* Which engagement the screen is actually asking about. A load is slow — seven calls and a plan
+     — and an operator switching engagements starts a second one before the first has landed. With
+     no guard the slower response wins, and the selector says one client while the ledger, the
+     plan and the decisions on screen belong to another. On a governance console that is not a
+     cosmetic race: it is the wrong client's evidence under the right client's name. */
+  const loading = useRef<string | null>(null);
+
   const load = useCallback(async (id: string) => {
+    loading.current = id;
     const soft = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
       try { return await fn(); } catch (e) {
         if ((e as ApiError).status === 0) setOffline(true);
@@ -171,6 +180,10 @@ export default function App() {
         if (err.status === 409) chainBroken = err.detail || err.message;
       }
     }
+
+    // Somebody has since asked for a different engagement. This answer is about the old one, and
+    // painting it now would be worse than painting nothing.
+    if (loading.current !== id) return;
 
     setD({
       detail, plan, planBlock, entries, chainBroken,
@@ -362,6 +375,7 @@ export default function App() {
                 </div>
               )}
 
+              <Boundary where={view} key={view}>
               {view === "Line" && (
                 <LineView detail={d.detail} lanes={lanes} plan={d.plan} planBlock={d.planBlock}
                           entries={d.entries} dps={d.dps ?? []} chainBroken={d.chainBroken}
@@ -462,8 +476,10 @@ export default function App() {
                       platform — but a rank below them: a decision point blocks a plan and an
                       objection blocks nothing, and putting them at the same weight would be the
                       platform overstating its own standing. */}
-                  <ObjectionsPanel eid={eid} canOverride={can("approve") && !offline && !stopped}
-                                   onRefusal={(title, text) => setRefusal({ title, text })} />
+                  <Boundary where="Objections">
+                    <ObjectionsPanel eid={eid} canOverride={can("approve") && !offline && !stopped}
+                                     onRefusal={(title, text) => setRefusal({ title, text })} />
+                  </Boundary>
                 </>
               )}
               {view === "Intent" && (
@@ -472,10 +488,14 @@ export default function App() {
                               writable={writable} onLoad={() => setDialog({ kind: "loadIr" })} />
                   {/* Beside the intent, because a contract is part of the record rather than a
                       thing about it: the registry cannot disagree with the design it describes. */}
-                  <TypesPanel eid={eid}
-                              onRefusal={(title, text) => setRefusal({ title, text })} />
-                  <ContractsPanel eid={eid}
-                                  onRefusal={(title, text) => setRefusal({ title, text })} />
+                  <Boundary where="The type-check">
+                    <TypesPanel eid={eid}
+                                onRefusal={(title, text) => setRefusal({ title, text })} />
+                  </Boundary>
+                  <Boundary where="Cross-module contracts">
+                    <ContractsPanel eid={eid}
+                                    onRefusal={(title, text) => setRefusal({ title, text })} />
+                  </Boundary>
                 </>
               )}
               {view === "Insight" && (
@@ -516,8 +536,10 @@ export default function App() {
                   {/* Beside the evidence, not on a screen of its own: somebody weighing what this
                       engagement can prove should meet the platform's own error record there,
                       rather than having to go looking for it. */}
-                  <AccountabilityPanel eid={eid}
-                                       onRefusal={(title, text) => setRefusal({ title, text })} />
+                  <Boundary where="What I got wrong">
+                    <AccountabilityPanel eid={eid}
+                                         onRefusal={(title, text) => setRefusal({ title, text })} />
+                  </Boundary>
                 </>
               )}
               {view === "Portfolio" && (
@@ -530,6 +552,7 @@ export default function App() {
                 <DocumentsView eid={eid}
                                onRefusal={(title, text) => setRefusal({ title, text })} />
               )}
+              </Boundary>
             </>
           )}
         </main>

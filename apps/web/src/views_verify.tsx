@@ -7,7 +7,7 @@
    allocations, where a collision is a refusal with a name in it. */
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, AssuranceView, NumberingSnapshot, TwinView, VerificationRun, platform } from "./api";
-import { Empty, Field, Pill, Section, Skeleton } from "./ui";
+import { Empty, Field, Pill, Section, Skeleton, useStillHere } from "./ui";
 
 const BASIS_WORDS: Record<string, string> = {
   checked: "read back from the live system by this platform",
@@ -42,26 +42,28 @@ export function VerifyView(props: {
   const [stamp, setStamp] = useState("");
   const [form, setForm] = useState({ range_id: "", object_type: "", prefix: "", start: "1", end: "9999" });
 
+  const stillHere = useStillHere(eid);
+
   /* The question an auditor actually asks, answered from the chain rather than from this run:
      a verification nobody has run yet still has a true answer, and it is "nothing is proven". */
   const refreshAssurance = useCallback(() => {
     if (!eid) return;
     platform.assurance(eid)
-      .then(setAssurance)
+      .then((a) => { if (stillHere(eid)) setAssurance(a); })
       .catch((e) => { if (e instanceof ApiError && !e.notAvailable) onRefusal("Assurance", e.detail); });
   }, [eid, onRefusal]);
 
   const refreshTwin = useCallback(() => {
     if (!eid) return;
     platform.twin(eid)
-      .then(setTwin)
+      .then((t) => { if (stillHere(eid)) setTwin(t); })
       .catch((e) => { if (e instanceof ApiError && !e.notAvailable) onRefusal("The twin", e.detail); });
   }, [eid, onRefusal]);
 
   const refreshNumbering = useCallback(() => {
     if (!eid) return;
     platform.numbering(eid)
-      .then(setNumbering)
+      .then((n) => { if (stillHere(eid)) setNumbering(n); })
       .catch((e) => { if (e instanceof ApiError && !e.notAvailable) onRefusal("Number ranges", e.detail); });
   }, [eid, onRefusal]);
 
@@ -165,7 +167,7 @@ export function VerifyView(props: {
             </p>
             <div className="tblwrap">
               <table className="tbl">
-                <thead><tr><th>Rests on</th><th>Records</th><th>What that means</th></tr></thead>
+                <thead><tr><th scope="col">Rests on</th><th scope="col">Records</th><th scope="col">What that means</th></tr></thead>
                 <tbody>
                   {Object.keys(assurance.counts).sort().map((b) => (
                     <tr key={b}>
@@ -213,7 +215,7 @@ export function VerifyView(props: {
               <div className="tblwrap">
                 <table className="tbl">
                   <thead>
-                    <tr><th>Record</th><th>Found</th><th>System</th><th>Fields</th><th>Decision</th></tr>
+                    <tr><th scope="col">Record</th><th scope="col">Found</th><th scope="col">System</th><th scope="col">Fields</th><th scope="col">Decision</th></tr>
                   </thead>
                   <tbody>
                     {run.drift.map((f) => (
@@ -281,7 +283,7 @@ export function VerifyView(props: {
           <>
             <div className="tblwrap">
               <table className="tbl">
-                <thead><tr><th>Record</th><th>Predicted</th><th>Why</th></tr></thead>
+                <thead><tr><th scope="col">Record</th><th scope="col">Predicted</th><th scope="col">Why</th></tr></thead>
                 <tbody>
                   {twin.predictions.map((p) => (
                     <tr key={p.key}>
@@ -334,7 +336,7 @@ export function VerifyView(props: {
           <div className="tblwrap">
             <table className="tbl">
               <thead>
-                <tr><th>Range</th><th>Governs</th><th>Codes</th><th>Next free</th><th /></tr>
+                <tr><th scope="col">Range</th><th scope="col">Governs</th><th scope="col">Codes</th><th scope="col">Next free</th><th /></tr>
               </thead>
               <tbody>
                 {numbering.ranges.map((r) => (
@@ -364,7 +366,7 @@ export function VerifyView(props: {
             <p className="mut" style={{ marginTop: 12 }}>Allocated — each entry is on the ledger:</p>
             <div className="tblwrap">
               <table className="tbl">
-                <thead><tr><th>Code</th><th>Held by</th></tr></thead>
+                <thead><tr><th scope="col">Code</th><th scope="col">Held by</th></tr></thead>
                 <tbody>
                   {Object.entries(numbering.allocated).map(([code, holder]) => (
                     <tr key={code}><td className="mono">{code}</td><td>{holder}</td></tr>

@@ -205,8 +205,8 @@ export function ConfigureView(props: {
           <table className="tbl">
             <thead>
               <tr>
-                <th className="num">#</th><th>What</th><th>Tier</th><th>System</th>
-                <th>Before</th><th>Outcome</th><th />
+                <th scope="col" className="num">#</th><th scope="col">What</th><th scope="col">Tier</th><th scope="col">System</th>
+                <th scope="col">Before</th><th scope="col">Outcome</th><th />
               </tr>
             </thead>
             <tbody>

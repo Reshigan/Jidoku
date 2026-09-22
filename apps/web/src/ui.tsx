@@ -1,4 +1,4 @@
-import { useEffect, useRef, type KeyboardEvent as ReactKeyEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, type KeyboardEvent as ReactKeyEvent, type ReactNode } from "react";
 import type { Lamp, Lane } from "./derive";
 
 /** Accessible modal: focus moves in, Escape closes, background is inert to the reader. */
@@ -10,13 +10,23 @@ export function Modal(props: {
   labelledBy?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  /* Escape through a ref, so the effect below can depend on nothing.
+     This is not a style choice. `props` is a fresh object on every render, so an effect that
+     depended on it re-ran on every render — restoring focus to whatever was focused before the
+     dialog opened, then pulling focus back to this container, which `tabIndex={-1}` makes
+     focusable. Typing one character into a dialog field re-rendered the parent and the second
+     keystroke went nowhere. Every dialog in the product was unusable by a person, and the e2e
+     missed it for a year because Playwright's `fill()` sets a value in one operation rather than
+     typing it. The regression test types one key at a time. */
+  const close = useRef(props.onClose);
+  close.current = props.onClose;
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null;
     ref.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
-        props.onClose();
+        close.current();
       }
     };
     document.addEventListener("keydown", onKey, true);
@@ -24,7 +34,7 @@ export function Modal(props: {
       document.removeEventListener("keydown", onKey, true);
       prev?.focus();
     };
-  }, [props]);
+  }, []);
   const id = props.labelledBy ?? "modal-title";
   return (
     <div className="scrim" onMouseDown={(e) => e.target === e.currentTarget && props.onClose()}>
@@ -87,6 +97,28 @@ export function Seal({ name, kanji = "印", lg = false }: { name: string; kanji?
   );
 }
 
+/**
+ * Was this answer asked for by the screen that is still on show?
+ *
+ * Every panel here loads on `eid` and sets state when the promise resolves. A load is slow and an
+ * operator switching engagements starts a second before the first lands, so without this the
+ * slower response wins and one client's objections, contracts or handover appear under another
+ * client's name. `views_document` guarded it with a local flag and nothing else did; a shared
+ * hook rather than six copies, because six copies is five chances to forget.
+ *
+ * Use it as `if (!stillHere(eid)) return;` inside the resolver, where `eid` is the value the
+ * effect closed over — that is the whole trick.
+ */
+export function useStillHere<T>(token: T): (was: T) => boolean {
+  const now = useRef(token);
+  now.current = token;
+  return useCallback((was: T) => now.current === was, []);
+}
+
+/** The digit that selects view `i`, or "" where there is none. Ten digits, more views than that:
+ *  the eleventh onward are reached by click or by the arrow keys that walk the rail. */
+export const KEY_FOR = (i: number): string => (i < 10 ? String((i + 1) % 10) : "");
+
 export const VIEWS = ["Line", "Portfolio", "Crew", "Work", "Configure", "Verify", "Decisions", "Intent", "Insight", "Landscape", "Memory", "Ledger", "Evidence", "Documents", "Milestones"] as const;
 export type ViewName = (typeof VIEWS)[number];
 
@@ -136,9 +168,13 @@ export function AndonRail(props: {
             data-lamp={laneLampFor(props, v)}
             onClick={() => props.onView(v)}
             /* At the mobile breakpoint the label is clipped away, so the name has to be on the
-               button itself — title is a tooltip, and a tooltip is not a name. */
-            aria-label={`${v} — press ${(i + 1) % 10}`}
-            title={`${v} — press ${(i + 1) % 10}`}
+               button itself — title is a tooltip, and a tooltip is not a name.
+               Only the first ten have a key: there are ten digits and more views than that, and
+               `% 10` used to give Memory "press 1", which selects Line. A label naming a key that
+               does something else is worse than a label naming no key at all, and it is worst for
+               the person who cannot see which lamp lit. */
+            aria-label={KEY_FOR(i) ? `${v} — press ${KEY_FOR(i)}` : v}
+            title={KEY_FOR(i) ? `${v} — press ${KEY_FOR(i)}` : v}
           >
             <span className="glass" />
             <span className="lamp-label">{v}</span>

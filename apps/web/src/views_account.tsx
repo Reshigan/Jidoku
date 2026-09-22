@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { Accountability, ApiError, Portfolio, platform } from "./api";
-import { Empty, Section } from "./ui";
+import { Empty, Section, useStillHere } from "./ui";
 
 export function PortfolioView(props: { onRefusal: (title: string, text: string) => void }) {
   const { onRefusal } = props;
@@ -33,8 +33,8 @@ export function PortfolioView(props: { onRefusal: (title: string, text: string) 
       ) : (
         <table className="tbl">
           <thead>
-            <tr><th>Engagement</th><th>Client</th><th>Phase</th><th className="num">Records</th>
-              <th className="num">Proven</th><th>Needs a person</th></tr>
+            <tr><th scope="col">Engagement</th><th scope="col">Client</th><th scope="col">Phase</th><th scope="col" className="num">Records</th>
+              <th scope="col" className="num">Proven</th><th scope="col">Needs a person</th></tr>
           </thead>
           <tbody>
             {out.engagements.map((e) => (
@@ -65,11 +65,12 @@ export function AccountabilityPanel(props: {
 }) {
   const { eid, onRefusal } = props;
   const [out, setOut] = useState<Accountability | null>(null);
+  const stillHere = useStillHere(eid);
 
   const load = useCallback(() => {
     if (!eid) return;
     platform.accountability(eid)
-      .then(setOut)
+      .then((a) => { if (stillHere(eid)) setOut(a); })
       .catch((e) => { if (e instanceof ApiError && !e.notAvailable) onRefusal("The account", e.detail); });
   }, [eid, onRefusal]);
 
@@ -88,8 +89,8 @@ export function AccountabilityPanel(props: {
       {out.refusals.gates.length > 0 && (
         <table className="tbl">
           <thead>
-            <tr><th>Gate</th><th className="num">Fired</th><th className="num">Cleared</th>
-              <th className="num">Standing</th><th>Reads as</th></tr>
+            <tr><th scope="col">Gate</th><th scope="col" className="num">Fired</th><th scope="col" className="num">Cleared</th>
+              <th scope="col" className="num">Standing</th><th scope="col">Reads as</th></tr>
           </thead>
           <tbody>
             {out.refusals.gates.map((g) => (

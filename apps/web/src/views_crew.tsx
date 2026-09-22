@@ -11,7 +11,7 @@
    because it is the only part somebody has to act on. */
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, CrewCard, CrewRun, NightClock, NightShift, TeamMember, platform } from "./api";
-import { Empty, Field, Pill, Section } from "./ui";
+import { Empty, Field, Pill, Section, useStillHere } from "./ui";
 
 /** Ring 3 reads as the loudest badge on the card: the auditor's whole power is that it has none. */
 const RING_LAMP: Record<string, string> = { AGENT: "run", SERVICE: "run", UNTRUSTED: "call" };
@@ -44,17 +44,24 @@ export function CrewView(props: {
                                          capacity_per_week: "20" });
   const [cadenceInput, setCadenceInput] = useState("24");
   const [busy, setBusy] = useState(false);
+  const stillHere = useStillHere(eid);
 
   const load = useCallback(() => {
     if (!eid) return;
     platform.lastRun(eid)
-      .then((r) => setRun(r.crew.length ? r : null))
+      .then((r) => { if (stillHere(eid)) setRun(r.crew.length ? r : null); })
       .catch((e) => { if (e instanceof ApiError && !e.notAvailable) onRefusal("The last run", e.detail); });
     platform.lastNight(eid)
-      .then((n) => { setNight(n.handover ? n : null); setClock(n.clock); })
+      .then((n) => {
+        if (!stillHere(eid)) return;
+        setNight(n.handover ? n : null); setClock(n.clock);
+      })
       .catch((e) => { if (e instanceof ApiError && !e.notAvailable) onRefusal("The handover", e.detail); });
     platform.team(eid)
-      .then((t) => { setTeam(t.people); setWeek(t.asked_this_week); setAnswers(t.answers_in_hours); })
+      .then((t) => {
+        if (!stillHere(eid)) return;
+        setTeam(t.people); setWeek(t.asked_this_week); setAnswers(t.answers_in_hours);
+      })
       .catch((e) => { if (e instanceof ApiError && !e.notAvailable) onRefusal("The team", e.detail); });
   }, [eid, onRefusal]);
 
@@ -270,7 +277,7 @@ export function CrewView(props: {
             <div className="tblwrap" style={{ marginTop: 14 }}>
               <table className="tbl">
                 <thead>
-                  <tr><th>Agent</th><th>Authority</th><th>Objective</th><th>Did</th><th>Syscalls</th></tr>
+                  <tr><th scope="col">Agent</th><th scope="col">Authority</th><th scope="col">Objective</th><th scope="col">Did</th><th scope="col">Syscalls</th></tr>
                 </thead>
                 <tbody>
                   {run.crew.map((card: CrewCard) => (
@@ -312,7 +319,7 @@ export function CrewView(props: {
         >
           <div className="tblwrap">
             <table className="tbl">
-              <thead><tr><th>What</th><th>Who</th><th>Why</th></tr></thead>
+              <thead><tr><th scope="col">What</th><th scope="col">Who</th><th scope="col">Why</th></tr></thead>
               <tbody>
                 {run.waiting_on_a_person.map((w, i) => (
                   <tr key={i}>
@@ -347,7 +354,7 @@ export function CrewView(props: {
           {v.drift.length > 0 && (
             <div className="tblwrap" style={{ marginTop: 12 }}>
               <table className="tbl">
-                <thead><tr><th>Record</th><th>Found</th><th>Decision</th></tr></thead>
+                <thead><tr><th scope="col">Record</th><th scope="col">Found</th><th scope="col">Decision</th></tr></thead>
                 <tbody>
                   {v.drift.map((f) => (
                     <tr key={f.key}>
@@ -370,7 +377,7 @@ export function CrewView(props: {
               </p>
               <div className="tblwrap">
                 <table className="tbl">
-                  <thead><tr><th>Record</th><th>Tier</th><th>System</th><th>Handed over</th></tr></thead>
+                  <thead><tr><th scope="col">Record</th><th scope="col">Tier</th><th scope="col">System</th><th scope="col">Handed over</th></tr></thead>
                   <tbody>
                     {v.awaiting_a_person.map((a) => (
                       <tr key={a.key}>
@@ -396,7 +403,7 @@ export function CrewView(props: {
               </p>
               <div className="tblwrap">
                 <table className="tbl">
-                  <thead><tr><th>Record</th><th>Tier</th><th>Why it cannot be read</th><th>Attested</th></tr></thead>
+                  <thead><tr><th scope="col">Record</th><th scope="col">Tier</th><th scope="col">Why it cannot be read</th><th scope="col">Attested</th></tr></thead>
                   <tbody>
                     {v.attested.map((a) => (
                       <tr key={a.key}>
@@ -450,7 +457,7 @@ export function CrewView(props: {
         >
           <div className="tblwrap">
             <table className="tbl">
-              <thead><tr><th>Step</th><th>Tier</th><th>System</th><th>Outcome</th><th>Detail</th></tr></thead>
+              <thead><tr><th scope="col">Step</th><th scope="col">Tier</th><th scope="col">System</th><th scope="col">Outcome</th><th scope="col">Detail</th></tr></thead>
               <tbody>
                 {run.steps.map((s) => (
                   <tr key={s.key}>

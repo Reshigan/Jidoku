@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { ApiError, Contracts, TypeCheck, platform } from "./api";
-import { Empty, Section } from "./ui";
+import { Empty, Section, useStillHere } from "./ui";
 
 /* C1: the rule travels with the value. Every message below is the platform's own — a rejection
    that needed rewording before it could go in a report would be reworded by hand, once, and then
@@ -16,12 +16,13 @@ export function TypesPanel(props: {
 }) {
   const { eid, onRefusal } = props;
   const [out, setOut] = useState<TypeCheck | null>(null);
+  const stillHere = useStillHere(eid);
 
   useEffect(() => {
     setOut(null);
     if (!eid) return;
     platform.types(eid)
-      .then(setOut)
+      .then((t) => { if (stillHere(eid)) setOut(t); })
       .catch((e) => { if (e instanceof ApiError && !e.notAvailable) onRefusal("The type-check", e.detail); });
   }, [eid, onRefusal]);
 
@@ -60,11 +61,12 @@ export function ContractsPanel(props: {
 }) {
   const { eid, onRefusal } = props;
   const [out, setOut] = useState<Contracts | null>(null);
+  const stillHere = useStillHere(eid);
 
   const load = useCallback(() => {
     if (!eid) return;
     platform.contracts(eid)
-      .then(setOut)
+      .then((c) => { if (stillHere(eid)) setOut(c); })
       .catch((e) => { if (e instanceof ApiError && !e.notAvailable) onRefusal("The contracts", e.detail); });
   }, [eid, onRefusal]);
 
@@ -94,7 +96,7 @@ export function ContractsPanel(props: {
       ) : (
         <table className="tbl">
           <thead>
-            <tr><th>Object</th><th>Written by</th><th>Read by</th><th>Feeds</th><th>Statutory</th></tr>
+            <tr><th scope="col">Object</th><th scope="col">Written by</th><th scope="col">Read by</th><th scope="col">Feeds</th><th scope="col">Statutory</th></tr>
           </thead>
           <tbody>
             {out.contracts.map((c) => (

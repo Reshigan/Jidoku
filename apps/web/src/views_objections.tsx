@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { ApiError, ObjectionRow, platform } from "./api";
-import { Empty, Field, Section } from "./ui";
+import { Empty, Field, Section, useStillHere } from "./ui";
 
 export function ObjectionsPanel(props: {
   eid: string | null;
@@ -20,11 +20,15 @@ export function ObjectionsPanel(props: {
   const [who, setWho] = useState("");
   const [why, setWhy] = useState("");
   const [on, setOn] = useState<string | null>(null);
+  const stillHere = useStillHere(eid);
 
   const load = useCallback(() => {
     if (!eid) return;
     platform.objections(eid)
-      .then((o) => { setRows(o.objections); setDue(o.due_for_revisit); setPhase(o.phase); })
+      .then((o) => {
+        if (!stillHere(eid)) return;   // a different engagement is on screen now
+        setRows(o.objections); setDue(o.due_for_revisit); setPhase(o.phase);
+      })
       .catch((e) => { if (e instanceof ApiError && !e.notAvailable) onRefusal("The objections", e.detail); });
   }, [eid, onRefusal]);
 
@@ -77,8 +81,8 @@ export function ObjectionsPanel(props: {
           )}
           <table className="tbl">
             <thead>
-              <tr><th>About</th><th>What I found</th><th>If it goes ahead</th><th>I would</th>
-                <th>Where it stands</th><th /></tr>
+              <tr><th scope="col">About</th><th scope="col">What I found</th><th scope="col">If it goes ahead</th><th scope="col">I would</th>
+                <th scope="col">Where it stands</th><th /></tr>
             </thead>
             <tbody>
               {rows.map((o) => (

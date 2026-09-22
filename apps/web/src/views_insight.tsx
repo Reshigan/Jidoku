@@ -13,7 +13,7 @@
    server's view of who is calling (ADR-0015): there is no name field here, on purpose. */
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, Backlog, Blast, Landscape, TimeTravel, platform } from "./api";
-import { Empty, Field, Pill, Section } from "./ui";
+import { Empty, Field, Pill, Section, useStillHere } from "./ui";
 
 /** A grade is a lamp: D is a stop, A is a running line. */
 const GRADE_LAMP: Record<string, string> = { A: "run", B: "run", C: "call", D: "stop" };
@@ -36,11 +36,12 @@ export function InsightView(props: {
   const [blastForm, setBlastForm] = useState({ system_id: "", entity: "", id_field: "externalCode",
                                                field: "", value: "", delta: "" });
   const [blast, setBlast] = useState<Blast | null>(null);
+  const stillHere = useStillHere(eid);
 
   const refresh = useCallback(() => {
     if (!eid) return;
     platform.backlog(eid)
-      .then(setBacklog)
+      .then((b) => { if (stillHere(eid)) setBacklog(b); })
       .catch((e) => { if (e instanceof ApiError && !e.notAvailable) onRefusal("Backlog", e.detail); });
   }, [eid, onRefusal]);
 
@@ -133,7 +134,7 @@ export function InsightView(props: {
             <div className="tblwrap">
               <table className="tbl">
                 <thead>
-                  <tr><th /><th>Object</th><th>Code</th><th>System</th><th>Recovered as</th><th>Rationale</th></tr>
+                  <tr><th /><th scope="col">Object</th><th scope="col">Code</th><th scope="col">System</th><th scope="col">Recovered as</th><th scope="col">Rationale</th></tr>
                 </thead>
                 <tbody>
                   {unsigned.map((d) => (
@@ -178,7 +179,7 @@ export function InsightView(props: {
         >
           <div className="tblwrap">
             <table className="tbl">
-              <thead><tr><th>Counter</th><th>Count</th><th>Weight</th><th>Contribution</th><th>Measured from</th></tr></thead>
+              <thead><tr><th scope="col">Counter</th><th scope="col">Count</th><th scope="col">Weight</th><th scope="col">Contribution</th><th scope="col">Measured from</th></tr></thead>
               <tbody>
                 {Object.keys(backlog.debt.items).sort().map((k) => (
                   <tr key={k}>

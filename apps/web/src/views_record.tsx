@@ -155,7 +155,7 @@ export function EvidenceView(props: {
               <div className="scroll-x">
                 <table className="tbl">
                   <thead>
-                    <tr><th>Task</th><th>Executed by</th><th>Approved by</th><th>Separation</th><th>Snapshot</th></tr>
+                    <tr><th scope="col">Task</th><th scope="col">Executed by</th><th scope="col">Approved by</th><th scope="col">Separation</th><th scope="col">Snapshot</th></tr>
                   </thead>
                   <tbody>
                     {sod.map((s) => (
@@ -187,7 +187,7 @@ export function EvidenceView(props: {
             <div className="tblwrap">
               <table className="tbl">
                 <thead>
-                  <tr><th>Control</th><th>Must be true</th><th>Tested</th><th>Result</th></tr>
+                  <tr><th scope="col">Control</th><th scope="col">Must be true</th><th scope="col">Tested</th><th scope="col">Result</th></tr>
                 </thead>
                 <tbody>
                   {props.controls.controls.map((x) => (
