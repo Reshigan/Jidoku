@@ -5,7 +5,7 @@
    is right is a question about why they differ. */
 import { useCallback, useEffect, useState } from "react";
 
-import { ApiError, EnvironmentDiff, Landscape, platform } from "./api";
+import { ApiError, EnvironmentDiff, Landscape, Reconciliation, platform } from "./api";
 import { Empty, Section, useStillHere } from "./ui";
 
 export function EnvironmentsPanel(props: {
@@ -151,6 +151,96 @@ export function EnvironmentsPanel(props: {
             </ul>
           )}
         </>
+      )}
+    </Section>
+  );
+}
+
+
+/* What happened in the system that never came through here (ADR-0044).
+   Every other number on this platform reads the chain, so a change made by hand in the GUI is not
+   under-reported — it is invisible. This is the only screen that can say otherwise, and when
+   nobody has run it, it says that rather than showing a clean result it never earned. */
+export function ReconcilePanel(props: {
+  eid: string | null;
+  landscape: Landscape | null;
+  canRun: boolean;
+  onRefusal: (title: string, text: string) => void;
+}) {
+  const { eid, onRefusal } = props;
+  const systems = props.landscape?.systems ?? [];
+  const [out, setOut] = useState<Reconciliation | null>(null);
+  const [on, setOn] = useState("");
+  const [busy, setBusy] = useState(false);
+  const stillHere = useStillHere(eid);
+
+  const load = useCallback(() => {
+    if (!eid) return;
+    platform.reconciliation(eid)
+      .then((r) => { if (stillHere(eid)) setOut(r); })
+      .catch((e) => { if (e instanceof ApiError && !e.notAvailable) onRefusal("The reconciliation", e.detail); });
+  }, [eid, onRefusal, stillHere]);
+
+  useEffect(() => { setOut(null); setOn(""); load(); }, [load]);
+
+  if (!eid || !out) return null;
+
+  const run = async () => {
+    setBusy(true);
+    try {
+      setOut(await platform.reconcile(eid, on));
+    } catch (e) {
+      if (e instanceof ApiError) onRefusal("Nothing could be reconciled", e.detail);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Section
+      title="What happened outside the platform"
+      note="The system's own change log against this ledger. A change it shows on configuration this engagement designed, that nothing here did, was made outside every gate."
+      lamp={out.out_of_band.length ? "stop" : out.ever_run ? "run" : "call"}
+      status={out.ever_run ? (out.out_of_band.length ? `${out.out_of_band.length} outside` : "none outside") : "never run"}
+      actions={
+        <button className="btn" disabled={!props.canRun || !on || busy} onClick={() => void run()}>
+          {busy ? "Reading the log…" : "Reconcile"}
+        </button>
+      }
+    >
+      {/* An engagement nobody has reconciled is not a clean one. */}
+      <p className={out.ever_run && !out.out_of_band.length ? "mut" : "verbatim"}
+         style={{ marginBottom: 12 }}>{out.says}</p>
+
+      <div className="row" style={{ gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
+        <label className="field">
+          <span className="eyebrow">Which system</span>
+          <select value={on} onChange={(e) => setOn(e.target.value)} aria-label="Which system">
+            <option value="">—</option>
+            {systems.map((s) => (
+              <option key={s.system_id} value={s.system_id}>{s.system_id} ({s.role})</option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {out.out_of_band.length > 0 && (
+        <table className="tbl" style={{ marginTop: 12 }}>
+          <thead>
+            <tr><th scope="col">Object</th><th scope="col">Changed by</th><th scope="col">When</th>
+              <th scope="col">What it means</th></tr>
+          </thead>
+          <tbody>
+            {out.out_of_band.map((r) => (
+              <tr key={`${r.object}${r.at}`}>
+                <td className="mono">{r.object}</td>
+                <td>{r.by || <span className="mut">the log does not name them</span>}</td>
+                <td className="mono">{r.at || "—"}</td>
+                <td>{r.says}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
     </Section>
   );

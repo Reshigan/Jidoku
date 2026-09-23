@@ -249,6 +249,16 @@ export type EntityDiff = {
   says: string;
 };
 
+/** The product's own change log against ours (ADR-0044). */
+export type Reconciliation = {
+  ever_run: boolean;
+  runs: number;
+  last_run: string;
+  out_of_band: { object: string; says: string; by: string; at: string }[];
+  window_minutes: number;
+  says: string;
+};
+
 export type Blast = {
   population: number;
   affected: number;
@@ -900,6 +910,12 @@ const api3 = {
   portfolio: () => call<Portfolio>("/portfolio"),
   contracts: (eid: string) => call<Contracts>(`/engagements/${eid}/contracts`),
   types: (eid: string) => call<TypeCheck>(`/engagements/${eid}/types`),
+  reconciliation: (eid: string) => call<Reconciliation>(`/engagements/${eid}/reconcile`),
+  /** Read the system's own change log and say what happened there that never came through here. */
+  reconcile: (eid: string, system_id: string) =>
+    call<Reconciliation & { matched: unknown[] }>(
+      `/engagements/${eid}/reconcile?system_id=${encodeURIComponent(system_id)}`,
+      { method: "POST" }),
   /** Reads both systems and writes to neither, so it needs nothing beyond read. */
   compareEnvironments: (eid: string, left: string, right: string) =>
     call<EnvironmentDiff>(

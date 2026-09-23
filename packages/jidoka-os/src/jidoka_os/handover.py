@@ -27,6 +27,8 @@ from .scheduler import Scheduler, Shift
 #: a budget is that the ranking can be argued with rather than felt.
 COST_OF_SILENCE = {
     "chain_broken": 100,        # every statement on the ledger is unproven until this is answered
+    "out_of_band": 95,          # somebody changed the system outside every gate, and until the
+                                # reconciliation ran, nothing here knew
     "partial_write": 90,        # a customer's system is in a state nobody designed
     "orphaned": 85,             # a live change the design no longer claims, and nobody is watching
     "control_failing": 70,      # a control that held yesterday does not hold today

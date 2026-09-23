@@ -48,6 +48,16 @@ def _findings(e, verification: dict, controls: dict) -> list[Finding]:
                                f"{entry.get('task')} half-landed and was never put back",
                                "an operator", entry.get("detail", ""), needs="execute"))
 
+    # A change somebody made outside every gate (ADR-0044). Found by reconciliation, which has to
+    # have been run — the night reports what the chain holds, and an engagement nobody reconciled
+    # is reported as unreconciled by the reconcile endpoint rather than silently as clean.
+    for entry in e.ledger.entries:
+        if entry.get("action") == "OUT_OF_BAND":
+            out.append(Finding("out_of_band",
+                               f"{entry.get('task')} was changed outside the platform",
+                               entry.get("changed_by") or "whoever signs this engagement's design",
+                               entry.get("detail", ""), needs="resolve_dp"))
+
     for control_id in controls["failing"]:
         result = next(c for c in controls["controls"] if c["control_id"] == control_id)
         out.append(Finding("control_failing", f"{control_id} is failing: {result['statement']}",

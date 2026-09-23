@@ -36,9 +36,10 @@ FRICTION_WITHIN_HOURS = 1.0
 
 #: What this cannot see, stated where the numbers are rather than in a footnote nobody opens.
 UNMEASURABLE = (
-    "Work that never reached a gate. A consultant who saw a refusal coming and did the change by "
-    "hand in the SAP GUI leaves nothing on this chain, and that is the most expensive failure "
-    "this platform can have.",
+    "Work that never reached a gate, on a system whose own change log nothing has read. Where a "
+    "product publishes one and somebody reconciled it (ADR-0044), a change made by hand in the "
+    "GUI is found and counted; where it does not, or nobody ran it, that change leaves nothing "
+    "on this chain and none of these numbers knows it happened.",
     "Whether a refusal was correct. This counts how quickly each one was cleared, which is a "
     "proxy for friction and not a verdict — a gate cleared in a minute may have caught a real "
     "mistake a minute before it landed.",

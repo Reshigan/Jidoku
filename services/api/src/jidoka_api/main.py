@@ -7,7 +7,7 @@ from .routers import (accountability, auth_router, contracts, controls, decision
                       engagements, environments,
                       execution, insight, ir, ledger, memory, nightshift, numbering, objections,
                       people,
-                      plans, portfolio, registry, run, schema_router, twin, types_router,
+                      plans, portfolio, reconcile, registry, run, schema_router, twin, types_router,
                       verification)
 from .state import STORE
 
@@ -25,7 +25,7 @@ app.add_exception_handler(HTTPException, refusals.record)
 for r in (auth_router, engagements, ir, plans, ledger, decisions, documents, registry, schema_router,
           execution, memory, numbering, verification, insight, run, controls, twin,
           nightshift, people, accountability, portfolio, objections, contracts,
-          types_router, environments):
+          types_router, environments, reconcile):
     app.include_router(r.router)
 
 

@@ -133,6 +133,14 @@ of it.
     not complete. We know of no comparable tool whose vendor ships the thing that can call it a
     liar. ADR-0043.
 
+16. **We read the system's own audit trail against ours, and name what never came through us.**
+    A change in SuccessFactors' Change Audit, on an object signed intent describes, that nothing
+    on this chain did, is reported as out-of-band with the person the product's log names — and it
+    wakes somebody, above a half-landed write. The free feature that competes with half this
+    platform's pitch is consumed as its missing input. Where a product publishes no readable log,
+    the answer is a refusal saying so, never an empty result that reads as a clean bill of health.
+    ADR-0044.
+
 ## Claims we cannot yet make
 
 - **"Proven on real engagements."** Zero production engagements have run on this platform. The
@@ -169,7 +177,11 @@ of it.
 - **"We can tell you which environment is right."** The comparison reports differences and, where
   intent describes the object, which side matches the design. Which environment is *meant* to be
   ahead is a question about a programme's plan, and the platform is not told it.
-- **"World first" as a totality.** The fifteen claims above are shapes we believe are new. The only
+- **"We see every change."** Only where the product publishes a readable log and somebody ran the
+  reconciliation. A system with no log, or one nobody has reconciled, is reported as unreconciled
+  — which is honest and is not the same as covered. The SuccessFactors entity this reads has not
+  been confirmed against a live tenant.
+- **"World first" as a totality.** The sixteen claims above are shapes we believe are new. The only
   honest form of the headline is: *the first SAP configuration platform we know of where drift,
   documents, tests and number ranges are all projections of one signed, hash-chained record — and
   where the machine can never approve its own work.*

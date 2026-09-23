@@ -280,6 +280,13 @@ test("the console reaches every endpoint the API publishes", async ({ page, requ
   await page.getByRole("button", { name: "Register", exact: true }).click();
   await dismissScrim(page);
 
+  // What happened outside the platform: the product's own change log against ours.
+  const rec = page.locator(".sec", { hasText: "What happened outside the platform" });
+  await expect(rec.getByText("assumption, not a finding")).toBeVisible();
+  await rec.getByLabel("Which system").selectOption("KOM-SF-DEV");
+  await rec.getByRole("button", { name: "Reconcile" }).click();
+  await dismissScrim(page);
+
   const env = page.locator(".sec", { hasText: "Two environments, compared" });
   await env.getByLabel("Compare this system").selectOption("KOM-SF-DEV");
   await env.getByLabel("With this system").selectOption("KOM-SF-PROD");

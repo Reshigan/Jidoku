@@ -37,6 +37,47 @@ class SFAdapter(Adapter):
     def unverifiable(self) -> dict:
         return unverifiable()
 
+    #: SuccessFactors keeps its own record of configuration and data changes, including role
+    #: permission changes, and SAP positions it for exactly this question: detecting unexpected
+    #: changes and identifying their source. Reading it back and reconciling it against the ledger
+    #: is what turns a free feature of the product into the thing that closes this platform's
+    #: blind spot (ADR-0044).
+    #:
+    #: The entity name below is the one this adapter asks its fetcher for. It has NOT been
+    #: confirmed against a live tenant from this codebase, like everything else here, and the
+    #: tier map's honesty rule applies: where the fetcher cannot produce it, `change_log` returns
+    #: None and the reconciliation says it cannot see rather than that it found nothing.
+    change_log_entity = "ChangeAudit"
+
+    #: Change Audit's own field names -> the four this platform reconciles on. Every product
+    #: spells its log differently, so the translation lives with the product.
+    CHANGE_FIELDS = {"object": ("objectId", "entityName", "objectType", "externalCode"),
+                     "changed_by": ("modifiedBy", "changedBy", "userId"),
+                     "ts": ("modifiedDate", "changedOn", "timestamp", "lastModifiedDateTime"),
+                     "detail": ("changeType", "operation", "description")}
+
+    def change_log(self, system, since: str = "") -> list[dict] | None:
+        if not self._fetch:
+            return None
+        try:
+            rows = self._fetch(system, self.change_log_entity)
+        except Exception:                    # noqa: BLE001 — a tenant that publishes no such set
+            return None                      # is "cannot see", never "nothing happened"
+        out = []
+        for row in rows or []:
+            got = {field: next((row[k] for k in keys if row.get(k) not in (None, "")), "")
+                   for field, keys in self.CHANGE_FIELDS.items()}
+            if since and got["ts"] and got["ts"] < since:
+                continue
+            out.append(got)
+        return out
+
+    def cannot_read_changes(self) -> str:
+        return ("SuccessFactors publishes a Change Audit report, and nothing in this engagement "
+                "produced it. Either no connector is bound, or this tenant does not expose the "
+                "set this adapter asks for — which is a different thing from no change having "
+                "been made outside the platform.")
+
     def key_field(self, entity: str) -> str:
         return KEY_FIELDS.get(entity, "externalCode")
 

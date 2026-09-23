@@ -39,6 +39,27 @@ class Adapter(ABC):
 
     def verifiable(self, entity: str) -> bool:
         return entity not in self.unverifiable()
+
+    #: Where this product keeps its own record of who changed what, if it keeps one, and what it
+    #: is called. Declared rather than assumed: an adapter that cannot read one must say so, or a
+    #: reconciliation finding nothing reads as "nothing happened outside the platform" when it
+    #: means "I cannot see" (ADR-0044).
+    change_log_entity: str | None = None
+
+    def change_log(self, system, since: str = "") -> list[dict] | None:
+        """The product's own change log, normalised to `{object, changed_by, ts, detail}`.
+
+        None where the product publishes no readable log. Every product spells this differently —
+        SuccessFactors has Change Audit, S/4 has change documents — so the translation belongs
+        here, with the product, and never in the reconciliation.
+        """
+        return None
+
+    def cannot_read_changes(self) -> str:
+        """Why not, for an adapter that returns None. Printed where the answer would otherwise be
+        an empty list that reads like a clean bill of health."""
+        return (f"{self.product}: this adapter reads no change log, so it cannot tell a system "
+                f"nobody touched from one it cannot see into.")
     @abstractmethod
     def extract(self, system, entity: str) -> list[dict]: ...
     @abstractmethod
