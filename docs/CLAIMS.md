@@ -124,6 +124,15 @@ of it.
     of makes one side the truth, which is the assumption that hides the case where both are wrong.
     ADR-0042.
 
+15. **The verifier ships, and it is allowed to contradict us.** `tools/jidoka-verify.py` is one
+    stdlib-only file with no network and no JIDOKA imports. It recomputes the manifest digest, the
+    chain, the assurance numerator and denominator and every separation-of-duties boolean from the
+    entries, and reports where the bundle's own claims disagree with its findings — including a
+    bundle that says `verified: true` when it does not verify, and a self-approval the producer's
+    summary called separated. A clean run states what it does not mean: the record is unaltered,
+    not complete. We know of no comparable tool whose vendor ships the thing that can call it a
+    liar. ADR-0043.
+
 ## Claims we cannot yet make
 
 - **"Proven on real engagements."** Zero production engagements have run on this platform. The
@@ -160,7 +169,7 @@ of it.
 - **"We can tell you which environment is right."** The comparison reports differences and, where
   intent describes the object, which side matches the design. Which environment is *meant* to be
   ahead is a question about a programme's plan, and the platform is not told it.
-- **"World first" as a totality.** The fourteen claims above are shapes we believe are new. The only
+- **"World first" as a totality.** The fifteen claims above are shapes we believe are new. The only
   honest form of the headline is: *the first SAP configuration platform we know of where drift,
   documents, tests and number ranges are all projections of one signed, hash-chained record — and
   where the machine can never approve its own work.*

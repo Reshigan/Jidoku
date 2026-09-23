@@ -108,6 +108,11 @@ for weeks after they were built, until somebody checked.
       through bindings that cannot write, with neither side the baseline and signed intent as the
       third party where it describes the object (`jidoka_core.environments`,
       `routers/environments.py`, the Landscape screen — ADR-0042)
+- [x] The verifier ships: `tools/jidoka-verify.py`, stdlib-only, no JIDOKA imports, held to the
+      same conformance fixture as the kernel and the Durable Object — and it contradicts the
+      bundle where the bundle is wrong (ADR-0043)
+- [ ] Reconcile against the system's own change log: a change in SAP's audit trail that is not on
+      the chain is an out-of-band change, and it is the blind spot CLAIMS.md names
 - [ ] Regression grammar: a customisation becomes a test dimension automatically (§3 step 5)
 - [ ] Release-readiness: re-validate every contract when SAP ships a release (§3 step 6)
 ## E13 Insight & team (built: jidoka-insight; docs/JIDOKA_PROJECT_TEAM_AND_ALIGNMENT.md)

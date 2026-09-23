@@ -10,7 +10,12 @@ from __future__ import annotations
 import hashlib
 import json
 
+from jidoka_core.assurance import assure
 from jidoka_core.ledger import GENESIS
+
+#: The verifier that ships with the bundle. Named here so the artefact points at the thing that
+#: checks it, rather than leaving an auditor to write one from the prose below.
+VERIFIER = "tools/jidoka-verify.py — stdlib Python, no network, no JIDOKA code. `python3 jidoka-verify.py bundle.json`"
 
 VERIFY_PROCEDURE = (
     "For each entry in order: take the entry object, remove the keys 'hash' and 'prev', add the key "
@@ -69,7 +74,11 @@ def build_bundle(engagement, plan: dict | None = None) -> dict:
         "engagement": {"engagement_id": engagement.engagement_id, "name": engagement.name,
                        "client": engagement.client, "phase": engagement.phase},
         "chain": {"genesis": GENESIS, "entries": entries, "verification": verification,
-                  "verify_procedure": VERIFY_PROCEDURE},
+                  "verify_procedure": VERIFY_PROCEDURE, "verify_with": VERIFIER},
+        # The platform's own claim about what it can prove, carried so that a verifier can
+        # recompute it and disagree. A bundle that only carried the evidence would leave the
+        # number to be quoted from a screen nobody can check.
+        "assurance": assure(engagement.ir, entries).as_dict(),
         "separation_of_duties": sod,
         "decision_points": {"all": dps, "unresolved": unresolved},
         "landscape": engagement.registry.landscape(),
