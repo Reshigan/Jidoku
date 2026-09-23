@@ -268,6 +268,25 @@ test("the console reaches every endpoint the API publishes", async ({ page, requ
   await page.locator(".doc-tab").nth(1).click();
   await dismissScrim(page);
 
+  // Two environments, compared. The second system is bound read-only, which is the binding this
+  // question actually wants: the design names one system and the question is about another.
+  await page.getByRole("tab", { name: /^Landscape/ }).click();
+  await page.getByRole("button", { name: "Register a system" }).click();
+  await page.getByLabel("System id").fill("KOM-SF-PROD");
+  await page.getByLabel("Product").fill("SuccessFactors");
+  await page.getByLabel("Role").selectOption("TARGET");
+  await page.getByLabel("Environment").selectOption("PROD");
+  await page.getByRole("checkbox").check();
+  await page.getByRole("button", { name: "Register", exact: true }).click();
+  await dismissScrim(page);
+
+  const env = page.locator(".sec", { hasText: "Two environments, compared" });
+  await env.getByLabel("Compare this system").selectOption("KOM-SF-DEV");
+  await env.getByLabel("With this system").selectOption("KOM-SF-PROD");
+  await env.getByRole("button", { name: /^Bind a read-only connector/ }).first().click();
+  await env.getByRole("button", { name: "Compare" }).click();
+  await expect(env.getByText(/agree on all|are not the same/)).toBeVisible();
+
   // The delta pool: a number somebody agreed to, recorded where the contracts it counts are.
   await page.getByRole("tab", { name: /^Intent/ }).click();
   await page.getByLabel("Customisations agreed").fill("30");

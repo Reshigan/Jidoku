@@ -20,6 +20,7 @@ import { CrewView } from "./views_crew";
 import { AccountabilityPanel, PortfolioView } from "./views_account";
 import { InsightView } from "./views_insight";
 import { ContractsPanel, TypesPanel } from "./views_contracts";
+import { EnvironmentsPanel } from "./views_environments";
 import { ObjectionsPanel } from "./views_objections";
 import { VerifyView } from "./views_verify";
 import { DP_KINDS, SYSTEM_ROLES, kindWords, roleLabel } from "./viewkit";
@@ -506,8 +507,17 @@ export default function App() {
                              onChanged={after} />
               )}
               {view === "Landscape" && (
-                <LandscapeView landscape={d.landscape} writable={writable}
-                               onRegister={() => setDialog({ kind: "registerSystem" })} />
+                <>
+                  <LandscapeView landscape={d.landscape} writable={writable}
+                                 onRegister={() => setDialog({ kind: "registerSystem" })} />
+                  {/* Beside the landscape, because the question is about two of the systems in
+                      it: the registry has modelled DEV, TEST and PROD since the first commit and
+                      nothing ever asked whether they hold the same thing. */}
+                  <Boundary where="Two environments, compared">
+                    <EnvironmentsPanel eid={eid} landscape={d.landscape}
+                                       onRefusal={(title, text) => setRefusal({ title, text })} />
+                  </Boundary>
+                </>
               )}
               {view === "Memory" && (
                 <MemoryView memory={d.memory} asOf={asOf} busy={busy}

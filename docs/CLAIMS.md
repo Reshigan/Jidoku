@@ -117,6 +117,13 @@ of it.
     sign it back in, or take it out of the system. Verification and assurance both iterate the
     current design, so before this the change stayed live and invisible. ADR-0039.
 
+14. **A cutover comparison that refuses to pick a side.** Two registered environments are read
+    through bindings with no write half and compared with neither treated as the baseline; where
+    signed intent describes the object the report says which side matches it, and where it does
+    not, the difference is still reported and said to be undesigned. Every comparison tool we know
+    of makes one side the truth, which is the assumption that hides the case where both are wrong.
+    ADR-0042.
+
 ## Claims we cannot yet make
 
 - **"Proven on real engagements."** Zero production engagements have run on this platform. The
@@ -150,7 +157,10 @@ of it.
 - **"The night shift reaches people."** It posts to one webhook if one is configured, and says so
   when none is. There is no escalation, no acknowledgement, no on-call rotation and no retry: an
   interruption that is not read is not chased.
-- **"World first" as a totality.** The thirteen claims above are shapes we believe are new. The only
+- **"We can tell you which environment is right."** The comparison reports differences and, where
+  intent describes the object, which side matches the design. Which environment is *meant* to be
+  ahead is a question about a programme's plan, and the platform is not told it.
+- **"World first" as a totality.** The fourteen claims above are shapes we believe are new. The only
   honest form of the headline is: *the first SAP configuration platform we know of where drift,
   documents, tests and number ranges are all projections of one signed, hash-chained record — and
   where the machine can never approve its own work.*

@@ -227,6 +227,28 @@ export type Superseded = {
   delta_pool?: DeltaPool;
 };
 
+/** Two registered systems, read and compared, with neither treated as the truth (ADR-0042). */
+export type EnvironmentDiff = {
+  entities: EntityDiff[];
+  apart: number;
+  same: number;
+  aligned: boolean;
+  says: string;
+  unreadable: { entity: string; reason: string }[];
+  method: string;
+};
+
+export type EntityDiff = {
+  entity: string; left: string; right: string; key_field: string;
+  only_in_left: { key: string }[];
+  only_in_right: { key: string }[];
+  differs: { key: string; fields: Record<string, { left: unknown; right: unknown }>;
+             signed: boolean; matches?: string[]; says: string }[];
+  same: string[];
+  aligned: boolean;
+  says: string;
+};
+
 export type Blast = {
   population: number;
   affected: number;
@@ -878,6 +900,10 @@ const api3 = {
   portfolio: () => call<Portfolio>("/portfolio"),
   contracts: (eid: string) => call<Contracts>(`/engagements/${eid}/contracts`),
   types: (eid: string) => call<TypeCheck>(`/engagements/${eid}/types`),
+  /** Reads both systems and writes to neither, so it needs nothing beyond read. */
+  compareEnvironments: (eid: string, left: string, right: string) =>
+    call<EnvironmentDiff>(
+      `/engagements/${eid}/environments/compare?left=${encodeURIComponent(left)}&right=${encodeURIComponent(right)}`),
   /** The number of customisations somebody agreed to. A commercial fact, so it takes `approve`. */
   setDeltaPool: (eid: string, size: number) =>
     call<DeltaPool>(`/engagements/${eid}/contracts/pool?size=${size}`, { method: "POST" }),

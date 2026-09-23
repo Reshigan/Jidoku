@@ -98,7 +98,9 @@ test("journey: open an engagement, register the landscape, see the write lock", 
   await page.getByLabel("Role").selectOption("TARGET");
   await page.getByLabel("Environment").selectOption("DEV");
   await page.getByRole("button", { name: "Register", exact: true }).click();
-  await expect(page.getByText("KOM-SF-DEV")).toBeVisible();
+  // In the landscape, specifically. The system's id also appears in the environment comparison's
+  // pickers below it, and "it is on the page somewhere" was never what this line meant.
+  await expect(page.locator(".fl-sys-id", { hasText: "KOM-SF-DEV" })).toBeVisible();
 
   // A legacy source is write-locked by the platform, and the console must say so in its own words.
   await page.getByRole("button", { name: "Register a system" }).click();

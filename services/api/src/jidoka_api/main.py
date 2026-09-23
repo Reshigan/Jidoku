@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from . import refusals
 
 from .routers import (accountability, auth_router, contracts, controls, decisions, documents,
-                      engagements,
+                      engagements, environments,
                       execution, insight, ir, ledger, memory, nightshift, numbering, objections,
                       people,
                       plans, portfolio, registry, run, schema_router, twin, types_router,
@@ -25,7 +25,7 @@ app.add_exception_handler(HTTPException, refusals.record)
 for r in (auth_router, engagements, ir, plans, ledger, decisions, documents, registry, schema_router,
           execution, memory, numbering, verification, insight, run, controls, twin,
           nightshift, people, accountability, portfolio, objections, contracts,
-          types_router):
+          types_router, environments):
     app.include_router(r.router)
 
 
