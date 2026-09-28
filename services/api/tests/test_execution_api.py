@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from jidoka_api.auth import issue_token
 from jidoka_api.main import app
+from jidoka_api.routers.engagements import STORE
 
 c = TestClient(app)
 IR = json.load(open(pathlib.Path(__file__).parents[3] /
@@ -242,20 +243,37 @@ def test_bound_system_can_snapshot_and_a_second_person_can_write_it_live():
         assert required in actions, actions
 
 
-def test_an_object_with_no_declared_entity_set_is_a_refusal_not_a_server_error():
-    """The IR claims tier A for an object the adapter has no honest write path to. That is the
-    workbook lying about the product, so it is a 422 naming the bad tier_map entry — not a 500,
-    which reads as "the platform broke" and sends the operator to the wrong place entirely.
+UNDECLARED = {"object": "cust_NotADeclaredObject", "product": "SuccessFactors",
+              "system_binding": "KOM-SF-DEV", "tier": "A", "intent": {"code": "BASIC"},
+              "source": {"workbook": "w.xlsx", "signed_by": "Komatsu HR", "date": "2026-01-01"}}
 
-    Caught on `AdapterError`, the shared base, so a new adapter cannot reintroduce the 500."""
+
+def test_tier_a_for_an_object_the_adapter_cannot_write_is_refused_at_load():
+    """The earlier refusal is the kinder one. This used to be caught at execute time, after the
+    design had been loaded, planned and put in front of an operator; the load gate (ADR-0045)
+    catches the same lie when the workbook arrives."""
     eid = c.post("/engagements", json={"name": "Exec", "client": "Komatsu"}).json()["engagement_id"]
     _target(eid, "KOM-SF-DEV")
-    c.post(f"/engagements/{eid}/ir", json=[{
-        "object": "cust_NotADeclaredObject", "product": "SuccessFactors", "system_binding": "KOM-SF-DEV",
-        "tier": "A", "intent": {"code": "BASIC"},
-        "source": {"workbook": "w.xlsx", "signed_by": "Komatsu HR", "date": "2026-01-01"}}])
-    key = _tier_a_step(eid)["key"]
-    res = c.post(f"/engagements/{eid}/execution/execute", json={"key": key},
+    res = c.post(f"/engagements/{eid}/ir", json=[UNDECLARED])
+    assert res.status_code == 422, res.text
+    assert "nothing can name the write path" in res.json()["detail"]
+
+
+def test_the_executor_still_refuses_it_if_it_arrives_by_another_route():
+    """The load gate is not the only gate, and must not become the reason the executor's own one
+    is never exercised. Put the record in the store directly — as a restored engagement or a
+    future loader might — and the write path refuses it with the tier_map named.
+
+    A 422 naming the bad map entry, never a 500: "the platform broke" sends an operator to
+    entirely the wrong place. Caught on `AdapterError`, the shared base, so a new adapter cannot
+    reintroduce the 500."""
+    from jidoka_core.ir import validate_record
+
+    eid = c.post("/engagements", json={"name": "Exec", "client": "Komatsu"}).json()["engagement_id"]
+    _target(eid, "KOM-SF-DEV")
+    e = STORE.get(eid)
+    e.ir = [validate_record(dict(UNDECLARED))[0]]
+    res = c.post(f"/engagements/{eid}/execution/execute", json={"key": e.ir[0].key},
                  headers=hdr("b.builder", "builder"))
     assert res.status_code == 422, res.text
     assert "tier_map" in res.json()["detail"]

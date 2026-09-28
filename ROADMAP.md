@@ -95,6 +95,12 @@ for weeks after they were built, until somebody checked.
       the chain says, never who was right (`jidoka_core.objections`, `routers/objections.py`, the
       night shift's `objection_due`, the Decisions screen — ADR-0033)
 ## E15 Design lifecycle, reach and commercial gates
+- [x] The adapter decides the tier: a workbook that overstates or understates it is refused at load,
+      naming both answers; an object no adapter knows may be B or C and never A (ADR-0045)
+- [x] Workbook profiles: the mapping from a real design authority document to IR is declared data,
+      so a programme is a new profile rather than a new parser — header below a title block, origin
+      qualified by prefix, a row the workbook disowns left uncompiled, and every sheet not read
+      named (`jidoka_compiler.profile`)
 - [x] A new design supersedes the old one: the diff on the chain, and a record the new version
       dropped that a customer's system still holds becomes an orphan — drift's treatment, two
       exits, planning halted (`jidoka_core.supersede` — ADR-0039)
