@@ -935,7 +935,52 @@ const api3 = {
   revisitObjection: (eid: string, oid: string) =>
     call<{ objection_id: string; says: string; objection_said: string; overridden_by: string }>(
       `/engagements/${eid}/objections/${oid}/revisit`, { method: "POST" }),
+  /** The plan of record against the chain. `today` is passed so lateness is the caller's clock,
+      not the server's: a gate is late in somebody's timezone, and the console knows whose. */
+  programme: (eid: string, today?: string) =>
+    call<Programme>(`/engagements/${eid}/programme${today ? `?today=${today}` : ""}`),
+  /** Confirming a boundary condition takes a name and something that was checked. */
+  confirmCondition: (eid: string, what: string, evidence: string) =>
+    call<Programme>(
+      `/engagements/${eid}/programme/conditions/confirm?what=${encodeURIComponent(what)}`,
+      { method: "POST", body: JSON.stringify({ evidence }) }),
+  breachCondition: (eid: string, what: string, evidence: string) =>
+    call<Programme>(
+      `/engagements/${eid}/programme/conditions/breach?what=${encodeURIComponent(what)}`,
+      { method: "POST", body: JSON.stringify({ evidence }) }),
+  /** A gate is an approval, so this needs `approve` — not merely write access. */
+  passGate: (eid: string, gate: string, evidence: string, on_behalf_of: string) =>
+    call<Programme>(`/engagements/${eid}/programme/gates/${gate}/pass`,
+      { method: "POST", body: JSON.stringify({ evidence, on_behalf_of }) }),
+  /** Only for a task the platform cannot see. It refuses one that watches something. */
+  reportTaskDone: (eid: string, task: string, evidence: string) =>
+    call<Programme>(`/engagements/${eid}/programme/tasks/${task}/done`,
+      { method: "POST", body: JSON.stringify({ evidence }) }),
 };
+
+/** The engagement plan, as the platform accounts for it. There is deliberately no percentage here:
+    a number made partly of tasks the platform cannot see would be quoted as progress. */
+export interface ProgrammeCondition {
+  what: string; by: string; consequence: string;
+  holding: boolean | null; who_said: string; evidence: string; says: string;
+}
+export interface ProgrammeGate {
+  gate_id: string; name: string; date: string; criteria: string; evidence_required: string;
+  approver: string; passed: boolean; passed_by: string; passed_on: string; evidence_given: string;
+  late: boolean; due_on: string; date_understood: boolean; says: string;
+}
+export interface ProgrammeTask {
+  task_id: string; task: string; week: string; owner: string; due: string; gate: string;
+  depends_on: string[]; declared_status: string; visible_to_platform: boolean; done: boolean;
+  says: string; waiting_on?: string[];
+}
+export interface Programme {
+  conditions: ProgrammeCondition[]; gates: ProgrammeGate[]; tasks: ProgrammeTask[];
+  blocked: ProgrammeTask[];
+  unspoken_conditions: number; breached_conditions: number; gates_passed: number;
+  gates_late: string[]; tasks_the_platform_cannot_see: number;
+  says: string; method: string;
+}
 
 /** One client surface. Typed by construction, so a missing endpoint is a compile error. */
 export const platform = { ...api, ...api2, ...api3 };

@@ -7,6 +7,12 @@ import { expect, test } from "@playwright/test";
  */
 const OUT_OF_BAND = new Set([
   "POST /engagements/{eid}/plan", // the console reads the plan; it never ledgers a rebuild by hand
+  /* A plan of record arrives as a bundle from tools/jidoka-absorb.py, which a person reads and
+     signs before it is registered. A console form for a hundred tasks, thirteen gates and eight
+     boundary conditions would be a worse version of the workbook they already have, and a
+     paste-the-JSON box would be a worse version of the tool. Everything after registration —
+     confirming a condition, passing a gate, accounting for a task — is on the screen. */
+  "POST /engagements/{eid}/programme",
 ]);
 
 test("the console reaches every endpoint the API publishes", async ({ page, request }) => {
@@ -39,6 +45,10 @@ test("the console reaches every endpoint the API publishes", async ({ page, requ
   const eng = `Coverage ${Date.now()}`;
   await page.getByLabel("Name").fill(eng);
   await page.getByRole("button", { name: "Open it" }).click();
+  // Held from here, because the walk switches identity twice and a selector read later would be
+  // whatever the console happens to have selected by then.
+  await expect(page.locator(".scrim")).toHaveCount(0);
+  const eid = await page.getByLabel("Engagement", { exact: true }).inputValue();
 
   // Landscape
   await page.getByRole("tab", { name: /^Landscape/ }).click();
@@ -314,6 +324,39 @@ test("the console reaches every endpoint the API publishes", async ({ page, requ
   await page.getByRole("button", { name: "Set the cadence" }).click();
   await dismissScrim(page);
 
+  /* The programme. Registered out of band, as a signed bundle is, and then answered on the screen:
+     a condition confirmed, one breached, a gate passed on evidence, a task the platform cannot see
+     accounted for by a person. */
+  expect((await request.post(`/engagements/${eid}/programme`, {
+    data: {
+      conditions: [{ what: "DEV and QAL provisioned", by: "1 Oct",
+                     consequence: "Week 1 cannot start" },
+                   { what: "Legacy read access", by: "1 Oct", consequence: "No baseline" }],
+      gates: [{ gate_id: "PG1", name: "Baseline accepted", date: "Fri 9 Oct",
+                criteria: "extract accepted", evidence: "baseline manifest", approver: "Lead" }],
+      tasks: [{ task_id: "PT-001", task: "Access check", week: "B1", owner: "PM", gate: "PG1",
+                declared_status: "Complete" }],
+    },
+  })).ok()).toBeTruthy();
+
+  await page.getByRole("tab", { name: /^Programme/ }).click();
+  await expect(page.getByRole("heading", { name: "The plan of record" })).toBeVisible();
+
+  const answer = async (button: string, what: string) => {
+    await page.getByRole("button", { name: button, exact: true }).first().click();
+    await page.getByLabel("What happened").fill(what);
+    await page.locator(".scrim").getByRole("button").first().click();
+    await dismissScrim(page);
+  };
+  await answer("It holds", "QAL login screenshot");
+  await answer("It has failed", "access request refused");
+  await answer("Report it done", "confirmed in the workshop");
+
+  await page.getByRole("button", { name: "Pass on evidence" }).first().click();
+  await page.getByLabel("Evidence for this gate").fill("manifest sha 9f2c");
+  await page.getByRole("button", { name: "Pass it" }).click();
+  await dismissScrim(page);
+
   // Every engagement at once — the partner's screen, and the only one that reads the whole store.
   await page.getByRole("tab", { name: /^Portfolio/ }).click();
   await expect(page.getByRole("heading", { name: "Every engagement" })).toBeVisible();
@@ -377,6 +420,10 @@ function templated(p: string): string {
     .replace(/^\/engagements\/[^/]+\/documents\/[^/]+$/, "/engagements/{eid}/documents/{document}")
     .replace(/^\/engagements\/[^/]+\/objections\/[^/]+\/(override|revisit)$/,
              (_m, act) => `/engagements/{eid}/objections/{oid}/${act}`)
+    .replace(/^\/engagements\/[^/]+\/programme\/gates\/[^/]+\/pass$/,
+             "/engagements/{eid}/programme/gates/{gate_id}/pass")
+    .replace(/^\/engagements\/[^/]+\/programme\/tasks\/[^/]+\/done$/,
+             "/engagements/{eid}/programme/tasks/{task_id}/done")
     .replace(/^\/engagements\/[^/]+\/memory\/[^/]+\/(recheck|correct|promote)$/,
              (_m, act) => `/engagements/{eid}/memory/{claim_id}/${act}`)
     .replace(/^\/engagements\/[^/]+(\/.*)?$/, (_m, rest) => `/engagements/{eid}${rest ?? ""}`)

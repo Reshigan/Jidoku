@@ -6,3 +6,4 @@ export { IntentView, LedgerView } from "./views_intent";
 export { EvidenceView, MilestonesView } from "./views_record";
 export { ConfigureView } from "./views_config";
 export { MemoryView } from "./views_memory";
+export { ProgrammeView } from "./views_programme";

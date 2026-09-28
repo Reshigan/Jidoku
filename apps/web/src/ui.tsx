@@ -119,7 +119,7 @@ export function useStillHere<T>(token: T): (was: T) => boolean {
  *  the eleventh onward are reached by click or by the arrow keys that walk the rail. */
 export const KEY_FOR = (i: number): string => (i < 10 ? String((i + 1) % 10) : "");
 
-export const VIEWS = ["Line", "Portfolio", "Crew", "Work", "Configure", "Verify", "Decisions", "Intent", "Insight", "Landscape", "Memory", "Ledger", "Evidence", "Documents", "Milestones"] as const;
+export const VIEWS = ["Line", "Portfolio", "Crew", "Work", "Configure", "Verify", "Decisions", "Intent", "Insight", "Landscape", "Memory", "Ledger", "Evidence", "Documents", "Milestones", "Programme"] as const;
 export type ViewName = (typeof VIEWS)[number];
 
 /**

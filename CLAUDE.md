@@ -14,6 +14,8 @@ hash-chained governance ledger with human-in-the-loop decisioning.
                                  recovered object is unsigned until a person signs it (ADR-0017).
 - `packages/jidoka-adapters`  — Adapter SDK + product adapters (SuccessFactors is the reference). Depends on jidoka-core only.
 - `packages/jidoka-compiler`  — design docs (workbooks) → IR. LLM-assisted, sign-off-gated.
+                                `absorb.py` takes a whole mobilisation pack — plan of record, gates, one-way doors,
+                                alignment matrix — via `tools/jidoka-absorb.py`. Read ADR-0046.
 - `services/api`             — FastAPI: engagements, IR, plans, ledger, decisions, registry.
 - `services/agent`           — the K5 consultant: Anthropic API + governed skills + eval harness.
 - `apps/web`                 — platform UI (React/Vite). `public/legacy-console.html` is the proven checkpoint UX to port.
@@ -38,6 +40,9 @@ Conventional commits; CI (`.github/workflows/ci.yml`) must be green before merge
 ## Where to start on common tasks
 - New SAP product adapter → `packages/jidoka-adapters` (implement `base.Adapter`, declare an honest tier_map, add fixture-driven tests; read ADR-0003).
 - New API surface → router in `services/api/src/jidoka_api/routers`, wire in `main.py`, test with httpx TestClient.
+- A client pack → `tools/jidoka-absorb.py <folder> --term YYYY-MM --system <id>`, then register the
+  bundle's `programme` block. Never commit a pack; add a same-shape fixture via
+  `packages/jidoka-compiler/tests/fixtures/make_fixtures.py`.
 - Agent skills → `services/agent/skills/<name>/SKILL.md`; every skill change must pass `services/agent/evals`.
 - UI → port interactions from `apps/web/public/legacy-console.html`; state comes from the API, never local truth.
 

@@ -141,6 +141,15 @@ of it.
     the answer is a refusal saying so, never an empty result that reads as a clean bill of health.
     ADR-0044.
 
+17. **A plan of record that refuses to publish a percentage.** A mobilisation pack is absorbed
+    whole — boundary conditions with the consequence of each failing, gates with named approvers and
+    stated evidence, one-way doors as ONE_WAY decisions rather than gates, tasks with dependencies —
+    and every row keeps what the register *claims* apart from what the chain *shows*. Completion is
+    derived only where a task watches something the platform can see; everywhere else the row says
+    the platform cannot see it. No percentage complete is published anywhere, and the screen says
+    why: a number made partly of workshops nobody can see would be quoted as progress. Every
+    programme tool we know of leads with that number. ADR-0046.
+
 ## Claims we cannot yet make
 
 - **"Proven on real engagements."** Zero production engagements have run on this platform. The
@@ -181,9 +190,17 @@ of it.
   reconciliation. A system with no log, or one nobody has reconciled, is reported as unreconciled
   — which is honest and is not the same as covered. The SuccessFactors entity this reads has not
   been confirmed against a live tenant.
-- **"World first" as a totality.** The sixteen claims above are shapes we believe are new. The only
+- **"We absorb any pack."** The absorber matches workbooks against declared profiles by filename
+  and reads registers by their headers. A pack laid out differently needs a profile, and the tool
+  says which files it did not read rather than guessing. The plan-of-record documents — the SDD, the
+  BRS, the plan of record itself — are not read at all: only the workbooks are, so anything stated
+  in prose and nowhere in a register is not in the platform.
+- **"The programme's tasks are tracked."** Most of them are not visible to the platform at all, and
+  the screen says so per row. What is tracked is what the chain can answer plus what a named person
+  has accounted for.
+- **"World first" as a totality.** The seventeen claims above are shapes we believe are new. The only
   honest form of the headline is: *the first SAP configuration platform we know of where drift,
   documents, tests and number ranges are all projections of one signed, hash-chained record — and
   where the machine can never approve its own work.*
 
-*Last reviewed 2026-09-21. If a claim above stops being true, edit this file in the same PR.*
+*Last reviewed 2026-09-28. If a claim above stops being true, edit this file in the same PR.*
