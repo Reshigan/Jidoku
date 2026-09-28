@@ -92,3 +92,69 @@ def audit_tier_map(adapter: Adapter) -> dict:
         "unconfirmable": {e: unverifiable[e] for e in sorted(unverifiable) if e in tiers},
         "counts": {t: sum(1 for x in tiers.values() if x == t) for t in "ABC"},
     }
+
+
+def audit_tenant(adapter: "Adapter", entity_sets: dict[str, dict]) -> dict:
+    """What one tenant's own `$metadata` says about the adapter's tier map.
+
+    `audit_tier_map` asks whether the map is honest against itself. This asks whether it is true
+    *here*. The two differ because a product's write surface is a property of the tenant: SF creates
+    an entity set per MDF object definition, so Tier-A coverage varies by customer, and a static map
+    can only ever be a statement about the product's shipped defaults.
+
+    Reports; never edits. Whether a published entity set is something the platform should write is
+    the adapter's call and then a person's — `$metadata` says what a tenant publishes, and an
+    entity set can be published and read-only.
+
+      not_published        tier A, write target not on this tenant — the claim is false here
+      not_writable         published, and the tenant says it is not upsertable
+      writability_unknown  published, no write annotation — unconfirmed, and never assumed writable
+      uncatalogued         published on the tenant and in no tier map; `candidates` are the ones the
+                           tenant itself marks upsertable
+    """
+    tiers = adapter.tier_map()
+    targets = {e: adapter.write_target(e) for e, t in tiers.items() if t == "A"}
+    catalogued = {t for t in targets.values() if t}
+
+    not_published = sorted(e for e, t in targets.items() if t and t not in entity_sets)
+    not_writable, unknown = [], []
+    for entity, target in sorted(targets.items()):
+        row = entity_sets.get(target or "")
+        if row is None:
+            continue
+        if row.get("upsertable") is False:
+            not_writable.append(entity)
+        elif row.get("upsertable") is None:
+            unknown.append(entity)
+
+    extra = {n: r for n, r in entity_sets.items() if n not in catalogued}
+    candidates = sorted(n for n, r in extra.items() if r.get("upsertable") is True)
+    confirmed = len(targets) - len(not_published) - len(not_writable) - len(unknown)
+    return {
+        "product": adapter.product,
+        "tier_a_claimed": len(targets),
+        "tier_a_confirmed_writable": confirmed,
+        "not_published": not_published,
+        "not_writable": not_writable,
+        "writability_unknown": unknown,
+        "uncatalogued": sorted(extra),
+        "candidates": candidates,
+        "says": _tenant_says(len(targets), confirmed, not_published, not_writable, unknown,
+                             extra, candidates),
+    }
+
+
+def _tenant_says(claimed, confirmed, missing, readonly, unknown, extra, candidates) -> str:
+    parts = [f"{confirmed} of {claimed} tier-A objects are confirmed writable on this tenant"]
+    if missing:
+        parts.append(f"{len(missing)} are not published by it at all: {', '.join(missing[:6])}"
+                     + ("…" if len(missing) > 6 else "") + " — the tier-A claim is false here")
+    if readonly:
+        parts.append(f"{len(readonly)} are published and marked not upsertable")
+    if unknown:
+        parts.append(f"{len(unknown)} are published with no write annotation, so whether they can "
+                     f"be written is unconfirmed rather than assumed")
+    if extra:
+        parts.append(f"{len(extra)} entity set(s) are on the tenant and in no tier map"
+                     + (f", {len(candidates)} of which it marks upsertable" if candidates else ""))
+    return ". ".join(parts) + "."

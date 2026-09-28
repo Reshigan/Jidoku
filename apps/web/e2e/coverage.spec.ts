@@ -17,6 +17,9 @@ const OUT_OF_BAND = new Set([
   // absorber, not something anybody types into a console. Tracing one — the judgement the platform
   // will not make for you — is on the screen.
   "POST /engagements/{eid}/specification",
+  // Drafts come from a design pass, not from anybody typing into a console. What a person does with
+  // one — read it, sign it, decline it — is on the screen, and is the point of the screen.
+  "POST /engagements/{eid}/proposals",
 ]);
 
 test("the console reaches every endpoint the API publishes", async ({ page, request }) => {
@@ -385,6 +388,26 @@ test("the console reaches every endpoint the API publishes", async ({ page, requ
   await page.getByRole("button", { name: "Record the trace" }).click();
   await dismissScrim(page);
 
+  /* Drafts an agent authored, answered by a person: one signed, one declined with a reason. The
+     drafts are posted as `anonymous`, so the console user is not their drafter and may sign. */
+  const draftOf = (code: string) => ({
+    object: "FOCostCenter", product: "SuccessFactors", system_binding: "KOM-SF-DEV", tier: "A",
+    external_code: code, intent: { externalCode: code, name: `Cost centre ${code}` },
+    source: { workbook: "SDD §5.1", signed_by: "", date: "" },
+  });
+  expect((await request.post(`/engagements/${eid}/proposals`, {
+    data: { records: [draftOf("CCA"), draftOf("CCB")] },
+  })).ok()).toBeTruthy();
+
+  await openView(page, /^Proposals/);
+  await expect(page.getByRole("heading", { name: "Waiting for a person" })).toBeVisible();
+  await page.getByRole("button", { name: "Sign", exact: true }).first().click();
+  await expect(page.locator(".sec", { hasText: "Already answered" })).toContainText("signed");
+  await page.getByRole("button", { name: "Decline" }).first().click();
+  await page.getByLabel("Why it is declined").fill("wrong cost centre group");
+  await page.getByRole("button", { name: "Decline it" }).click();
+  await dismissScrim(page);
+
   // Every engagement at once — the partner's screen, and the only one that reads the whole store.
   await page.getByRole("tab", { name: /^Portfolio/ }).click();
   await expect(page.getByRole("heading", { name: "Every engagement" })).toBeVisible();
@@ -464,6 +487,8 @@ function templated(p: string): string {
              (_m, act) => `/engagements/{eid}/objections/{oid}/${act}`)
     .replace(/^\/engagements\/[^/]+\/specification\/requirements\/[^/]+\/trace$/,
              "/engagements/{eid}/specification/requirements/{req_id}/trace")
+    .replace(/^\/engagements\/[^/]+\/proposals\/.+\/(sign|reject)$/,
+             (_m, act) => `/engagements/{eid}/proposals/{key}/${act}`)
     .replace(/^\/engagements\/[^/]+\/programme\/gates\/[^/]+\/pass$/,
              "/engagements/{eid}/programme/gates/{gate_id}/pass")
     .replace(/^\/engagements\/[^/]+\/programme\/tasks\/[^/]+\/done$/,

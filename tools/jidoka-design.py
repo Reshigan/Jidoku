@@ -84,6 +84,10 @@ def main(argv=None) -> int:
     proposals = {
         "brief": args.brief, "system": args.system, "product": args.product,
         "accepted": [p.record for p in out.accepted],
+        # Exactly the body of POST /engagements/{eid}/proposals, so this is `jq .proposals` away from
+        # a person's screen. They are drafts: no signature, and none can be added by whoever wrote them.
+        "proposals": {"records": [p.record for p in out.accepted],
+                      "note": f"design pass: {args.brief}"},
         "refused": [p.as_dict() for p in out.refused],
         "decision_points": out.decisions,
         "traces": out.traces,
@@ -91,8 +95,9 @@ def main(argv=None) -> int:
         "metadata_gate": bool(metadata) or
             "SKIPPED — no tenant $metadata was given, so nothing checked these records against a "
             "real tenant's fields. They are a guess about a product until that runs.",
-        "unsigned": ("Proposals, not intent. Nothing here executes until a person signs it, and the "
-                     "refusals below are part of what they are signing off on."),
+        "unsigned": ("Drafts, not intent. They carry no signature and cannot: a person signs each "
+                     "one on the Proposals screen, under their own identity, and the refusals here "
+                     "are part of what they are signing off on."),
     }
     text = json.dumps(proposals, indent=2, sort_keys=True, default=str)
     if args.out:

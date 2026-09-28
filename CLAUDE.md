@@ -51,6 +51,8 @@ Conventional commits; CI (`.github/workflows/ci.yml`) must be green before merge
 - Agent skills → `services/agent/skills/<name>/SKILL.md`; every skill change must pass `services/agent/evals`.
 - Authoring intent from documents → `tools/jidoka-design.py`, then `tools/jidoka-bench.py` to mark it.
   Never let the agent post records directly: the four gates in `design.py` are the product (ADR-0048).
+  An agent's output is a *draft* with no signature; only `POST .../proposals/{key}/sign` — `approve`,
+  never the drafter — makes it intent (ADR-0049).
 - UI → port interactions from `apps/web/public/legacy-console.html`; state comes from the API, never local truth.
   Fonts are served by the console, never fetched from Google: `src/fonts.css` is generated —
   run `npm run fonts` after adding a character, and `npm run check` fails if you forget.

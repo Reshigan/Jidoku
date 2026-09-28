@@ -23,7 +23,16 @@ def _honest_tier(rec) -> str | None:
 
 @router.post("")
 def upload_ir(eid: str, records: list[dict], identity: Identity = Depends(require("write_ir"))):
-    e = get_or_404(eid)
+    return load_records(get_or_404(eid), records, identity)
+
+
+def load_records(e, records: list[dict], identity: Identity) -> dict:
+    """The one load path: signed-source, numbering, tier honesty, supersession, orphans, delta pool.
+
+    Shared so that signing an agent's draft goes through exactly the gates a workbook upload does. A
+    second path that "merged one record" would be a second set of gates, and the weaker one is the
+    one that gets used.
+    """
     try:
         loaded, open_dps = load_ir(records)
     except IRValidationError as ex:

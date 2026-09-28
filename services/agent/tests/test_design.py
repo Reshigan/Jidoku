@@ -8,6 +8,7 @@ to author intent at all.
 import json
 from types import SimpleNamespace
 
+import pytest
 from jidoka_adapters.successfactors import SFAdapter
 from jidoka_core.schema import IR_SCHEMA
 from jidoka_agent.design import (SYSTEM, DesignSession, ir_tool_schema, request, requirements_of,
@@ -44,7 +45,8 @@ PACK = {
 GOOD = {
     "object": "FOPayComponent", "product": "SuccessFactors", "system_binding": "KOM-SF-DEV",
     "tier": "A", "external_code": "BASIC",
-    "source": {"workbook": "SDD.docx", "signed_by": "N. Sango", "date": "2026-09-30"},
+    # A draft: it cites where its values came from and carries no signature. A person signs it.
+    "source": {"workbook": "SDD.docx"},
     "intent": {"externalCode": "BASIC", "name": "Basic Salary"},
 }
 
@@ -137,6 +139,7 @@ def test_the_system_prompt_states_the_invariants_it_has_to_state():
     assert "Never invent a value" in SYSTEM
     assert "The product decides the tier" in SYSTEM
     assert "builder, never the approver" in SYSTEM
+    assert "never write source.signed_by" in SYSTEM
 
 
 # --- the reads -------------------------------------------------------------------------------
@@ -189,11 +192,41 @@ def test_a_record_with_no_source_is_refused_because_provenance_is_the_invariant(
     assert len(s.out.refused) == 1
 
 
-def test_an_unsigned_source_is_refused_by_the_same_function_the_api_uses():
+def test_a_drafter_that_writes_a_signature_is_refused_because_it_is_asserting_an_approval():
+    # The hole this closes: `validate_record` checks signed_by is *present*, so a model could pass the
+    # gate by writing a person's name into it. Unsigned intent wearing a signature.
     s = session()
-    bad = {**GOOD, "source": {"workbook": "SDD.docx", "signed_by": "", "date": "2026-09-30"}}
-    got = s.propose_ir(bad, ["SDD §5.1"])
-    assert any("does not execute unsigned intent" in p for p in got["problems"])
+    forged = {**GOOD, "source": {"workbook": "SDD.docx", "signed_by": "N. Sango",
+                                 "date": "2026-09-30"}}
+    got = s.propose_ir(forged, ["SDD §5.1"])
+    assert got["accepted"] is False
+    assert any("asserting an approval nobody gave" in p for p in got["problems"])
+    assert s.out.accepted == []
+
+
+def test_an_accepted_record_is_stored_as_a_draft_with_no_signature_and_platform_stamped_provenance():
+    s = session()
+    typed = {**GOOD, "source": {"workbook": "something the model made up"}}
+    s.propose_ir(typed, ["SDD §5.1", "DP-C04"])
+    stored = s.out.accepted[0].record["source"]
+    assert stored == {"workbook": "SDD §5.1; DP-C04", "signed_by": "", "date": ""}
+
+
+def test_an_accepted_record_is_still_unloadable_until_a_person_signs_it():
+    from jidoka_core.ir import IRValidationError, validate_record
+    s = session()
+    s.propose_ir(GOOD, ["SDD §5.1"])
+    with pytest.raises(IRValidationError) as ex:
+        validate_record(s.out.accepted[0].record)
+    assert "does not execute unsigned intent" in str(ex.value)
+
+
+def test_the_tool_schema_no_longer_asks_the_model_for_a_signature_it_may_not_give():
+    source = ir_tool_schema()["properties"]["source"]
+    assert source["required"] == ["workbook"]
+    assert "signed_by" not in source["properties"] and "date" not in source["properties"]
+    # …while the published schema still demands them of a *signed* record.
+    assert "signed_by" in IR_SCHEMA["properties"]["source"]["required"]
 
 
 def test_a_tier_the_model_invented_is_refused_naming_both_answers():

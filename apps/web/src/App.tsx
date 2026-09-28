@@ -13,7 +13,7 @@ import { LINE_STOP, LINE_RESUME, buildLanes, lineStop, milestones, type Lane, ty
 import { AndonRail, Empty, Field, Modal, Skeleton, VIEWS, type ViewName } from "./ui";
 import {
   ConfigureView, DecisionsView, EvidenceView, IntentView, LandscapeView, LedgerView, LineView,
-  MemoryView, MilestonesView, ProgrammeView, SpecificationPanel, WorkView,
+  MemoryView, MilestonesView, ProgrammeView, ProposalsView, SpecificationPanel, WorkView,
 } from "./views";
 import { DocumentsView } from "./views_document";
 import { CrewView } from "./views_crew";
@@ -571,6 +571,10 @@ export default function App() {
               {view === "Specification" && (
                 <SpecificationPanel eid={eid}
                                     onRefusal={(title, text) => setRefusal({ title, text })} />
+              )}
+              {view === "Proposals" && (
+                <ProposalsView eid={eid}
+                               onRefusal={(title, text) => setRefusal({ title, text })} />
               )}
               {view === "Documents" && (
                 <DocumentsView eid={eid}

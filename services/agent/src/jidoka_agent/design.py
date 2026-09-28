@@ -33,7 +33,7 @@ import json
 import os
 from dataclasses import dataclass, field
 
-from jidoka_core.ir import IRValidationError, validate_record
+from jidoka_core import proposals
 from jidoka_core.requirements import Requirement
 from jidoka_core.schema import IR_SCHEMA
 from jidoka_core.twin import SchemaTwin
@@ -117,7 +117,16 @@ def ir_tool_schema() -> dict:
     definition. The projection is deliberately not authoritative — `validate_record` is, and it runs
     on every proposal — so a drift between the two is caught by the gate rather than trusted.
     """
-    return {k: v for k, v in IR_SCHEMA.items() if not k.startswith("$") and k != "title"}
+    out = {k: v for k, v in IR_SCHEMA.items() if not k.startswith("$") and k != "title"}
+    # The published schema requires source.signed_by and source.date — correctly, for a *signed*
+    # record. A drafter is not a signer: asking the model to fill those in would have the tool schema
+    # demand the very field `proposals.check` refuses, and would invite a fabricated name. The drafter
+    # cites where the values came from; a person signs (invariant 1, invariant 7).
+    out["properties"] = {**out["properties"], "source": {
+        "type": "object", "required": ["workbook"],
+        "properties": {"workbook": {"type": "string", "minLength": 1,
+                                    "description": "the document section or decision point"}}}}
+    return out
 
 
 def tools(schema: dict | None = None) -> list[dict]:
@@ -212,8 +221,10 @@ write an entity's fields; write only fields it publishes, and every field it req
 authored without reading them is a guess with paperwork.
 5. A refusal is information, not an obstacle. When propose_ir refuses a record, fix what it names \
 and propose again. Do not work around a gate.
-6. You are the builder, never the approver. Nothing you author executes until a person signs it. \
-Write the rationale a reviewer needs, not just the conclusion.
+6. You are the builder, never the approver. Nothing you author executes until a person signs it, \
+and you cannot sign: never write source.signed_by or source.date — cite where each value came from in \
+`sources` and the platform records it. A record carrying a name you wrote is refused. Write the \
+rationale a reviewer needs, not just the conclusion.
 7. Say what you could not do. A design pass that silently skipped a scope item is worse than one \
 that raised a decision about it."""
 
@@ -290,14 +301,20 @@ class DesignSession:
             return {"accepted": False,
                     "problems": [f"A record is an object, not a {type(record).__name__}. Send the "
                                  f"fields, not a description of them."]}
-        problems = self._check(record, list(sources or []))
-        proposal = Proposal(record=record, accepted=not problems, problems=problems)
+        sources = list(sources or [])
+        problems = self._check(record, sources)
+        # Stored as a draft: provenance from what was *cited*, and no signature at all. Whatever
+        # `source` the model typed is replaced, so a proposal that passes cannot carry a name.
+        stored = proposals.draft(record, sources) if not problems else record
+        proposal = Proposal(record=stored, accepted=not problems, problems=problems)
         (self.out.accepted if proposal.accepted else self.out.refused).append(proposal)
         if problems:
             return {"accepted": False, "problems": problems,
                     "note": "Fix these and propose again. Do not work around them."}
         return {"accepted": True, "object": record.get("object"),
-                "external_code": record.get("external_code", "")}
+                "external_code": record.get("external_code", ""),
+                "note": "Recorded as a draft. It has no signature and cannot have one from you — a "
+                        "person signs it, and until then it is not intent."}
 
     def _check(self, record: dict, sources: list) -> list[str]:
         """The four gates. Every one of them is a check the platform already trusted somewhere
@@ -310,11 +327,12 @@ class DesignSession:
                 "resolved decision point; a record with no provenance is a guess, and invariant 2 "
                 "says the platform does not make them.")
 
-        try:
-            _rec, open_dps = validate_record(record)
-        except IRValidationError as ex:
-            problems.append(f"IR validation: {ex}")
-            open_dps = []
+        # Provenance is the drafter's `sources`, so `source.workbook` is stamped from it below; what
+        # matters here is that the record carries no signature and is otherwise valid.
+        stamped = {**record, "source": {**(record.get("source") or {}),
+                                        "workbook": "; ".join(map(str, sources)) or ""}}
+        problems.extend(proposals.check(stamped))
+        open_dps = _placeholders(record.get("intent"))
         if open_dps:
             problems.append(
                 f"Unresolved decision placeholders in the intent: {open_dps}. Raise them with "
@@ -477,3 +495,10 @@ def requirements_of(pack: dict) -> list[Requirement]:
     return [Requirement(**{k: (tuple(v) if k == "objects" else v) for k, v in r.items()
                            if k in Requirement.__dataclass_fields__})
             for r in pack.get("specification", {}).get("requirements", [])]
+
+
+def _placeholders(node, path="intent") -> list[str]:
+    """Decision-point placeholders left in an intent tree, by path. The same walk the IR loader does
+    (`jidoka_core.ir._find_decision_points`), reached without loading a record."""
+    from jidoka_core.ir import _find_decision_points
+    return _find_decision_points(node or {}, path)

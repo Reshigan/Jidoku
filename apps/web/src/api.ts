@@ -963,6 +963,18 @@ const api3 = {
   traceRequirement: (eid: string, reqId: string, objects: string[], why: string) =>
     call<SpecificationView>(`/engagements/${eid}/specification/requirements/${reqId}/trace`,
       { method: "POST", body: JSON.stringify({ objects, why }) }),
+
+  /** What an agent drafted and nobody has yet signed, rejected or answered. `read` on purpose. */
+  proposals: (eid: string) => call<Proposals>(`/engagements/${eid}/proposals`),
+  /** Signing is `approve`, the signer cannot be the drafter, and the signature is the caller's
+      identity — there is no field in this request to put a name in. */
+  signProposal: (eid: string, key: string) =>
+    call<{ signed: string; signed_by: string }>(
+      `/engagements/${eid}/proposals/${encodeURIComponent(key)}/sign`, { method: "POST" }),
+  rejectProposal: (eid: string, key: string, reason: string) =>
+    call<{ rejected: string; reason: string }>(
+      `/engagements/${eid}/proposals/${encodeURIComponent(key)}/reject`,
+      { method: "POST", body: JSON.stringify({ reason }) }),
 };
 
 /** The engagement plan, as the platform accounts for it. There is deliberately no percentage here:
@@ -1008,6 +1020,16 @@ export interface SpecificationView {
   declared_gaps: string[]; unrecognised_fit: string[];
   says: string; method: string;
 }
+
+/** Intent an agent drafted, waiting for a person. A draft carries no signature and cannot: the
+    signer is stamped from the authenticated identity when somebody with `approve` signs it. */
+export interface ProposalRow {
+  key: string; record: Record<string, unknown> & { object?: string; tier?: string;
+    intent?: Record<string, unknown>; source?: { workbook?: string } };
+  status: "pending" | "signed" | "rejected"; proposed_by: string; proposed_on: string; why: string;
+  resolved_by: string; resolved_on: string; reason: string;
+}
+export interface Proposals { proposals: ProposalRow[]; pending: number; signed: number; rejected: number; }
 
 /** One client surface. Typed by construction, so a missing endpoint is a compile error. */
 export const platform = { ...api, ...api2, ...api3 };

@@ -182,3 +182,56 @@ test("an untraced requirement is shown first and is never counted as covered", a
 
   await expect(page.locator("main")).not.toContainText("%");
 });
+
+
+/* The proposals screen's one job is to show a person what they are signing, and to make clear that
+   the drafter did not. */
+const DRAFT = {
+  object: "FOCostCenter", product: "SuccessFactors", system_binding: "KOM-SF-DEV", tier: "A",
+  external_code: "CC1", intent: { externalCode: "CC1", name: "Finance" },
+  source: { workbook: "SDD §5.1", signed_by: "", date: "" },
+};
+
+test("an engagement nobody drafted for says so rather than showing an empty table", async ({ page }) => {
+  await open(page, "prop.empty");
+  await page.getByRole("tab", { name: /^Proposals/ }).click();
+  await expect(page.locator(".empty")).toContainText("No agent has drafted anything");
+});
+
+test("a draft shows where its values came from and who drafted it, and signing records the signer", async ({ page, request }) => {
+  const eid = await open(page, "prop.signer");
+  expect((await request.post(`/engagements/${eid}/proposals`, { data: { records: [DRAFT] } })).ok())
+    .toBeTruthy();
+
+  await page.getByRole("tab", { name: /^Proposals/ }).click();
+  const waiting = page.locator(".sec", { hasText: "Drafts an agent authored" });
+  await expect(waiting).toContainText("SuccessFactors:FOCostCenter:CC1");
+  await expect(waiting).toContainText("SDD §5.1");
+  await expect(waiting).toContainText("anonymous");          // the drafter, named
+
+  await waiting.getByRole("button", { name: "Sign", exact: true }).click();
+  const answered = page.locator(".sec", { hasText: "What was signed and what was declined" });
+  await expect(answered).toContainText("prop.signer");       // the console's identity, not a typed name
+  await expect(answered).toContainText("signed");
+});
+
+test("a drafter cannot sign its own draft, and the refusal says why", async ({ page }) => {
+  const eid = await open(page, "prop.self");     // signed in as prop.self, the drafter below
+  // The console user drafts through the API under their own identity, then tries to sign in the UI.
+  // The token is minted the way the console mints it (POST /auth/token) rather than read out of
+  // sessionStorage, which a browser may deny — the console guards for that and keeps the session in
+  // memory, so there is nothing to read. A missing token fails the test rather than skipping it: a
+  // skip would be a test that passes by not running, on the one rule this screen exists to show.
+  const minted = await page.request.post("/auth/token", {
+    data: { subject: "prop.self", roles: ["builder", "reviewer", "approver", "auditor"] },
+  });
+  expect(minted.ok()).toBeTruthy();
+  const token = (await minted.json()).token as string;
+  const res = await page.request.post(`/engagements/${eid}/proposals`, {
+    data: { records: [DRAFT] }, headers: { authorization: `Bearer ${token}` },
+  });
+  expect(res.ok()).toBeTruthy();
+  await page.getByRole("tab", { name: /^Proposals/ }).click();
+  await page.getByRole("button", { name: "Sign", exact: true }).click();
+  await expect(page.locator(".modal.refusal")).toContainText("may not sign it");
+});

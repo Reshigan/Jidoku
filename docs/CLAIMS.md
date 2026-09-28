@@ -170,7 +170,10 @@ of it.
     what it authors against configuration real consultants really built from the same documents —
     where `extra` is never scored as wrong, because a benchmark punishing it would train the pass to
     author less. We know of no configuration tool that generates intent and then declines to accept
-    it until the substrate agrees. ADR-0048.
+    it until the substrate agrees. And what it authors is a *draft*: it carries no signature and has
+    nowhere to put one — a model that writes a name into `signed_by` is refused for asserting an
+    approval nobody gave, the signature is stamped from the authenticated person who signs, and
+    that person cannot be the drafter. ADR-0048, ADR-0049.
 
 ## Claims we cannot yet make
 
@@ -230,6 +233,10 @@ of it.
   tested with a scripted client and no network — which is why they are testable at all, and is not
   the same as proven. What a frontier model actually authors from a real SDD is unmeasured, and the
   benchmark exists precisely so that it stops being a matter of opinion.
+- **"Signing is safe at scale."** It is one record at a time, which is the honest cost of a person
+  reading what they sign, and nothing stops a signer clicking through a hundred drafts unread. The
+  platform's answer to that is the ledger — who signed what, and when — not a control. Bulk signing
+  would need its own answer to "what did the signer actually read".
 - **"The agent configures the whole solution."** It can author intent for anything the design names,
   including the objects SAP publishes no write API for — authoring and writing are different
   problems. Three limits remain and none is a capability limit: partner Provisioning access we may

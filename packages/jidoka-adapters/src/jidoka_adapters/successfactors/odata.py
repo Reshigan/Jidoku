@@ -135,3 +135,30 @@ def parse_metadata(raw: bytes | str) -> dict:
             }
         out[et.get("Name")] = {"fields": fields}
     return out
+
+
+#: SAP's own annotations for whether an entity set can be written, on the EntitySet element. SF writes
+#: through upsert, so `upsertable` is the one that decides; the other two are kept because a set that
+#: is creatable and updatable but says nothing about upsert is a different answer from one that says
+#: no to all three.
+WRITE_ANNOTATIONS = ("upsertable", "creatable", "updatable")
+
+
+def parse_entity_sets(raw: bytes | str) -> dict[str, dict]:
+    """$metadata XML -> {entity set: {"entity_type", "upsertable", "creatable", "updatable"}}.
+
+    Each annotation is True, False, or **None where the tenant published none**. None is not a
+    default of True: an absent annotation is an unanswered question about a write path, and a tier
+    map that treated silence as permission is exactly what this exists to stop. Attribute
+    namespaces are matched by local name because SAP's annotation namespace is not one every
+    release spells the same way.
+    """
+    out: dict[str, dict] = {}
+    for es in ET.fromstring(raw).iter(f"{EDM_NS}EntitySet"):
+        local = {k.rsplit("}", 1)[-1].split(":")[-1]: v for k, v in es.attrib.items()}
+        row = {"entity_type": local.get("EntityType", "")}
+        for name in WRITE_ANNOTATIONS:
+            value = local.get(name)
+            row[name] = None if value is None else value.strip().lower() == "true"
+        out[es.get("Name")] = row
+    return out

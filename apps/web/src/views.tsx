@@ -8,3 +8,4 @@ export { ConfigureView } from "./views_config";
 export { MemoryView } from "./views_memory";
 export { ProgrammeView } from "./views_programme";
 export { SpecificationView_ as SpecificationPanel } from "./views_specification";
+export { ProposalsView } from "./views_proposals";
