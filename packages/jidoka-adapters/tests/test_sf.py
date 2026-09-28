@@ -119,3 +119,37 @@ class TestVerify(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# --- the tier map has to be honest about what it can read back, not only what it can write --------
+
+def test_no_tier_a_entity_lacks_a_write_target():
+    """A Tier-A entity with no entity set would fail at the substrate with a target already armed."""
+    from jidoka_adapters.base import audit_tier_map
+
+    assert audit_tier_map(SFAdapter())["lying"] == []
+
+
+def test_the_adapter_names_what_it_cannot_read_back():
+    from jidoka_adapters.successfactors.tiers import TIER_MAP
+
+    gaps = SFAdapter().unverifiable()
+    # Provisioning and Admin Center objects: SF publishes no entity set that reads them.
+    assert "DATA_MODEL_XML" in gaps and "PROVISIONING_SWITCH" in gaps
+    assert all(TIER_MAP[e] in ("B", "C") for e in gaps), "a Tier-A entity must be readable"
+    assert all(gaps[e] for e in gaps), "a declared gap with no reason is not a declaration"
+
+
+def test_a_readable_but_unwritable_entity_is_still_confirmable():
+    """The Tier B/C bargain: a person does it and JIDOKA reads the result back (ADR-0003)."""
+    a = SFAdapter()
+    for entity in ("TimeAccountDetail", "WorkScheduleDay", "Holiday", "PicklistOption"):
+        assert a.verifiable(entity), entity
+        assert a.write_target(entity) is None, f"{entity} must never be a write target"
+
+
+def test_every_writable_entity_can_also_be_read_back():
+    a = SFAdapter()
+    from jidoka_adapters.successfactors.tiers import ENTITY_SETS
+
+    assert all(a.verifiable(e) for e in ENTITY_SETS)

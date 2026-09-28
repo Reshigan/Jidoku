@@ -1,30 +1,56 @@
 # JIDOKA Roadmap — epics broken to Claude-Code-sized issues
-## E1 Core hardening (now)
-- [ ] Persist ledger/IR/registry to SQLite behind repository interfaces (keep in-memory impl for tests)
-- [ ] IR JSON Schema published + versioned (ir/v1)
-- [ ] Planner: parallel-branch output (independent subgraphs → concurrent lanes)
+
+A box is ticked only against code that exists and tests that run. Under-reporting misleads exactly
+as much as over-claiming, which is why `docs/CLAIMS.md` exists — and why E1–E5 and E7 sat unticked
+for weeks after they were built, until somebody checked.
+
+## E1 Core hardening
+- [x] Persist ledger/IR/registry to SQLite behind repository interfaces (keep in-memory impl for tests)
+      — `jidoka_core.repository`, both implementations held to one suite by `test_repository.py`
+- [x] IR JSON Schema published + versioned (ir/v1) — `jidoka_core.schema`, served at `/schema/ir`
+- [x] Planner: parallel-branch output (independent subgraphs → concurrent lanes) — `plan()["lanes"]`
 ## E2 API completeness
-- [ ] Engagement lifecycle states (DISCOVER→SCOPE→BUILD→CUTOVER→HYPERCARE)
-- [ ] AuthN/Z: OIDC, roles (builder/reviewer/approver/auditor); SoD enforced server-side
-- [ ] Evidence export endpoint (ledger chain + artefact bundle, auditor-verifiable offline)
+- [x] Engagement lifecycle states (DISCOVER→SCOPE→BUILD→CUTOVER→HYPERCARE) — `jidoka_core.lifecycle`,
+      forward-only and ledgered
+- [x] AuthN/Z: OIDC, roles (builder/reviewer/approver/auditor); SoD enforced server-side — `oidc.py`,
+      `auth.py`; a group map granting a builder `approve` is refused at config load (ADR-0008)
+- [x] Evidence export endpoint (ledger chain + artefact bundle, auditor-verifiable offline) — `evidence.py`,
+      with the verification procedure shipped inside the bundle
 ## E3 SuccessFactors live path
-- [ ] OData client (OAuth SAML bearer), $metadata fetch, live extract behind adapter fetcher
-- [ ] $batch loader with per-record error journal + idempotent replay
-- [ ] Instance file importers for Tier B artefact handoff
+- [x] OData client (OAuth SAML bearer), $metadata fetch, live extract behind adapter fetcher
+- [x] $batch loader with per-record error journal + idempotent replay
+- [x] Instance file importers for Tier B artefact handoff
+- [ ] Nothing above has ever spoken to a live tenant. Every test injects a transport; the SAML assertion is
+      read from an env var and nothing mints or refreshes one. See docs/CLAIMS.md.
 ## E4 Compiler
-- [ ] XLSX workbook → IR with cell-level provenance (openpyxl), gap questionnaire for prose docs
+- [x] XLSX workbook → IR with cell-level provenance (openpyxl), gap questionnaire for prose docs
+- [x] Documents projected from signed state, including the archaeology backlog (ADR-0017)
 ## E5 Agent (K5 consultant)
-- [ ] Anthropic tool-use loop over API endpoints (agent = builder only)
-- [ ] K5 exam runner: YAML scenarios, human-graded rubric ingestion, pass-gate for skill promotion
+- [x] Anthropic tool-use loop over API endpoints (agent = builder only) — `consultant.py`; the tool list
+      excludes approval, and no ring an agent occupies holds the capability
+- [x] K5 exam runner: YAML scenarios, human-graded rubric ingestion, pass-gate for skill promotion —
+      `exam.py`, `grader.py`; a skill is examined only on its own syllabus (ADR-0011)
 ## E6 Twin v1
-- [ ] Rule-export parser → executable rule eval, calibrated against DEV probes; fidelity metric published
+- [x] Rule-export parser → executable rule eval; fidelity published as a projection over the chain and withheld
+      below ten settled predictions; the twin never blocks a write (ADR-0026). SAP's own rule XML is not parsed —
+      the evaluatable subset is JIDOKA's shape and refuses what it cannot read.
 ## E7 Web app
-- [ ] Port checkpoint console to React on live API; milestone rail; DP queues; landscape graph
+- [x] Port checkpoint console to React on live API; milestone rail; DP queues; landscape graph — 15 screens,
+      state from the API and never local truth, every endpoint walked by a browser in `e2e/coverage.spec.ts`
 ## E8 New adapters
-- [ ] S/4HANA/ECC transport-native adapter (BC Set generation, TMS release hooks)
-- [ ] BTP adapter via Terraform provider
+- [~] S/4HANA adapter: OData writes, CSRF, and transport-aware completion DEV→QA→PROD are built (ADR-0006,
+      ADR-0009). BC Set generation and TMS release hooks are not.
+- [x] BTP adapter: Terraform-declared objects are Tier B — JIDOKA emits the HCL, a person plans,
+      reads the diff and applies under their own credentials, and JIDOKA reads the BTP APIs back
+      (applying it would mean owning the customer's state file or destroying what it did not know
+      about). Tier A is the two real write APIs; Tier C is cockpit-only with an attestation. No
+      live connector, and `_live` refuses BTP by name (ADR-0038)
 ## E9 Deployment & SaaS
-- [ ] EngagementLedger Durable Object (TS port of ledger semantics + Access-identity SoD)
+- [x] EngagementLedger Durable Object: the chain in plain JS (`deploy/cloudflare/src/chain.mjs`),
+      one DO per engagement so appends cannot race for the same prev hash, identity from the Access
+      header and never the body — held byte-for-byte to the kernel's own conformance fixture by
+      `src/ledger.check.mjs`, which CI runs beside the Python suite held to the same file
+      (ADR-0037). Not deployed: the registry, executor and decision gates are not ported.
 - [ ] Org onboarding worker: D1-per-tenant, R2 prefix, envelope keys, AI Gateway budgets
 - [ ] Edge Connector: adapter runtime + tunnel client; ro-binding compiled without write capability
 - [ ] Terraform for Access/R2/Queues/DO; GH Actions -> GHCR -> wrangler
@@ -34,19 +60,79 @@
 - [ ] Vectorize retrieval with citation-required answers; citation-coverage metric on dashboard
 - [ ] Skill Factory: elicitation tooling, engagement mining, senior sign-off flow, K5 exam gate
 ## E11 Advanced concepts (docs/JIDOKA_ADVANCED_CONCEPTS.md)
-- [ ] C6 Evidence Compiler: controls as executable predicates over ledger+state; complete-population assurance
-- [ ] C1 Refinement-typed IR: statutory/referential refinements; plan type-checking
+- [x] C6 Evidence Compiler: complete-population assurance (`jidoka_core.assurance` — ADR-0023) and controls as
+      executable predicates over the ledger (`jidoka_core.controls`: six controls, every row tested, violations
+      enumerated rather than counted, NOT_EXERCISED distinguished from PASS — ADR-0025)
+- [x] C1 Refinement-typed IR: `bounded` (a statutory ceiling citing statute, signer and date — a
+      bound with no authority does not load), `dependent` (decided by another object's field) and
+      `required` (R-107's shape). The plan is type-checked after the decision points, and every
+      rejection is the auditor's control narrative verbatim (`jidoka_core.refinements`,
+      `routers/types_router.py`, the Intent screen — ADR-0036). The compiler does not emit them yet.
 - [ ] C2 CP-SAT run-planner: optimal sequencing under approver/window/statutory constraints + shadow prices
 - [ ] C3 Bayesian forecaster: nightly Monte-Carlo P(go-live) + ranked interventions
-- [ ] C5 Adversarial agent economy: architect/auditor/sentinel/operator/economist, no shared memory
+- [x] C5 Adversarial agent economy: architect/auditor/sentinel/operator/economist, no shared memory — `jidoka_os.crew`
+      runs the pass, `routers/run.py` binds the syscalls to the executor, the Crew view shows who held what authority (ADR-0018)
 - [ ] C4/C7 (research): causal defect graph; DP routing mechanism design
 ## E12 Team-member behaviours (docs/JIDOKA_TEAM_MEMBER_MODEL.md)
-- [ ] Shift scheduler + night jobs + first-person handover composer
-- [ ] Interruption budget ranked by cost-of-silence
-- [ ] Person profiles: authority, capacity, latency, working hours; cheapest-sufficient-authority routing
-- [ ] Self-accountability page: fidelity defects, forecast calibration, refusal review
-- [ ] Objection records with scheduled revisit triggers
+- [x] Shift scheduler + night jobs + first-person handover composer (`jidoka_os.handover`,
+      `routers/nightshift.py`, the Crew screen — ADR-0027), with a clock in both deployment shapes:
+      `python -m jidoka_api.nightly` under compose, a Worker `scheduled()` handler at the edge (ADR-0028)
+- [x] Interruption budget ranked by cost-of-silence — published table, hard budget, and what it held back is in
+      the handover rather than dropped (ADR-0027)
+- [x] Person profiles: authority, named-zone working hours, cheapest-sufficient-authority routing, weekly
+      capacity read off the ledger's `ASKED` entries, and observed latency from its DP_RAISED/DP_RESOLVED
+      pairs (`jidoka_os.people`, `routers/people.py` — ADR-0029). Capacity changes who is asked and a full
+      team is the finding; latency is reported in the handover and deliberately never routed on.
+- [x] Self-accountability page: refusals and clearings on the ledger, gates read as friction or as
+      holding, drift after a verification counted apart from drift, twin fidelity reused rather
+      than recomputed, and what it cannot measure printed beside the numbers
+      (`jidoka_core.accountability`, `routers/accountability.py`, the Evidence screen — ADR-0031)
+- [x] Portfolio: every engagement at once, worst first, each number the same projection its own
+      screen shows (`routers/portfolio.py`, the Portfolio screen — ADR-0032)
+- [x] Objection records with revisit triggers: stated once by identity, consequence and
+      recommendation required, grounds a closed set, overridden only by a named person holding
+      `approve`, revisited at the phase where the consequence lands — and the revisit reports what
+      the chain says, never who was right (`jidoka_core.objections`, `routers/objections.py`, the
+      night shift's `objection_due`, the Decisions screen — ADR-0033)
+## E15 Design lifecycle, reach and commercial gates
+- [x] The adapter decides the tier: a workbook that overstates or understates it is refused at load,
+      naming both answers; an object no adapter knows may be B or C and never A (ADR-0045)
+- [x] Workbook profiles: the mapping from a real design authority document to IR is declared data,
+      so a programme is a new profile rather than a new parser — header below a title block, origin
+      qualified by prefix, a row the workbook disowns left uncompiled, and every sheet not read
+      named (`jidoka_compiler.profile`)
+- [x] A new design supersedes the old one: the diff on the chain, and a record the new version
+      dropped that a customer's system still holds becomes an orphan — drift's treatment, two
+      exits, planning halted (`jidoka_core.supersede` — ADR-0039)
+- [x] The night's interruptions reach somebody: one webhook sink, only what the budget spent, a
+      minimal payload, every attempt on the chain, and a failure that never costs the night its
+      work (`jidoka_api.notify` — ADR-0040)
+- [x] The delta pool can be exhausted: a customisation is an object with a contract, counted from
+      the design, and going over is a COMMERCIAL decision that halts the plan
+      (`jidoka_core.delta` — ADR-0041)
+- [x] Two environments, compared: the same designed objects read from two registered systems
+      through bindings that cannot write, with neither side the baseline and signed intent as the
+      third party where it describes the object (`jidoka_core.environments`,
+      `routers/environments.py`, the Landscape screen — ADR-0042)
+- [x] The verifier ships: `tools/jidoka-verify.py`, stdlib-only, no JIDOKA imports, held to the
+      same conformance fixture as the kernel and the Durable Object — and it contradicts the
+      bundle where the bundle is wrong (ADR-0043)
+- [x] Reconcile against the system's own change log: four outcomes, the translation in the
+      adapter, an unreadable log as a refusal rather than an empty result, an unreconciled
+      engagement that says so, and cost-of-silence 95 (`jidoka_core.reconcile`,
+      `routers/reconcile.py`, the Landscape screen — ADR-0044)
+- [ ] Regression grammar: a customisation becomes a test dimension automatically (§3 step 5)
+- [ ] Release-readiness: re-validate every contract when SAP ships a release (§3 step 6)
 ## E13 Insight & team (built: jidoka-insight; docs/JIDOKA_PROJECT_TEAM_AND_ALIGNMENT.md)
 - [x] Archaeology reverse-IR (unsigned by construction) · time-travel as_of · person-level blast radius · debt index
-- [ ] Cross-module contract registry in IR schema (owner module, declared readers)
-- [ ] Module agent manifests (RCM/ONB/PMGM/TO) + PMO/migration agent manifests in economy.py
+- [x] Insight reachable end to end: API (`routers/insight.py`), Insight console view, `archaeology-backlog` document;
+      signing a recovered draft makes it ordinary IR the planner, documents and verification already handle (ADR-0017)
+- [x] Cross-module contract registry in the IR schema: single owner module, registered consumers,
+      what it feeds, statutory linkage. Two writers block the plan through the same gate an open
+      decision point uses; an undeclared reader is a finding that names the owner; standard
+      configuration needs no contract (`jidoka_core.contracts`, `routers/contracts.py`, the Intent
+      screen — ADR-0034)
+- [~] Module agent manifests: derived from the design rather than hardcoded — `crew.run` spawns one
+      Ring-2 agent per contract owner in the signed intent, each objecting only about its own
+      objects (ADR-0035). PMO (Ring 3, writes nothing), migration (no WRITE_TARGET) and integration
+      (Ring 1) manifests exist and have no caller yet; they are shapes, not behaviour.

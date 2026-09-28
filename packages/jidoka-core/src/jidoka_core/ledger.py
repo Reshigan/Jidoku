@@ -1,6 +1,8 @@
 """Hash-chained append-only governance ledger: checkpoints, apjidokals, SoD.
 Tamper-evidence is cryptographic, not procedural — an auditor can verify the chain offline."""
-import hashlib, json, time
+import hashlib, json
+
+from .clock import stamp
 
 class SoDViolation(Exception): ...
 class LedgerTampered(Exception): ...
@@ -17,7 +19,7 @@ class Ledger:
 
     def append(self, task: str, action: str, actor: str, detail: str = "", **extra) -> dict:
         prev = self.entries[-1]["hash"] if self.entries else GENESIS
-        entry = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        entry = {"ts": stamp(),
                  "task": task, "action": action, "actor": actor, "detail": detail, **extra}
         entry["hash"] = self._hash(entry, prev)
         entry["prev"] = prev

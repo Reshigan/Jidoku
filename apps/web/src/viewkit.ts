@@ -101,6 +101,8 @@ export function humanAction(a: string) {
     IN_TRANSPORT: "Waiting on transport", TRANSPORT_ADVANCED: "Transport moved on",
     TRANSPORT_FAILED: "Transport refused", ARMED: "Armed for a live write",
     DISARMED: "Live writing turned off", CONNECTOR_BOUND: "Connected to the system",
+    PEOPLE_REGISTERED: "Team registered", HANDOVER: "Handover written",
+    ASKED: "Asked somebody for something",
   };
   return words[a] ?? a.replace(/_/g, " ").toLowerCase();
 }

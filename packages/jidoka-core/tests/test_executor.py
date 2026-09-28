@@ -329,3 +329,38 @@ def test_ledger_chain_verifies_after_a_full_release_and_import_sequence():
     assert tr.status == IMPORTED
     e.ledger.approve(TASK, "reviewer@client")
     assert e.ledger.verify_chain()
+
+
+# --- invariant 6: an arming is a window, not a standing authority (ADR-0021) ----------------------
+
+def test_an_arming_with_no_expiry_still_works_for_a_direct_caller():
+    """Zero means no expiry: a script or a test driving the executor is not the risk this guards."""
+    ex_ = ex(actor="builder")
+    ex_.ledger.append(TASK, "SNAPSHOT", "builder", "3 rows")
+    res = ex_.execute(TASK, FakeAdapter(), rec(product="SuccessFactors"),
+                      armed=ArmedTarget("S4-DEV", "approver"),
+                      apply_fn=lambda p: {"live_state": [{"CostCenter": "CC-1000"}]})
+    assert res.status == VERIFIED
+
+
+def test_a_lapsed_arming_is_refused_and_names_the_moment_it_lapsed():
+    import time
+
+    ex_ = ex(actor="builder")
+    ex_.ledger.append(TASK, "SNAPSHOT", "builder", "3 rows")
+    lapsed = ArmedTarget("S4-DEV", "approver", expires_at=time.time() - 1)
+    with pytest.raises(ExecutionRefused) as err:
+        ex_.execute(TASK, FakeAdapter(), rec(), armed=lapsed, apply_fn=lambda p: {})
+    assert "lapsed at" in str(err.value) and "not a standing authority" in str(err.value)
+    assert not any(e["action"] == "EXECUTED" for e in ex_.ledger.entries)
+
+
+def test_an_arming_inside_its_window_is_spent_normally():
+    import time
+
+    ex_ = ex(actor="builder")
+    ex_.ledger.append(TASK, "SNAPSHOT", "builder", "3 rows")
+    live = ArmedTarget("S4-DEV", "approver", expires_at=time.time() + 600)
+    res = ex_.execute(TASK, FakeAdapter(), rec(product="SuccessFactors"), armed=live,
+                      apply_fn=lambda p: {"live_state": [{"CostCenter": "CC-1000"}]})
+    assert res.status == VERIFIED

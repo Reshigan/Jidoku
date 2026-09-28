@@ -4,16 +4,24 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiError, platform, setSession, getSession,
   type Claim, type DecisionPoint, type EngagementDetail, type EngagementSummary, type Evidence,
-  type ArmedTarget, type Connector, type ExecutionResult, type MemoryView as Memory,
+  type ArmedTarget, type Connector, type ControlsView, type ExecutionResult,
+  type MemoryView as Memory,
   type StepTransport, type IRRecordView, type Landscape, type LedgerEntry, type Plan,
 } from "./api";
+import { Boundary } from "./boundary";
 import { LINE_STOP, LINE_RESUME, buildLanes, lineStop, milestones, type Lane, type Station } from "./derive";
 import { AndonRail, Empty, Field, Modal, Skeleton, VIEWS, type ViewName } from "./ui";
 import {
   ConfigureView, DecisionsView, EvidenceView, IntentView, LandscapeView, LedgerView, LineView,
-  MemoryView, MilestonesView, WorkView,
+  MemoryView, MilestonesView, ProgrammeView, SpecificationPanel, WorkView,
 } from "./views";
 import { DocumentsView } from "./views_document";
+import { CrewView } from "./views_crew";
+import { AccountabilityPanel, PortfolioView } from "./views_account";
+import { InsightView } from "./views_insight";
+import { ContractsPanel, TypesPanel } from "./views_contracts";
+import { EnvironmentsPanel, ReconcilePanel } from "./views_environments";
+import { ObjectionsPanel } from "./views_objections";
 import { VerifyView } from "./views_verify";
 import { DP_KINDS, SYSTEM_ROLES, kindWords, roleLabel } from "./viewkit";
 import "./app.css";
@@ -51,7 +59,10 @@ export default function App() {
   const [refusal, setRefusal] = useState<{ title: string; text: string } | null>(null);
   const [dialog, setDialog] = useState<null | { kind: string; station?: Station; dp?: DecisionPoint; claim?: Claim }>(null);
   // Execution state is per-session, not per-engagement history: the ledger is the record of what
-  // happened, this is only what this operator has run since opening the screen.
+  // happened, this is only what this operator has run since opening the screen. Snapshots are the
+  // exception and always were — the executor's gate reads the task's chain, not this session — and
+  // once a crew run takes them, a screen reading session memory tells an operator a live write is
+  // impossible while the server is ready to perform one.
   const [armed, setArmed] = useState<ArmedTarget[]>([]);
   const [connectors, setConnectors] = useState<Connector[]>([]);
   const [results, setResults] = useState<Record<string, ExecutionResult>>({});
@@ -59,6 +70,19 @@ export default function App() {
   const [snapshots, setSnapshots] = useState<Record<string, number>>({});
   // A time query is this operator's question, not engagement state — it is cleared with the view.
   const [asOf, setAsOf] = useState<{ as_of: string; claims: Claim[] } | null>(null);
+
+  /** Snapshots as the server would count them: the chain first, this session on top of it. */
+  const snapshotted = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const e of d.entries ?? []) {
+      if (e.action === "SNAPSHOT") out[e.task] = Number(e.rows ?? 0);
+      // A rollback puts the system back to the before-state, and the console's own station
+      // derivation treats that as clearing the snapshot. Agree with it, or one screen offers a
+      // live write the other says is not possible.
+      if (e.action === "ROLLED_BACK") delete out[e.task];
+    }
+    return { ...out, ...snapshots };
+  }, [d.entries, snapshots]);
 
   const signedIn = !!who && roles.length > 0;
   const can = (c: string) =>
@@ -110,7 +134,15 @@ export default function App() {
     }
   }, [guard]);
 
+  /* Which engagement the screen is actually asking about. A load is slow — seven calls and a plan
+     — and an operator switching engagements starts a second one before the first has landed. With
+     no guard the slower response wins, and the selector says one client while the ledger, the
+     plan and the decisions on screen belong to another. On a governance console that is not a
+     cosmetic race: it is the wrong client's evidence under the right client's name. */
+  const loading = useRef<string | null>(null);
+
   const load = useCallback(async (id: string) => {
+    loading.current = id;
     const soft = async <T,>(fn: () => Promise<T>): Promise<T | null> => {
       try { return await fn(); } catch (e) {
         if ((e as ApiError).status === 0) setOffline(true);
@@ -149,6 +181,10 @@ export default function App() {
         if (err.status === 409) chainBroken = err.detail || err.message;
       }
     }
+
+    // Somebody has since asked for a different engagement. This answer is about the old one, and
+    // painting it now would be worse than painting nothing.
+    if (loading.current !== id) return;
 
     setD({
       detail, plan, planBlock, entries, chainBroken,
@@ -340,6 +376,7 @@ export default function App() {
                 </div>
               )}
 
+              <Boundary where={view} key={view}>
               {view === "Line" && (
                 <LineView detail={d.detail} lanes={lanes} plan={d.plan} planBlock={d.planBlock}
                           entries={d.entries} dps={d.dps ?? []} chainBroken={d.chainBroken}
@@ -348,6 +385,12 @@ export default function App() {
                             await guard("The phase cannot advance", () => platform.advancePhase(eid, to));
                             await after();
                           }} />
+              )}
+              {view === "Crew" && (
+                <CrewView eid={eid}
+                          canRun={can("write") && !offline && !stopped && !d.chainBroken}
+                          onRefusal={(title, text) => setRefusal({ title, text })}
+                          onChanged={after} />
               )}
               {view === "Work" && (
                 <WorkView lanes={lanes} planBlock={d.planBlock} busy={busy}
@@ -359,7 +402,7 @@ export default function App() {
               {view === "Configure" && (
                 <ConfigureView plan={d.plan} planBlock={d.planBlock} armed={armed}
                                connectors={connectors}
-                               results={results} snapshots={snapshots}
+                               results={results} snapshots={snapshotted}
                                transports={transports} busy={busy}
                                canExecute={can("write") && !offline && !stopped && !d.chainBroken}
                                canArm={can("approve") && !offline && !stopped && !d.chainBroken}
@@ -426,17 +469,60 @@ export default function App() {
                             onChanged={after} />
               )}
               {view === "Decisions" && (
-                <DecisionsView dps={d.dps} irGaps={d.irGaps} writable={writable}
-                               onRaise={() => setDialog({ kind: "raiseDp" })}
-                               onResolve={(dp) => setDialog({ kind: "resolveDp", dp })} />
+                <>
+                  <DecisionsView dps={d.dps} irGaps={d.irGaps} writable={writable}
+                                 onRaise={() => setDialog({ kind: "raiseDp" })}
+                                 onResolve={(dp) => setDialog({ kind: "resolveDp", dp })} />
+                  {/* Beside the decisions, because this is the screen where a person answers the
+                      platform — but a rank below them: a decision point blocks a plan and an
+                      objection blocks nothing, and putting them at the same weight would be the
+                      platform overstating its own standing. */}
+                  <Boundary where="Objections">
+                    <ObjectionsPanel eid={eid} canOverride={can("approve") && !offline && !stopped}
+                                     onRefusal={(title, text) => setRefusal({ title, text })} />
+                  </Boundary>
+                </>
               )}
               {view === "Intent" && (
-                <IntentView records={d.records} gaps={d.irGaps} schemaVersion={d.schemaVersion}
-                            writable={writable} onLoad={() => setDialog({ kind: "loadIr" })} />
+                <>
+                  <IntentView records={d.records} gaps={d.irGaps} schemaVersion={d.schemaVersion}
+                              writable={writable} onLoad={() => setDialog({ kind: "loadIr" })} />
+                  {/* Beside the intent, because a contract is part of the record rather than a
+                      thing about it: the registry cannot disagree with the design it describes. */}
+                  <Boundary where="The type-check">
+                    <TypesPanel eid={eid}
+                                onRefusal={(title, text) => setRefusal({ title, text })} />
+                  </Boundary>
+                  <Boundary where="Cross-module contracts">
+                    <ContractsPanel eid={eid}
+                                    canSetPool={can("approve") && !offline && !stopped}
+                                    onRefusal={(title, text) => setRefusal({ title, text })} />
+                  </Boundary>
+                </>
+              )}
+              {view === "Insight" && (
+                <InsightView eid={eid} landscape={d.landscape}
+                             canDig={can("write") && !offline && !stopped && !d.chainBroken}
+                             onRefusal={(title, text) => setRefusal({ title, text })}
+                             onChanged={after} />
               )}
               {view === "Landscape" && (
-                <LandscapeView landscape={d.landscape} writable={writable}
-                               onRegister={() => setDialog({ kind: "registerSystem" })} />
+                <>
+                  <LandscapeView landscape={d.landscape} writable={writable}
+                                 onRegister={() => setDialog({ kind: "registerSystem" })} />
+                  {/* Beside the landscape, because the question is about two of the systems in
+                      it: the registry has modelled DEV, TEST and PROD since the first commit and
+                      nothing ever asked whether they hold the same thing. */}
+                  <Boundary where="What happened outside the platform">
+                    <ReconcilePanel eid={eid} landscape={d.landscape}
+                                    canRun={can("write") && !offline && !stopped}
+                                    onRefusal={(title, text) => setRefusal({ title, text })} />
+                  </Boundary>
+                  <Boundary where="Two environments, compared">
+                    <EnvironmentsPanel eid={eid} landscape={d.landscape}
+                                       onRefusal={(title, text) => setRefusal({ title, text })} />
+                  </Boundary>
+                </>
               )}
               {view === "Memory" && (
                 <MemoryView memory={d.memory} asOf={asOf} busy={busy}
@@ -460,16 +546,37 @@ export default function App() {
               )}
               {view === "Ledger" && <LedgerView entries={d.entries} chainBroken={d.chainBroken} />}
               {view === "Evidence" && (
-                <EvidenceLoader eid={eid} evidence={d.evidence} guard={guard}
-                                onLoaded={(ev) => setD((x) => ({ ...x, evidence: ev }))} />
+                <>
+                  <EvidenceLoader eid={eid} evidence={d.evidence} guard={guard}
+                                  onLoaded={(ev) => setD((x) => ({ ...x, evidence: ev }))} />
+                  {/* Beside the evidence, not on a screen of its own: somebody weighing what this
+                      engagement can prove should meet the platform's own error record there,
+                      rather than having to go looking for it. */}
+                  <Boundary where="What I got wrong">
+                    <AccountabilityPanel eid={eid}
+                                         onRefusal={(title, text) => setRefusal({ title, text })} />
+                  </Boundary>
+                </>
+              )}
+              {view === "Portfolio" && (
+                <PortfolioView onRefusal={(title, text) => setRefusal({ title, text })} />
               )}
               {view === "Milestones" && (
                 <MilestonesView milestones={milestones(lanes)} planBlock={d.planBlock} />
+              )}
+              {view === "Programme" && (
+                <ProgrammeView eid={eid}
+                               onRefusal={(title, text) => setRefusal({ title, text })} />
+              )}
+              {view === "Specification" && (
+                <SpecificationPanel eid={eid}
+                                    onRefusal={(title, text) => setRefusal({ title, text })} />
               )}
               {view === "Documents" && (
                 <DocumentsView eid={eid}
                                onRefusal={(title, text) => setRefusal({ title, text })} />
               )}
+              </Boundary>
             </>
           )}
         </main>
@@ -557,9 +664,15 @@ function EvidenceLoader(props: {
   guard: <T,>(t: string, fn: () => Promise<T>) => Promise<T | null>;
   onLoaded: (e: Evidence) => void;
 }) {
+  // The controls come with the bundle rather than behind a button: an auditor reading the
+  // evidence is asking exactly the question the controls answer, and a control nobody ran is a
+  // control nobody trusts.
+  const [controls, setControls] = useState<ControlsView | null>(null);
   const fetchIt = useCallback(async () => {
     const ev = await props.guard("Evidence export refused", () => platform.evidence(props.eid));
     if (ev) props.onLoaded(ev);
+    const cs = await props.guard("The controls did not run", () => platform.controls(props.eid));
+    if (cs) setControls(cs);
   }, [props]);
   useEffect(() => { if (!props.evidence) fetchIt(); }, [props.evidence, fetchIt]);
 
@@ -572,7 +685,8 @@ function EvidenceLoader(props: {
     a.click();
     URL.revokeObjectURL(a.href);
   };
-  return <EvidenceView evidence={props.evidence} onRefresh={fetchIt} onDownload={download} />;
+  return <EvidenceView evidence={props.evidence} controls={controls}
+                       onRefresh={fetchIt} onDownload={download} />;
 }
 
 /* ---------------- every write the platform accepts ---------------- */
@@ -742,7 +856,27 @@ function Dialogs(props: {
               try { parsed = JSON.parse(a); } catch (err) { setCheck(String(err)); return; }
               const ok = await guard("The intent was refused",
                 () => platform.uploadIR(eid, parsed as Record<string, unknown>[]));
-              if (ok) onDone();
+              if (!ok) return;
+              /* What this version did to the last one, said before the dialog closes. A record
+                 the new design dropped that is still live in a customer's system is the one
+                 thing nobody should have to go looking for. */
+              const sup = ok.superseded;
+              const lost = ok.orphaned ?? [];
+              if (lost.length) {
+                setCheck([
+                  `${lost.length} record(s) are live and this design no longer contains them. `
+                  + `Each one has raised a decision, and planning is blocked until somebody says `
+                  + `whether to sign it back in or take it out of the system:`,
+                  ...lost.map((o) => `  · ${o.says}`),
+                ].join("\n"));
+                return;                       // the dialog stays open: this is not a clean load
+              }
+              if (sup && (sup.added.length || sup.removed.length || sup.changed.length)) {
+                setCheck(`Superseded the previous design: ${sup.added.length} added, `
+                  + `${sup.removed.length} removed, ${sup.changed.length} changed, `
+                  + `${sup.unchanged.length} unchanged. Nothing was left live and unclaimed.`);
+              }
+              onDone();
             }}>Load it</button>
             <button className="btn ghost" onClick={props.onClose}>Cancel</button>
           </div>

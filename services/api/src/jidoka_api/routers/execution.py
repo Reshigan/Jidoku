@@ -5,9 +5,13 @@ a builder then spends that arming. Neither can do both — the role table forbid
 the executor forbids it again (armed_by != actor). Two gates, because this is the one endpoint
 that changes a customer's production system.
 """
+import time
+
 from fastapi import APIRouter, Depends, HTTPException
 from jidoka_adapters.base import AdapterError
 from jidoka_core import transport as tp
+from jidoka_core.clock import stamp
+from jidoka_core.drift import intent_hash
 from jidoka_core.executor import ArmedTarget, ExecutionRefused, Executor, is_abap
 from jidoka_core.registry import RegistryError, WriteLockViolation
 from pydantic import BaseModel
@@ -69,9 +73,17 @@ def _executor(e, identity: Identity) -> Executor:
     return Executor(e.registry, e.ledger, identity.subject)
 
 
+#: How long an arming stands unless the approver says otherwise. Long enough for a cutover step
+#: with a person watching, short enough that a forgotten arming lapses before anybody is
+#: surprised by it. An approver can ask for less; nothing can ask for more without saying so.
+DEFAULT_ARMING_MINUTES = 60
+MAX_ARMING_MINUTES = 12 * 60
+
+
 class Arm(BaseModel):
     system_id: str
     reason: str = ""
+    minutes: int = DEFAULT_ARMING_MINUTES
 
 
 @router.post("/arm")
@@ -85,12 +97,20 @@ def arm(eid: str, body: Arm, identity: Identity = Depends(require("arm"))):
         raise HTTPException(403, str(ex))
     except RegistryError as ex:
         raise HTTPException(404, str(ex))
-    target = ArmedTarget(body.system_id, identity.subject, body.reason)
+    if body.minutes < 1 or body.minutes > MAX_ARMING_MINUTES:
+        raise HTTPException(
+            422, f"An arming stands for between 1 and {MAX_ARMING_MINUTES} minutes. A window "
+                 f"longer than that is not a window — arm it again when you need it.")
+    expires_at = time.time() + body.minutes * 60
+    target = ArmedTarget(body.system_id, identity.subject, body.reason, expires_at=expires_at)
     _ARMED[(eid, body.system_id)] = target
+    lapses = stamp(expires_at)
     e.ledger.append("EXECUTION", "ARMED", identity.subject,
-                    f"{body.system_id} armed for live write: {body.reason or 'no reason given'}",
-                    system=body.system_id)
-    return {"armed": body.system_id, "armed_by": identity.subject, "reason": body.reason}
+                    f"{body.system_id} armed for live write until {lapses}: "
+                    f"{body.reason or 'no reason given'}",
+                    system=body.system_id, expires_at=lapses, minutes=body.minutes)
+    return {"armed": body.system_id, "armed_by": identity.subject, "reason": body.reason,
+            "expires_at": lapses, "minutes": body.minutes}
 
 
 @router.delete("/arm/{system_id}")
@@ -103,9 +123,13 @@ def disarm(eid: str, system_id: str, identity: Identity = Depends(require("arm")
 
 @router.get("/arm")
 def armed(eid: str, identity: Identity = Depends(require("read"))):
+    """Live armings only. A lapsed one is not shown as armed, because it is not: the console
+    would otherwise offer a write the executor is about to refuse."""
     get_or_404(eid)
-    return {"armed": [{"system_id": t.system_id, "armed_by": t.armed_by, "reason": t.reason}
-                      for (e_id, _), t in _ARMED.items() if e_id == eid]}
+    return {"armed": [{"system_id": t.system_id, "armed_by": t.armed_by, "reason": t.reason,
+                       "expires_at": stamp(t.expires_at)
+                       if t.expires_at else ""}
+                      for (e_id, _), t in _ARMED.items() if e_id == eid and not t.expired()]}
 
 
 class Step(BaseModel):
@@ -116,39 +140,99 @@ class Rollback(Step):
     reason: str = ""
 
 
+class NotArmed(Exception):
+    """A write with no armed target. Undoing one is still a write (ADR-0009)."""
+
+
+class NoSnapshotHeld(Exception):
+    """Nothing proven to restore. Invariant 4 refuses rather than writing a guess."""
+
+
+def rollback_step(e, identity: Identity, key: str, reason: str):
+    """Put back exactly what the snapshot read. The single implementation, shared with the crew.
+
+    Every gate an execute wears, because the direction of a change is irrelevant to the
+    invariants: invariant 3 via the registry, invariant 4 via the snapshot the executor refuses to
+    proceed without, invariant 6 via the armed target, invariant 7 via armed_by != actor — all
+    checked by the executor's own arming gate rather than re-implemented here.
+    """
+    r = _record_or_404(e, key)
+    target = _ARMED.get((e.engagement_id, r.system_binding))
+    ex_ = _executor(e, identity)
+    if not ex_._assert_armed(r, target):
+        raise NotArmed(
+            f"{r.system_binding} is not armed. A rollback writes to a live system, so it needs an "
+            f"armed target exactly as an execute does — ask an approver to arm it.")
+    before = _BEFORE.get((e.engagement_id, key))
+    if before is None:
+        raise NoSnapshotHeld(
+            f"{key}: rollback refused — this process holds no snapshot for this step. Take a "
+            f"before-snapshot first; there is nothing proven to restore.")
+    if r.system_binding not in e.connectors:
+        raise NoSnapshotHeld(
+            f"{r.system_binding}: armed, but no connector is bound for {r.product}. A rollback "
+            f"with no substrate would report a restore that never happened.")
+    return ex_.rollback(key, before, e.connectors[r.system_binding].apply, r, reason)
+
+
+def snapshot_step(e, identity: Identity, key: str) -> list[dict]:
+    """Read live state, chain its fingerprint, and hold the rows server-side.
+
+    The holding is the load-bearing part: a rollback restores what the platform itself read, never
+    a "before" a caller supplied (ADR-0009). The crew's operator snapshots through this same
+    function, so a run that writes is a run that can be undone — one that snapshotted by some
+    other route would leave the rollback path with nothing to restore.
+    """
+    r = _record_or_404(e, key)
+    system = e.registry.get(r.system_binding)
+    rows = _executor(e, identity).snapshot(
+        key, _adapter_for(r.product, e.connectors.get(r.system_binding)), r, system)
+    _BEFORE[(e.engagement_id, key)] = [dict(x) for x in rows]
+    return rows
+
+
 @router.post("/snapshot")
 def snapshot(eid: str, body: Step, identity: Identity = Depends(require("snapshot"))):
     """Read live state and chain its fingerprint. Nothing may be written until this has run."""
     e = get_or_404(eid)
-    r = _record_or_404(e, body.key)
     try:
-        system = e.registry.get(r.system_binding)
+        rows = snapshot_step(e, identity, body.key)
     except RegistryError as ex:
         raise HTTPException(404, str(ex))
-    try:
-        rows = _executor(e, identity).snapshot(
-            body.key, _adapter_for(r.product, e.connectors.get(r.system_binding)), r, system)
     except RuntimeError as ex:
         # The adapter has no reader bound. A snapshot that cannot read is not a snapshot, and
         # letting it pass would satisfy invariant 4 with an empty before-state — worse than failing.
-        raise HTTPException(409, f"{r.system_binding}: cannot snapshot — {ex}")
-    _BEFORE[(eid, body.key)] = [dict(x) for x in rows]
+        raise HTTPException(409, f"cannot snapshot — {ex}")
     return {"key": body.key, "rows": len(rows), "before": rows}
+
+
+def execute_step(e, identity: Identity, key: str):
+    """Run one step, armed or not. The single implementation of the apply path.
+
+    The endpoint below maps its refusals onto HTTP; the crew's operator lets them travel back
+    through the syscall boundary as a refused step (ADR-0020). Neither gets its own copy of the
+    gates, because two copies of a gate are one gate and one bug waiting to happen.
+
+    Arming is read here, never granted here: `_ARMED` is written only by the arm endpoint, which
+    an approver holds and a builder does not. Absent an arming this is a dry run, whoever asked.
+    """
+    eid = e.engagement_id
+    r = _record_or_404(e, key)
+    target = _ARMED.get((eid, r.system_binding))
+    connector = e.connectors.get(r.system_binding)
+    req, route = _transport_for(e, eid, key, r) if (target and is_abap(r.product)) else (None, None)
+    return _executor(e, identity).execute(
+        key, _adapter_for(r.product, connector), r, armed=target,
+        apply_fn=_apply_fn(e, r) if target else None,
+        transport_request=req, route=route)
 
 
 @router.post("/execute")
 def execute(eid: str, body: Step, identity: Identity = Depends(require("execute"))):
     """Dry run unless an approver has armed this record's target. Tier B/C hand off to a human."""
     e = get_or_404(eid)
-    r = _record_or_404(e, body.key)
-    target = _ARMED.get((eid, r.system_binding))
-    connector = e.connectors.get(r.system_binding)
-    req, route = _transport_for(e, eid, body.key, r) if (target and is_abap(r.product)) else (None, None)
     try:
-        res = _executor(e, identity).execute(
-            body.key, _adapter_for(r.product, connector), r, armed=target,
-            apply_fn=_apply_fn(e, r) if target else None,
-            transport_request=req, route=route)
+        res = execute_step(e, identity, body.key)
     except ExecutionRefused as ex:
         raise HTTPException(409, str(ex))
     except WriteLockViolation as ex:
@@ -197,37 +281,18 @@ def rollback(eid: str, body: Rollback, identity: Identity = Depends(require("exe
     armed_by != actor, checked by the executor's own arming gate rather than re-implemented here.
     """
     e = get_or_404(eid)
-    r = _record_or_404(e, body.key)
-    target = _ARMED.get((eid, r.system_binding))
-    ex_ = _executor(e, identity)
     try:
-        # The arming gate, verbatim: right target, someone other than the operator armed it,
-        # and the registry still says the system may be written.
-        if not ex_._assert_armed(r, target):
-            raise HTTPException(
-                403, f"{r.system_binding} is not armed. A rollback writes to a live system, so it "
-                     f"needs an armed target exactly as an execute does — ask an approver to arm it.")
-    except ExecutionRefused as exc:
+        res = rollback_step(e, identity, body.key, body.reason or "rolled back from the console")
+    except NotArmed as exc:
         raise HTTPException(403, str(exc))
+    except NoSnapshotHeld as exc:
+        raise HTTPException(409, str(exc))
+    except ExecutionRefused as exc:
+        raise HTTPException(409 if "refused" in str(exc) else 403, str(exc))
     except WriteLockViolation as exc:
         raise HTTPException(403, str(exc))
     except RegistryError as exc:
         raise HTTPException(404, str(exc))
-
-    before = _BEFORE.get((eid, body.key))
-    if before is None:
-        raise HTTPException(
-            409, f"{body.key}: rollback refused — this process holds no snapshot for this step. "
-                 f"Take a before-snapshot first; there is nothing proven to restore.")
-    if r.system_binding not in e.connectors:
-        raise HTTPException(
-            409, f"{r.system_binding}: armed, but no connector is bound for {r.product}. "
-                 f"A rollback with no substrate would report a restore that never happened.")
-    try:
-        res = ex_.rollback(body.key, before, e.connectors[r.system_binding].apply, r,
-                           body.reason or "rolled back from the console")
-    except ExecutionRefused as exc:
-        raise HTTPException(409, str(exc))
     except ConnectorError as exc:
         raise HTTPException(422, str(exc))
     return {"key": res.key, "tier": res.tier, "system": res.system, "status": res.status,
@@ -237,23 +302,47 @@ def rollback(eid: str, body: Rollback, identity: Identity = Depends(require("exe
 # ---- transport: on the ABAP stack the write is only half the change (ADR-0006) ----------------
 
 
+class NoTransportHeld(Exception):
+    """Asked to advance a step that never captured a transport. Not a fault — a wrong question."""
+
+
+def advance_step(e, identity: Identity, key: str) -> dict:
+    """One hop along the declared route. The single implementation, shared with the crew.
+
+    A transport exists only because an armed live write was captured in it, and the route came
+    from the promotion paths a human registered — so moving a change along it is the completion
+    of an authorised write (ADR-0006), not a new authority.
+    """
+    r = _record_or_404(e, key)
+    if not is_abap(r.product):
+        raise tp.TransportError(
+            f"{r.product} is not an ABAP product — its changes do not travel by transport, "
+            f"so there is nothing to advance.")
+    held = _TRANSPORTS.get((e.engagement_id, key))
+    if held is None:
+        raise NoTransportHeld(
+            f"{key}: no transport request is held for this step. Execute it live first — "
+            f"a transport exists because a write was captured in it, never before.")
+    req, route = held
+    state = _executor(e, identity).advance_transport(key, req, route)
+    landed = state["currently_in"]
+    e.ledger.append(key, "TRANSPORT_ADVANCED", identity.subject,
+                    f"{req.request_id} imported into {landed} "
+                    f"({e.registry.get(landed).environment}); next hop {state['next_hop'] or 'none — in production'}",
+                    request_id=req.request_id, target_system=landed,
+                    target_environment=e.registry.get(landed).environment,
+                    next_hop=state["next_hop"], in_production=state["in_production"])
+    return {"key": key, **state}
+
+
 @router.post("/transport")
 def advance(eid: str, body: Step, identity: Identity = Depends(require("transport"))):
     """Release if still modifiable, then import into the next legal hop. One call, one hop."""
     e = get_or_404(eid)
-    r = _record_or_404(e, body.key)
-    if not is_abap(r.product):
-        raise HTTPException(
-            422, f"{r.product} is not an ABAP product — its changes do not travel by transport, "
-                 f"so there is nothing to advance.")
-    held = _TRANSPORTS.get((eid, body.key))
-    if held is None:
-        raise HTTPException(
-            404, f"{body.key}: no transport request is held for this step. Execute it live first — "
-                 f"a transport exists because a write was captured in it, never before.")
-    req, route = held
     try:
-        state = _executor(e, identity).advance_transport(body.key, req, route)
+        return advance_step(e, identity, body.key)
+    except NoTransportHeld as exc:
+        raise HTTPException(404, str(exc))
     except ExecutionRefused as exc:
         raise HTTPException(409, str(exc))
     except WriteLockViolation as exc:
@@ -262,14 +351,6 @@ def advance(eid: str, body: Step, identity: Identity = Depends(require("transpor
         raise HTTPException(422, str(exc))
     except RegistryError as exc:
         raise HTTPException(404, str(exc))
-    landed = state["currently_in"]
-    e.ledger.append(body.key, "TRANSPORT_ADVANCED", identity.subject,
-                    f"{req.request_id} imported into {landed} "
-                    f"({e.registry.get(landed).environment}); next hop {state['next_hop'] or 'none — in production'}",
-                    request_id=req.request_id, target_system=landed,
-                    target_environment=e.registry.get(landed).environment,
-                    next_hop=state["next_hop"], in_production=state["in_production"])
-    return {"key": body.key, **state}
 
 
 @router.get("/transport")
@@ -290,6 +371,39 @@ def _apply_fn(e, r):
 
     c = e.connectors.get(r.system_binding)
     return c.apply if c else _refuse
+
+
+class Attest(BaseModel):
+    key: str
+    note: str = ""
+
+
+@router.post("/attest")
+def attest(eid: str, body: Attest, identity: Identity = Depends(require("execute"))):
+    """A person states they did work this platform has no way to read back (ADR-0022).
+
+    Offered only where the adapter says the product publishes no read path. Everywhere else the
+    live system is the answer, and accepting somebody's word instead would let a claim mask a
+    machine-checkable failure — which is the whole disease this platform exists to treat.
+
+    The attestation is written by the act, under the caller's own identity (ADR-0015), and it
+    carries the hash of the intent it covers so that a later change to that intent retires it
+    rather than silently inheriting it.
+    """
+    e = get_or_404(eid)
+    r = _record_or_404(e, body.key)
+    connector = e.connectors.get(r.system_binding)
+    adapter = _adapter_for(r.product, connector)
+    if adapter.verifiable(r.object):
+        raise HTTPException(
+            409, f"{r.object} can be read back on {r.product}, so JIDOKA checks it rather than "
+                 f"taking anyone's word for it. Run a verification.")
+    entry = e.ledger.append(body.key, "ATTESTED", identity.subject,
+                            body.note or f"{identity.subject} states this change was made by hand",
+                            intent_hash=intent_hash(r.intent), object=r.object,
+                            system=r.system_binding)
+    return {"key": body.key, "attested_by": identity.subject, "at": entry["ts"],
+            "note": entry["detail"]}
 
 
 class Bind(BaseModel):

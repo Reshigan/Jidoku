@@ -33,6 +33,12 @@ class Repository(Protocol):
     def load_dps(self, eid: str) -> list[dict]: ...
     def save_claims(self, eid: str, claims: list[dict]) -> None: ...
     def load_claims(self, eid: str) -> list[dict]: ...
+    def save_drafts(self, eid: str, drafts: list[dict]) -> None: ...
+    def load_drafts(self, eid: str) -> list[dict]: ...
+    def save_rules(self, eid: str, rules: list[dict]) -> None: ...
+    def load_rules(self, eid: str) -> list[dict]: ...
+    def save_people(self, eid: str, people: list[dict]) -> None: ...
+    def load_people(self, eid: str) -> list[dict]: ...
 
 
 class InMemoryRepository:
@@ -45,6 +51,9 @@ class InMemoryRepository:
         self._systems: dict[str, tuple[list[dict], list]] = {}
         self._dps: dict[str, list[dict]] = {}
         self._claims: dict[str, list[dict]] = {}
+        self._drafts: dict[str, list[dict]] = {}
+        self._rules: dict[str, list[dict]] = {}
+        self._people: dict[str, list[dict]] = {}
 
     def save_engagement(self, eid: str, name: str, client: str, phase: str) -> None:
         self._eng[eid] = {"engagement_id": eid, "name": name, "client": client, "phase": phase}
@@ -87,6 +96,24 @@ class InMemoryRepository:
 
     def load_claims(self, eid: str) -> list[dict]:
         return [dict(c) for c in self._claims.get(eid, [])]
+
+    def save_drafts(self, eid: str, drafts: list[dict]) -> None:
+        self._drafts[eid] = [dict(d) for d in drafts]
+
+    def load_drafts(self, eid: str) -> list[dict]:
+        return [dict(d) for d in self._drafts.get(eid, [])]
+
+    def save_rules(self, eid: str, rules: list[dict]) -> None:
+        self._rules[eid] = [dict(r) for r in rules]
+
+    def load_rules(self, eid: str) -> list[dict]:
+        return [dict(r) for r in self._rules.get(eid, [])]
+
+    def save_people(self, eid: str, people: list[dict]) -> None:
+        self._people[eid] = [dict(p) for p in people]
+
+    def load_people(self, eid: str) -> list[dict]:
+        return [dict(p) for p in self._people.get(eid, [])]
 
 
 _SCHEMA = """
@@ -215,6 +242,31 @@ class SqliteRepository:
 
     def load_claims(self, eid: str) -> list[dict]:
         return self._get_blob(eid, "claims", [])
+
+    def save_drafts(self, eid: str, drafts: list[dict]) -> None:
+        # Archaeology output, unsigned by construction. Stored so the backlog survives a restart:
+        # an unanswered "why does this exist" is the work, and work that vanishes on a deploy is
+        # work nobody does.
+        self._put_blob(eid, "drafts", drafts)
+
+    def load_drafts(self, eid: str) -> list[dict]:
+        return self._get_blob(eid, "drafts", [])
+
+    def save_rules(self, eid: str, rules: list[dict]) -> None:
+        # The twin's rule export as it was handed to us, refused clauses and all: the refusal is
+        # part of the record, and re-parsing on read keeps one parser rather than two.
+        self._put_blob(eid, "rules", rules)
+
+    def load_rules(self, eid: str) -> list[dict]:
+        return self._get_blob(eid, "rules", [])
+
+    def save_people(self, eid: str, people: list[dict]) -> None:
+        # Who the platform may ask for something, and when. Working hours and cost are facts about
+        # colleagues, declared by the organisation — never inferred, and never a secret.
+        self._put_blob(eid, "people", people)
+
+    def load_people(self, eid: str) -> list[dict]:
+        return self._get_blob(eid, "people", [])
 
 
 def open_repository(db_url: str | None) -> Repository:

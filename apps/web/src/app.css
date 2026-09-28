@@ -4,7 +4,6 @@
    paper-white. Vermillion (shu) is the seal pigment and nothing else: signatures, approvals,
    the one primary action on a screen. Lamps keep their jidoka semantics in Japanese pigment
    hues — shu red, kihada amber, matsuba green. Dark is earned here, not a default. */
-@import url("https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap");
 
 :root {
   /* aizome floors — each one dip lighter than the last */
@@ -679,6 +678,13 @@ footer {
   .main { margin-left: 0; padding-bottom: 124px; }
   .page, .topbar { padding-left: 16px; padding-right: 16px; }
   .btn, select, input, textarea { min-height: 44px; }
+
+  /* Five phase names across a phone is 8px more than a phone has, and a mono word with
+     letter-spacing does not break on its own however small the flex basis is. The page then
+     scrolls sideways, which on the board that carries the andon state is a defect and not a
+     cosmetic one. Let the name break and give the padding back. */
+  .track-stop { padding: 18px 4px 8px; overflow-wrap: anywhere; }
+  .track-stop .eyebrow { letter-spacing: .06em; }
 }
 
 /* A touch device is not a screen size: a laptop with a touchscreen needs the same targets. */
@@ -757,6 +763,16 @@ footer {
 .counters { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
 .counters > * { border-right: 1px solid var(--line); background: var(--floor2); }
 .counters > *:last-child { border-right: none; }
+/* One gauge: the number first, because the number is what an operator scans for. The label is
+   an eyebrow like every other label on the floor, so a counter reads as part of the panel rather
+   than as a tile someone bolted on. */
+.counter { padding: 10px 12px; display: grid; gap: 2px; }
+.counter > b { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.counter > span {
+  font-family: var(--mono); font-size: 10px; font-weight: 500; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--ink-dim);
+}
+@media (max-width: 560px) { .counters { grid-auto-flow: row; } }
 
 /* Panels in a board row match heights; content pins to the top. Only a scrolling list is
    stretched — a fixed block cannot use the room, and stretching one leaves a void that reads

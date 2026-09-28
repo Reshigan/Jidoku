@@ -3,7 +3,17 @@ name = "jidoka-agent"
 version = "0.1.0"
 description = "JIDOKA K5 consultant: Anthropic tool-use loop, governed skills, K5 exam harness"
 requires-python = ">=3.11"
-dependencies = ["jidoka-core"]   # stdlib urllib for HTTP; exam YAML subset parsed in-tree (no pyyaml)
+# The design pass calls the Anthropic API through the official SDK: it needs prompt caching, strict
+# tool schemas, adaptive thinking and a task budget, and hand-rolling those over urllib is how a
+# request shape drifts from the API. `consultant.py` keeps its stdlib urllib loop — it predates this
+# and works. Exam YAML subset is still parsed in-tree (no pyyaml).
+dependencies = ["jidoka-core", "jidoka-knowledge", "jidoka-os"]
+
+# Running a design pass needs the SDK; testing one does not. `design.py` imports it lazily and only
+# when no client was injected, so the suite stays dependency-free and CI stays hermetic — which is
+# also what makes the loop, the gates and the request shape testable at all.
+[project.optional-dependencies]
+live = ["anthropic>=1.9"]
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"

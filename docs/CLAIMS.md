@@ -36,11 +36,141 @@ of it.
    an out-of-range code is refused before anything is kept. The ledger is the storage: the
    registry is rebuilt by replay. (ADR-0014; `packages/jidoka-core/src/jidoka_core/numbering.py`.)
 
-4. **Unsigned intent is unexecutable by construction.** IR records without a signed source do not
+4. **An unattended crew configures the system and structurally cannot sign off on it.** Five
+   agents with opposed objectives run an engagement: sequence, snapshot, write every Tier-A step
+   an approver has armed, carry an ABAP change along its declared route until it lands in
+   production, emit the artefacts a person must do by hand, raise the statutory questions nobody
+   may guess, object to their own output, price the remainder and verify. Every effect goes
+   through a capability-checked syscall bound to the same executor the console's buttons use, so
+   the crew has the operator's route to a customer's system and less authority than the operator:
+   no syscall arms anything, the executor refuses an arming whose holder is the actor spending it,
+   and APPROVE exists in no ring an agent can occupy. An arming is a window with a stated expiry
+   rather than a standing authority; a Tier B/C artefact handed to a person is chased from the
+   live system until a re-read finds the work done; and where the product publishes no read path
+   at all, the adapter says so and the record is a named person's attestation — never counted as
+   a verification — rather than a chase with no end. A run that configures a whole landscape ends
+   unapproved, waiting on a reviewer who did not build it. (ADR-0018, ADR-0020, ADR-0021;
+   `packages/jidoka-os/src/jidoka_os/crew.py`; `test_crew.py`, `test_run_api.py`.)
+
+5. **The platform publishes how much of its own work it can prove.** Every signed record is filed
+   by what its claim to being done rests on — read back from the live system, a named person's
+   word, nothing at all, or not claimed yet — and the headline is `checked / (checked + disagrees
+   + attested + unevidenced)`, with the denominator and the three excluded bases printed beside
+   it. An attestation sits in the denominator and never the numerator. We know of no configuration
+   tool that reports its own assurance as a fraction it can be argued with about. (ADR-0023;
+   `packages/jidoka-core/src/jidoka_core/assurance.py`; `test_assurance.py`.)
+
+6. **Controls are predicates over the whole population, not prose with a sample attached.** Six
+   controls — prior snapshot, no self-approval, armed by a second person, two approvers on a
+   one-way decision, transports that reached production, no write to a write-locked system — run
+   over every row of the engagement's ledger on demand, enumerate their violations in full rather
+   than counting them, and distinguish "nothing to test" from "passed". The population is complete
+   because every act that touched a customer's system is on the chain or did not happen through
+   this platform. (ADR-0025; `packages/jidoka-core/src/jidoka_core/controls.py`; `test_controls.py`.)
+
+7. **The twin publishes how often it is right, and is never allowed to act on it.** Rules are
+   evaluated from a declared subset that refuses what it cannot read rather than approximating it;
+   metadata comes from the system itself; every prediction is ledgered and paired afterwards with
+   what the substrate actually did. Below ten settled predictions there is no fidelity rate at
+   all, and where a prediction is quoted the same sentence says how much weight it has earned. A
+   prediction never blocks a write. (ADR-0026; `packages/jidoka-core/src/jidoka_core/twin.py`;
+   `test_twin.py`.)
+
+8. **Unsigned intent is unexecutable by construction.** IR records without a signed source do not
    load; open decision points — whether from the IR or raised later, including by drift — hard-block
    planning through one gate; the agent is always builder and never approver; approval requires a
    different reviewer and a prior snapshot; live Tier-A writes require an explicitly armed target
    plus a ledger snapshot. These are the seven invariants in the root CLAUDE.md, each with tests.
+
+9. **The platform records what it refused, and reports how often its own gates were friction.**
+   Every 403, 409 and 422 is a `REFUSED` entry on the same hash-chained ledger as the work it
+   declined, named by route template so the same gate across eleven engagements is one gate; when
+   the same person later gets past it, that is a `CLEARED` entry at the same seam. From those two,
+   `GET .../accountability` reports each gate as *cleared fast every time* — friction wearing a
+   governance costume — or *never cleared* — stopping something real. Nothing is scored, because a
+   number would be quoted; and what the record cannot see is printed beside it, starting with the
+   consultant who saw a refusal coming and made the change by hand in the SAP GUI. We know of no
+   compliance or configuration tool that publishes its own false-friction rate. ADR-0031.
+
+10. **The platform reports its own silence.** A night shift writes a handover on every run, a
+    failure when one raises, and nothing when the clock stops — so `clock()` reads the absence off
+    the chain and the console says *"no night has been worked in 21 days"* against a cadence the
+    engagement declared. Every way a scheduled job dies is invisible from inside the run that did
+    not happen; at the edge, `GET /__edge` answers whether the deployment is wired up in booleans,
+    never values. ADR-0030.
+
+11. **One roll-up, no second opinion.** `GET /portfolio` shows every engagement worst-first with
+    the same projections each engagement's own screen runs — no stored aggregate, no portfolio
+    average, and one sentence per row saying what needs a person rather than a colour they have to
+    decode. ADR-0032.
+
+12. **Two implementations of the chain, one spec.** The Durable Object port of the ledger and the
+    Python kernel are both held to the same fixture — the same operations, the same hashes, the
+    same refusal messages, byte for byte — and CI runs both. The drift this prevents is not
+    somebody weakening a rule; it is `JSON.stringify` putting no space after a comma where
+    `json.dumps` does, producing a chain that verifies against itself and fails against every
+    chain the kernel ever wrote. ADR-0037.
+
+13. **A new design cannot silently strand a live change.** Loading intent supersedes rather than
+    replaces: the diff goes on the chain, and a record the new version dropped that a customer's
+    system is still holding becomes an orphan with a blocking decision and exactly two exits —
+    sign it back in, or take it out of the system. Verification and assurance both iterate the
+    current design, so before this the change stayed live and invisible. ADR-0039.
+
+14. **A cutover comparison that refuses to pick a side.** Two registered environments are read
+    through bindings with no write half and compared with neither treated as the baseline; where
+    signed intent describes the object the report says which side matches it, and where it does
+    not, the difference is still reported and said to be undesigned. Every comparison tool we know
+    of makes one side the truth, which is the assumption that hides the case where both are wrong.
+    ADR-0042.
+
+15. **The verifier ships, and it is allowed to contradict us.** `tools/jidoka-verify.py` is one
+    stdlib-only file with no network and no JIDOKA imports. It recomputes the manifest digest, the
+    chain, the assurance numerator and denominator and every separation-of-duties boolean from the
+    entries, and reports where the bundle's own claims disagree with its findings — including a
+    bundle that says `verified: true` when it does not verify, and a self-approval the producer's
+    summary called separated. A clean run states what it does not mean: the record is unaltered,
+    not complete. We know of no comparable tool whose vendor ships the thing that can call it a
+    liar. ADR-0043.
+
+16. **We read the system's own audit trail against ours, and name what never came through us.**
+    A change in SuccessFactors' Change Audit, on an object signed intent describes, that nothing
+    on this chain did, is reported as out-of-band with the person the product's log names — and it
+    wakes somebody, above a half-landed write. The free feature that competes with half this
+    platform's pitch is consumed as its missing input. Where a product publishes no readable log,
+    the answer is a refusal saying so, never an empty result that reads as a clean bill of health.
+    ADR-0044.
+
+17. **A plan of record that refuses to publish a percentage.** A mobilisation pack is absorbed
+    whole — boundary conditions with the consequence of each failing, gates with named approvers and
+    stated evidence, one-way doors as ONE_WAY decisions rather than gates, tasks with dependencies —
+    and every row keeps what the register *claims* apart from what the chain *shows*. Completion is
+    derived only where a task watches something the platform can see; everywhere else the row says
+    the platform cannot see it. No percentage complete is published anywhere, and the screen says
+    why: a number made partly of workshops nobody can see would be quoted as progress. Every
+    programme tool we know of leads with that number. ADR-0046.
+
+18. **The specification, joined to the configuration, with the join kept honest.** A pack's
+    requirements are absorbed out of its Word documents with their rationale, country scope, wave,
+    fit assessment and control reference, alongside the J-SOX control objectives with each owner,
+    frequency and evidence. Which configuration objects satisfy a requirement is a person's
+    judgement recorded on the chain under their name — never inferred from the requirement's words —
+    and a requirement traced to nothing is NOT_TRACEABLE, its own state, never counted as covered.
+    A control cited but never defined and a control defined but never cited are both reported. Every
+    tool we know of either has the specification or has the configuration; the ones that claim to
+    trace between them infer it. ADR-0047.
+
+19. **The platform authors the design, and then refuses its own work.** The agent reads the
+    client's documents — the prose an absorber will not interpret — and authors configuration intent
+    object by object. Every proposal passes four gates before it counts: IR validation, the
+    *adapter's* tier rather than the model's, the *tenant's own* `$metadata` rather than the model's
+    memory of the product, and a required provenance for every value. A record with no source is
+    refused, because the alternative is a guessed statutory value. Refusals are reported with the
+    reason, not dropped. And the pass is marked by withholding a register from the pack and comparing
+    what it authors against configuration real consultants really built from the same documents —
+    where `extra` is never scored as wrong, because a benchmark punishing it would train the pass to
+    author less. We know of no configuration tool that generates intent and then declines to accept
+    it until the substrate agrees. ADR-0048.
 
 ## Claims we cannot yet make
 
@@ -48,14 +178,69 @@ of it.
   Komatsu fixtures are fixtures.
 - **"Writes to real SAP systems."** The OData connector exists and is tested against mocks; no
   live SuccessFactors or S/4HANA tenant has been written to from this codebase.
-- **"Covers the SAP portfolio."** One reference adapter (SuccessFactors) is real; other products
-  are tier-mapped but not implemented end to end.
+- **"Covers the SAP portfolio."** Three adapters exist — SuccessFactors (the reference, with a
+  live OData client), S/4HANA (OData plus transport-aware completion) and BTP (Terraform-declared,
+  Tier B by design). None has been pointed at a live tenant from this codebase, and BTP has no
+  live connector at all: `_live` refuses it by name rather than shipping an untested write path
+  into a customer's control plane.
+- **"The crew replaces a consulting team."** It does a team's *mechanical* pass: sequencing,
+  writing, transporting, artefact production, statutory challenge, objection, pricing and
+  verification — deterministically, and only ever against a mock SAP double, because no live
+  tenant has been written to from this codebase at all. It brings no judgement of its own: the
+  statutory sentinel matches field names against a published word list, it does not understand
+  South African leave law. Read the claim as "an unattended pass that configures what an approver
+  has armed and stops at every human judgement", which is what the tests prove.
 - **"An LLM that fully understands SAP."** The knowledge subsystem is evidence-grounded and the
   scrubber gate works, but the corpus question (DP-K01 — entitlement to SAP documentation) is an
   open legal decision point and remains blocked until counsel answers it.
-- **"World first" as a totality.** The four claims above are shapes we believe are new. The only
+- **"We measure whether our gates are correct."** The refusal record counts how fast each gate was
+  cleared, which is a proxy for friction and not a verdict: a gate cleared in a minute may have
+  caught a real mistake a minute before it landed. Nothing on the chain distinguishes the two.
+- **"We measure harm avoided."** A change that was never made because the platform blocked it
+  cannot be compared against the world where it was made. Any number claiming otherwise is
+  invented, and none is published.
+- **"The kernel runs at the edge."** The ledger does, and is proven to. The registry's write-lock,
+  the executor's arming and snapshot gates and the decision engine's STATUTORY and ONE_WAY rules
+  are not ported, and `wrangler.phase2.toml` is not deployed.
+- **"The night shift reaches people."** It posts to one webhook if one is configured, and says so
+  when none is. There is no escalation, no acknowledgement, no on-call rotation and no retry: an
+  interruption that is not read is not chased.
+- **"We can tell you which environment is right."** The comparison reports differences and, where
+  intent describes the object, which side matches the design. Which environment is *meant* to be
+  ahead is a question about a programme's plan, and the platform is not told it.
+- **"We see every change."** Only where the product publishes a readable log and somebody ran the
+  reconciliation. A system with no log, or one nobody has reconciled, is reported as unreconciled
+  — which is honest and is not the same as covered. The SuccessFactors entity this reads has not
+  been confirmed against a live tenant.
+- **"We absorb any pack."** The absorber matches workbooks and documents against declared profiles
+  by filename and header, and names every file, table and sheet it did not read. A pack laid out
+  differently needs a profile. The documents' **prose is not read at all** — a Solution Design
+  Document is 30 tables and 113 paragraphs and the paragraphs carry the reasoning — so anything
+  stated in sentences and nowhere in a register is not in the platform, and the absorber reports how
+  many sections it skipped rather than summarising them.
+- **"The design rules are enforced."** Twenty-one design rules and eleven ordering constraints are
+  absorbed and reported, and nothing checks any of them. Several state their own check — "checked at
+  G2 and nightly" — and binding a prose rule to a mechanism is a judgement per rule. They are in the
+  bundle so nothing is lost; the platform does not enforce them.
+- **"We know which requirements are met."** We know which are described by signed intent, for the
+  ones somebody traced. On a freshly absorbed pack that is zero of sixty-two, and the platform says
+  so rather than implying the traceability work is done.
+- **"The design pass works."** It has **never been run against the live Anthropic API from this
+  repository.** The loop, all four gates, the request shape and the benchmark's marking scheme are
+  tested with a scripted client and no network — which is why they are testable at all, and is not
+  the same as proven. What a frontier model actually authors from a real SDD is unmeasured, and the
+  benchmark exists precisely so that it stops being a matter of opinion.
+- **"The agent configures the whole solution."** It can author intent for anything the design names,
+  including the objects SAP publishes no write API for — authoring and writing are different
+  problems. Three limits remain and none is a capability limit: partner Provisioning access we may
+  never be granted, approval authority the platform must not hold (invariant 7), and decisions that
+  are the client's to make (invariant 2).
+- **"The programme's tasks are tracked."** Most of them are not visible to the platform at all, and
+  the screen says so per row. What is tracked is what the chain can answer plus what a named person
+  has accounted for.
+- **"World first" as a totality.** The nineteen claims above are shapes we believe are new. The only
   honest form of the headline is: *the first SAP configuration platform we know of where drift,
   documents, tests and number ranges are all projections of one signed, hash-chained record — and
   where the machine can never approve its own work.*
 
-*Last reviewed 2026-09-01. If a claim above stops being true, edit this file in the same PR.*
+*Last reviewed 2026-09-28. If a claim above stops being true, edit this file in the same PR.*

@@ -1,0 +1,104 @@
+{
+  "about": "The ledger's semantics as data. Any implementation of the EngagementLedger \u2014 the Python kernel, the Durable Object at the edge \u2014 must produce these exact hashes from these exact operations. Governance must not vary by hosting, and a second implementation in a second language is the one place that promise can quietly stop being true.",
+  "genesis": "0000000000000000000000000000000000000000000000000000000000000000",
+  "canonical_json": "Keys sorted, ASCII-escaped, and separated by ', ' and ': ' \u2014 Python's json.dumps defaults, which JSON.stringify does not match. The entry is hashed with its prev hash folded in and without its own hash or prev key.",
+  "operations": [
+    {
+      "op": "append",
+      "task": "SF:PICKLIST:ZA_MIBCO",
+      "action": "LOADED",
+      "actor": "t.mabaso",
+      "detail": "signed intent loaded",
+      "extra": {}
+    },
+    {
+      "op": "append",
+      "task": "SF:PICKLIST:ZA_MIBCO",
+      "action": "SNAPSHOT",
+      "actor": "a.builder",
+      "detail": "before-state captured",
+      "extra": {
+        "rows": 14
+      }
+    },
+    {
+      "op": "append",
+      "task": "SF:PICKLIST:ZA_MIBCO",
+      "action": "EXECUTED",
+      "actor": "a.builder",
+      "detail": "wrote 14 options \u2014 na\u00efve caf\u00e9 \u2713",
+      "extra": {
+        "dry_run": false,
+        "ratio": 0.5
+      }
+    },
+    {
+      "op": "approve",
+      "task": "SF:PICKLIST:ZA_MIBCO",
+      "reviewer": "r.reviewer"
+    }
+  ],
+  "expected": [
+    {
+      "ts": "2026-09-21T09:00:00Z",
+      "task": "SF:PICKLIST:ZA_MIBCO",
+      "action": "LOADED",
+      "actor": "t.mabaso",
+      "detail": "signed intent loaded",
+      "hash": "c646cd3d99314e0d6310d81fb69f92ee102be9072290350c344c6f678e9410a3",
+      "prev": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "ts": "2026-09-21T09:01:00Z",
+      "task": "SF:PICKLIST:ZA_MIBCO",
+      "action": "SNAPSHOT",
+      "actor": "a.builder",
+      "detail": "before-state captured",
+      "rows": 14,
+      "hash": "d6082dc96ba7b42711fcd5548e25a9c335a30a7e3f0e70da44d805d12446f603",
+      "prev": "c646cd3d99314e0d6310d81fb69f92ee102be9072290350c344c6f678e9410a3"
+    },
+    {
+      "ts": "2026-09-21T09:02:00Z",
+      "task": "SF:PICKLIST:ZA_MIBCO",
+      "action": "EXECUTED",
+      "actor": "a.builder",
+      "detail": "wrote 14 options \u2014 na\u00efve caf\u00e9 \u2713",
+      "dry_run": false,
+      "ratio": 0.5,
+      "hash": "2e0714b9b89055e0211030ef6da3b619b4073a1119d143f197644e9714c38f12",
+      "prev": "d6082dc96ba7b42711fcd5548e25a9c335a30a7e3f0e70da44d805d12446f603"
+    },
+    {
+      "ts": "2026-09-21T09:03:00Z",
+      "task": "SF:PICKLIST:ZA_MIBCO",
+      "action": "APPROVED",
+      "actor": "r.reviewer",
+      "detail": "",
+      "hash": "d694b2e07a519d63332577e99503118de7a94c18ccdf700133a781c378e194c5",
+      "prev": "2e0714b9b89055e0211030ef6da3b619b4073a1119d143f197644e9714c38f12"
+    }
+  ],
+  "sod": [
+    {
+      "why": "a builder may not approve their own execution",
+      "task": "SF:PICKLIST:ZA_MIBCO",
+      "reviewer": "a.builder",
+      "refused": true,
+      "message": "a.builder executed SF:PICKLIST:ZA_MIBCO and may not approve it (builder != reviewer)."
+    },
+    {
+      "why": "an approval with no before-snapshot on the chain is refused",
+      "task": "NEVER:SNAPSHOTTED:1",
+      "reviewer": "r.reviewer",
+      "refused": true,
+      "message": "NEVER:SNAPSHOTTED:1: apjidokal refused \u2014 no before-snapshot on the ledger."
+    }
+  ],
+  "tamper": {
+    "why": "changing any field of any entry breaks the chain from that point on",
+    "index": 1,
+    "field": "detail",
+    "to": "tampered after the fact"
+  }
+}

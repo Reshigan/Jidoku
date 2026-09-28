@@ -12,6 +12,10 @@ IR = json.load(open(pathlib.Path(__file__).parents[3] /
                     "packages/jidoka-core/tests/fixtures/komatsu_sample_ir.json"))
 
 
+def _key(rec):
+    return f"{rec['product']}:{rec['object']}:{rec['external_code']}"
+
+
 def hdr(subject, *roles):
     return {"Authorization": f"Bearer {issue_token(subject, roles)}"}
 
@@ -40,9 +44,13 @@ def test_no_connector_means_skipped_never_silently_green():
     assert "no connector bound" in body["skipped"][0]["reason"]
 
 
-def test_a_missing_record_raises_a_blocking_decision_point():
+def test_a_record_this_platform_built_and_cannot_find_raises_a_blocking_decision_point():
+    """Absence after a build is drift: we wrote it, and it is gone."""
     eid = _eng()
     _bound(eid, IR[0]["system_binding"])
+    # The executor writes EXECUTED when a live write happens; the kernel is the only thing
+    # permitted to (ADR-0015), so the test seeds it the same way rather than over HTTP.
+    STORE.get(eid).ledger.append(_key(IR[0]), "EXECUTED", "builder@gonxt", "live write")
     body = c.post(f"/engagements/{eid}/verification").json()
     assert body["planning_blocked"] is True
     statuses = {f["key"]: f["status"] for f in body["drift"]}
@@ -53,6 +61,32 @@ def test_a_missing_record_raises_a_blocking_decision_point():
     assert c.get(f"/engagements/{eid}/plan").status_code == 409
 
 
+def test_a_record_nobody_has_built_yet_is_unbuilt_work_not_drift():
+    """The defect this rule fixes: verifying a fresh engagement used to raise a decision point per
+    record, whose two answers — reassert, or adopt — are both wrong when the answer is "build it",
+    and left the plan blocked on a question nobody should have been asked (ADR-0018)."""
+    eid = _eng()
+    _bound(eid, IR[0]["system_binding"])
+    body = c.post(f"/engagements/{eid}/verification").json()
+    assert body["drift"] == [] and body["planning_blocked"] is False
+    assert {u["key"] for u in body["not_applied"]} == {_key(r) for r in IR
+                                                      if r["object"] != "DATA_MODEL_XML"}
+    dps = c.get(f"/engagements/{eid}/decisions").json()["decision_points"]
+    assert not any(d["dp_id"].startswith("DP-DRIFT-") for d in dps)
+    assert c.get(f"/engagements/{eid}/plan").status_code == 200
+
+
+def test_a_record_nobody_built_that_exists_anyway_is_still_drift():
+    """The most interesting row on the page: somebody configured it outside this platform."""
+    eid = _eng()
+    conn = _bound(eid, IR[0]["system_binding"])
+    row = dict(IR[0]["intent"])
+    row["unit"] = "HOURS"
+    conn.mock.collections.setdefault(IR[0]["object"], []).append(row)
+    body = c.post(f"/engagements/{eid}/verification").json()
+    assert any(f["status"] == "DRIFT" for f in body["drift"])
+
+
 def test_live_state_matching_intent_is_ledgered_as_verified():
     eid = _eng()
     conn = _bound(eid, IR[0]["system_binding"])
@@ -60,7 +94,11 @@ def test_live_state_matching_intent_is_ledgered_as_verified():
         conn.mock.collections.setdefault(rec["object"], []).append(dict(rec["intent"]))
     body = c.post(f"/engagements/{eid}/verification").json()
     assert body["planning_blocked"] is False
-    assert len(body["verified"]) == len(IR)
+    # DATA_MODEL_XML is not an SFOData entity set, so seeding a row for it proves nothing and
+    # the platform says so rather than reading a fixture it would never read in a real tenant.
+    readable = [r for r in IR if r["object"] != "DATA_MODEL_XML"]
+    assert len(body["verified"]) == len(readable)
+    assert [u["key"] for u in body["unconfirmable"]] == ["SuccessFactors:DATA_MODEL_XML:CSDM_ZAF_NID"]
     actions = [x["action"] for x in c.get(f"/engagements/{eid}/ledger").json()["entries"]]
     assert "VERIFIED" in actions and "DRIFT_DETECTED" not in actions
 
@@ -88,3 +126,99 @@ def test_verification_never_writes_to_the_live_system():
     before = {k: [dict(r) for r in v] for k, v in conn.mock.collections.items()}
     c.post(f"/engagements/{eid}/verification")
     assert conn.mock.collections == before
+
+
+# --- assurance: what this engagement can prove (ADR-0023) -----------------------------------------
+
+def test_assurance_is_empty_before_anything_claims_to_be_done():
+    eid = _eng()
+    a = c.get(f"/engagements/{eid}/verification/assurance").json()
+    assert a["fraction"] is None and a["claimed"] == 0
+    assert a["counts"] == {"unexamined": len(IR)}
+
+
+def test_assurance_separates_what_was_checked_from_what_was_attested():
+    eid = _eng()
+    conn = _bound(eid, IR[0]["system_binding"])
+    for rec in IR:
+        conn.mock.collections.setdefault(rec["object"], []).append(dict(rec["intent"]))
+    c.post(f"/engagements/{eid}/verification")
+    a = c.get(f"/engagements/{eid}/verification/assurance").json()
+    # two readable records matched; the data model has no read path and nobody has attested
+    assert a["counts"]["checked"] == 2 and a["counts"]["unevidenced"] == 1
+    assert a["proven"] == 2 and a["claimed"] == 3
+
+    c.post(f"/engagements/{eid}/execution/attest",
+           json={"key": "SuccessFactors:DATA_MODEL_XML:CSDM_ZAF_NID"},
+           headers=hdr("t.mabaso", "builder"))
+    c.post(f"/engagements/{eid}/verification")
+    a = c.get(f"/engagements/{eid}/verification/assurance").json()
+    assert a["counts"]["attested"] == 1 and "unevidenced" not in a["counts"]
+    # the attestation did not make it provable — the denominator is unchanged
+    assert a["proven"] == 2 and a["claimed"] == 3
+
+
+def test_an_auditor_may_read_assurance_and_may_not_run_a_verification():
+    eid = _eng()
+    assert c.get(f"/engagements/{eid}/verification/assurance",
+                 headers=hdr("an.auditor", "auditor")).status_code == 200
+    assert c.post(f"/engagements/{eid}/verification",
+                  headers=hdr("an.auditor", "auditor")).status_code == 403
+
+
+def test_the_verification_report_leads_with_what_can_be_proven():
+    eid = _eng()
+    conn = _bound(eid, IR[0]["system_binding"])
+    for rec in IR:
+        conn.mock.collections.setdefault(rec["object"], []).append(dict(rec["intent"]))
+    c.post(f"/engagements/{eid}/verification")
+    doc = c.get(f"/engagements/{eid}/documents/verification-report").text
+    assert "## What can be proven" in doc
+    assert "2 of 3 records that claim to be done are proven" in doc
+    # and the report does not contradict its own headline further down
+    assert "unconfirmable" in doc.lower()
+
+
+# --- controls, over the whole population (C6) -----------------------------------------------------
+
+def test_controls_run_over_the_engagements_whole_chain():
+    eid = _eng()
+    out = c.get(f"/engagements/{eid}/controls").json()
+    assert {x["control_id"] for x in out["controls"]} >= {"C-EXE-01", "C-SOD-01", "C-ARM-01"}
+    assert out["population_complete"] is True
+    # nothing has happened, so nothing passed — every control says it was not exercised
+    assert out["failing"] == [] and len(out["not_exercised"]) == len(out["controls"])
+
+
+def test_a_real_self_approval_attempt_never_reaches_the_control_because_the_ledger_refuses():
+    """The control is the second line. The first is that `approve` refuses (invariant 4)."""
+    eid = _eng()
+    STORE.get(eid).ledger.append("t", "SNAPSHOT", "a.builder", "3 rows")
+    STORE.get(eid).ledger.append("t", "EXECUTED", "a.builder", "live write")
+    refused = c.post(f"/engagements/{eid}/ledger/approve", json={"task": "t"},
+                     headers=hdr("a.builder", "approver"))
+    assert refused.status_code == 403
+
+    out = c.get(f"/engagements/{eid}/controls").json()
+    sod = next(x for x in out["controls"] if x["control_id"] == "C-SOD-01")
+    assert sod["status"] == "NOT_EXERCISED"       # no approval exists to test
+    arm = next(x for x in out["controls"] if x["control_id"] == "C-ARM-01")
+    assert arm["status"] == "FAIL"                # the seeded write names no arming
+
+
+def test_the_write_locked_systems_come_from_the_registry_not_from_the_control():
+    eid = _eng()
+    c.post(f"/engagements/{eid}/systems", json={
+        "system_id": "KOM-ECC-PRD", "product": "SuccessFactors", "role": "SOURCE_LEGACY",
+        "environment": "PROD", "connectivity": {}})
+    STORE.get(eid).ledger.append("t", "EXECUTED", "a.builder", "live write",
+                                 system="KOM-ECC-PRD", armed_by="an.approver")
+    reg = next(x for x in c.get(f"/engagements/{eid}/controls").json()["controls"]
+               if x["control_id"] == "C-REG-01")
+    assert reg["status"] == "FAIL" and "KOM-ECC-PRD" in reg["violations"][0]["why"]
+
+
+def test_an_auditor_may_read_the_controls():
+    eid = _eng()
+    assert c.get(f"/engagements/{eid}/controls",
+                 headers=hdr("an.auditor", "auditor")).status_code == 200

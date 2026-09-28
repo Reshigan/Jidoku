@@ -30,6 +30,11 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+from jidoka_core.assurance import VERDICTS, assure
+from jidoka_core.ir import record_key
+from jidoka_insight.archaeology import unexplained
+from jidoka_insight.debt import WEIGHTS, measure
+
 #: Documents that can be projected. Keyed by the name an API path asks for.
 DOCUMENTS = {
     "config-rationale": "Configuration Rationale — every configured value, and who signed for it.",
@@ -37,6 +42,8 @@ DOCUMENTS = {
     "decision-register": "Decision Register — every decision point, its owner and its resolution.",
     "verification-report": "Verification Report — signed intent checked against live state, "
                            "with every unexplained difference and who must answer for it.",
+    "archaeology-backlog": "Archaeology Backlog — what the live system was found to contain, "
+                           "what nobody can explain, and what that costs.",
 }
 
 
@@ -362,6 +369,19 @@ def decision_register(engagement) -> str:
     return "\n".join(out + _footer(engagement))
 
 
+#: A sentence per basis, so the table means the same thing to a reader who has not read ADR-0022.
+_BASIS_WORDS = {
+    "checked": "this platform read the live system and found the signed value.",
+    "disagrees": "read, and the live system says something else. Each one is an open decision.",
+    "attested": "a named person's word. The product publishes no way to read it back, so nobody "
+                "has seen the system — this is evidence about a person.",
+    "unevidenced": "no read path and no attestation. Nothing supports this record at all.",
+    "outstanding": "handed to a person and not done yet. No claim of completion.",
+    "unbuilt": "nothing has been written. No claim of completion.",
+    "unexamined": "no verification has ever looked at it. The absence of a check is a finding.",
+}
+
+
 def verification_report(engagement) -> str:
     """What was checked, what matched, what drifted, and what has never been looked at.
 
@@ -376,15 +396,36 @@ def verification_report(engagement) -> str:
         return _no_ir_yet(engagement, title, subtitle)
 
     def _key(rec):
-        return f"{rec.get('product')}:{rec.get('object')}:{_code(rec)}"
+        return record_key(rec)
 
-    # Latest verification verdict per record, straight off the ledger.
+    # Latest verification verdict per record, straight off the ledger. Every verdict, not only
+    # the two that read a live system: a record the platform found unreadable has been looked at,
+    # and listing it under "never verified" would contradict the assurance table above.
     last: dict[str, dict] = {}
     for e in _ledger_entries(engagement):
-        if e.get("action") in ("VERIFIED", "DRIFT_DETECTED"):
+        if e.get("action") in VERDICTS:
             last[e.get("task")] = e
 
     out = _header(engagement, title, subtitle)
+
+    # The headline an auditor came for, before the detail they will read to check it.
+    a = assure(records, _ledger_entries(engagement)).as_dict()
+    counts = a["counts"]
+    out += ["## What can be proven", ""]
+    if a["fraction"] is None:
+        out += ["Nothing on this engagement claims to be done yet, so there is nothing to prove. "
+                "That is a state, not a score — a fraction printed here would be an opinion about "
+                "an empty set.", ""]
+    else:
+        out += [f"**{a['proven']} of {a['claimed']} records that claim to be done are proven** "
+                f"({a['fraction'] * 100:.0f}%) — read back from the live system by this platform.", ""]
+    out += _table(["Rests on", "Records", "What that means"],
+                  [[b, counts.get(b, 0), _BASIS_WORDS[b]] for b in sorted(counts)])
+    out += ["",
+            f"*{a['formula']}* Not counted: "
+            + "; ".join(a["not_counted"]) + ". Counting those would move the number for reasons "
+            "that have nothing to do with evidence.", ""]
+
     out += ["## What is checked", "",
             "The expected state below is not authored by a tester — it is the engagement's signed "
             "intent, per object. Settled fields are asserted verbatim against the live system; "
@@ -406,7 +447,10 @@ def verification_report(engagement) -> str:
         if e is None:
             never.append(rec)
             continue
-        verdict = "match" if e.get("action") == "VERIFIED" else f"**{e.get('status', 'DRIFT')}**"
+        action = e.get("action")
+        verdict = "match" if action == "VERIFIED" else (
+            f"**{e.get('status', 'DRIFT')}**" if action == "DRIFT_DETECTED"
+            else action.replace("_", " ").lower())
         rows.append([rec.get("object"), f"`{_code(rec)}`", verdict, e.get("ts", "—"),
                      e.get("detail", "")])
     out += _table(["Object", "Code", "Result", "When", "Detail"], rows) or            ["*No verification has been run on this engagement.*"]
@@ -434,11 +478,87 @@ def verification_report(engagement) -> str:
     return "\n".join(out + _footer(engagement))
 
 
+def archaeology_backlog(engagement) -> str:
+    """The brownfield document: what is in the system, and what nobody can account for.
+
+    Every other document here projects signed intent. This one projects its absence — objects a
+    live tenant actually contains that no signed record explains. That inversion is deliberate.
+    A greenfield programme's risk is in what it has decided; a brownfield programme's risk is in
+    what it inherited and never examined, and no design document will ever mention it, because
+    the whole problem is that nobody wrote one.
+
+    Drafts are unsigned by construction, so nothing here is executable and nothing here should
+    read as though it were. The backlog is a queue of questions with a price attached, not a
+    configuration.
+    """
+    title, subtitle = "Archaeology Backlog", DOCUMENTS["archaeology-backlog"]
+    drafts = [dict(d) for d in (getattr(engagement, "drafts", []) or [])]
+    out = _header(engagement, title, subtitle)
+
+    if not drafts:
+        return "\n".join(out + [
+            "No live system has been read on this engagement yet.",
+            "",
+            "Archaeology reverses a running tenant into draft records so the objects nobody can "
+            "explain become visible work. Until a system is read there is nothing to account for, "
+            "and an empty backlog is the honest output — not a claim that the system is clean.",
+        ] + _footer(engagement))
+
+    open_items = unexplained(drafts)
+    debt = measure(drafts, _decisions(engagement))
+    by_system = defaultdict(list)
+    for d in drafts:
+        by_system[d.get("system_binding") or "—"].append(d)
+
+    out += [f"{len(drafts)} object(s) recovered from {len(by_system)} system(s). "
+            f"**{len(open_items)} have no recorded rationale.**", "",
+            "Every record below is unsigned by construction and therefore unexecutable "
+            "(invariant 1). A recovered object becomes configuration only when a named person "
+            "signs it, and signing is an assertion that somebody understands why it exists.", ""]
+
+    out += ["## Debt index", "",
+            f"**Score {debt['score']} — grade {debt['grade']}**"
+            + (f", driven by `{debt['top_driver']}`." if debt["top_driver"] else "."), ""]
+    out += _table(["Counter", "Count", "Weight", "Contribution", "Measured from"],
+                  [[f"`{k}`", debt["counts"].get(k, 0), WEIGHTS[k], debt["items"][k],
+                    debt["measured"].get(k, "*not measured*")]
+                   for k in sorted(WEIGHTS)])
+    out += ["",
+            "The weights are published above and the score is reproducible from the same extract. "
+            "Counters marked *not measured* contribute nothing and are not silently assumed to be "
+            "zero: "
+            + (", ".join(f"`{c}`" for c in debt["unmeasured"]) or "none")
+            + ". A number nobody can trace is an opinion.", ""]
+
+    for system in sorted(by_system):
+        rows = by_system[system]
+        out += [f"## `{system}`", "",
+                f"{len(rows)} object(s) recovered.", ""]
+        out += _table(["Object", "Code", "Rationale", "Status"],
+                      [[d.get("object"), f"`{_code(d)}`",
+                        d.get("rationale") or "**unexplained**",
+                        d.get("provenance_status") or "UNVERIFIED"]
+                       for d in sorted(rows, key=lambda r: (r.get("object") or "", _code(r)))])
+        out.append("")
+
+    out += ["## What to do with this", "",
+            "Each unexplained object is one question: *why does this exist, and is it still "
+            "wanted?* The answers divide into three, and only three:", "",
+            "1. **It is wanted** — someone signs it, and it becomes intent the platform will "
+            "plan, document and verify like any other record.",
+            "2. **It is not wanted** — it is decommissioned, and the backlog shrinks honestly.",
+            "3. **Nobody knows** — which is itself the finding, and the reason this document "
+            "exists rather than a migration that quietly carried it forward.", ""]
+
+    return "\n".join(out + _footer(engagement))
+
+
 RENDERERS = {
     "config-rationale": config_rationale,
     "solution-design": solution_design,
     "decision-register": decision_register,
     "verification-report": verification_report,
+    "archaeology-backlog": archaeology_backlog,
 }
 
 

@@ -7,9 +7,26 @@ import { expect, test } from "@playwright/test";
  */
 const OUT_OF_BAND = new Set([
   "POST /engagements/{eid}/plan", // the console reads the plan; it never ledgers a rebuild by hand
+  /* A plan of record arrives as a bundle from tools/jidoka-absorb.py, which a person reads and
+     signs before it is registered. A console form for a hundred tasks, thirteen gates and eight
+     boundary conditions would be a worse version of the workbook they already have, and a
+     paste-the-JSON box would be a worse version of the tool. Everything after registration —
+     confirming a condition, passing a gate, accounting for a task — is on the screen. */
+  "POST /engagements/{eid}/programme",
+  // Same reason: a specification is sixty-two requirements read out of a Word document by the
+  // absorber, not something anybody types into a console. Tracing one — the judgement the platform
+  // will not make for you — is on the screen.
+  "POST /engagements/{eid}/specification",
 ]);
 
 test("the console reaches every endpoint the API publishes", async ({ page, request }) => {
+  // This one walks the whole product in a single session — register a landscape, load intent,
+  // plan, run the crew, work a night, override an objection, advance four phases and revisit it —
+  // so it is the one test whose runtime grows every time the platform does. It sat at 30.2s
+  // against the 30s default and failed about half the time, which reads as a flake and is not
+  // one: the walk really is that long, and the right answer is a budget that says so rather than
+  // a shorter walk that covers less.
+  test.setTimeout(120_000);
   const spec = await (await request.get("/openapi.json")).json() as {
     paths: Record<string, Record<string, unknown>>;
   };
@@ -32,6 +49,15 @@ test("the console reaches every endpoint the API publishes", async ({ page, requ
   const eng = `Coverage ${Date.now()}`;
   await page.getByLabel("Name").fill(eng);
   await page.getByRole("button", { name: "Open it" }).click();
+  // Held from here, because the walk switches identity twice and a selector read later would be
+  // whatever the console happens to have selected by then.
+  await expect(page.locator(".scrim")).toHaveCount(0);
+  /* Opening selects it — assert that before reading the id. A parallel worker creating its own
+     engagement refreshes this list, and reading the selector's value without checking whose
+     engagement is open hands the rest of the walk somebody else's id: every request succeeds, and
+     the screen is looking at a different programme. panels.spec.ts learned this the same way. */
+  await expect(page.locator(".head h1")).toHaveText(eng);
+  const eid = await page.getByLabel("Engagement", { exact: true }).inputValue();
 
   // Landscape
   await page.getByRole("tab", { name: /^Landscape/ }).click();
@@ -65,6 +91,12 @@ test("the console reaches every endpoint the API publishes", async ({ page, requ
   }, {
     object: "A_CostCenter", product: "S4HANA", system_binding: "KOM-S4-DEV", tier: "A",
     intent: { CostCenter: "CC90", CompanyCode: "1000" },
+    source: { workbook: "w.xlsx", signed_by: "x", date: "2026-01-01" },
+  }, {
+    // Provisioning-only, so SF publishes no way to read it back: the record a person attests to
+    // rather than one the platform can ever check (ADR-0022).
+    object: "DATA_MODEL_XML", product: "SuccessFactors", system_binding: "KOM-SF-DEV", tier: "C",
+    intent: { externalCode: "CSDM_COV", change: "Add coverage marker" },
     source: { workbook: "w.xlsx", signed_by: "x", date: "2026-01-01" },
   }]);
   await page.getByLabel("Records (JSON array)").fill(records);
@@ -176,6 +208,16 @@ test("the console reaches every endpoint the API publishes", async ({ page, requ
   await page.getByRole("tab", { name: /^Verify/ }).click();
   await page.getByRole("button", { name: /^(Run verification|Verify again)$/ }).click();
   await dismissScrim(page);
+  // The twin: load a rule export, predict, and read the fidelity it has not earned yet.
+  await page.getByLabel("Rule export").fill(JSON.stringify([{
+    rule_id: "R-COV", entity: "FOPayComponent",
+    then: [{ field: "code", op: "required" }],
+  }]));
+  await page.getByRole("button", { name: "Load rules" }).click();
+  await dismissScrim(page);
+  await page.getByRole("button", { name: /^(Run the twin|Predict again)$/ }).click();
+  await dismissScrim(page);
+
   await page.getByLabel("Range id").fill("TT-COV");
   await page.getByLabel("Object type").fill("TimeType");
   await page.getByLabel("Prefix").fill("TT_COV_");
@@ -184,11 +226,168 @@ test("the console reaches every endpoint the API publishes", async ({ page, requ
   await page.getByRole("button", { name: "Allocate next" }).first().click();
   await dismissScrim(page);
 
+  // Crew: put the team on the engagement. It stops at the statutory question the sentinel raises,
+  // which is the platform working — answer it, then run again and it goes to the human gate.
+  await page.getByRole("tab", { name: /^Crew/ }).click();
+  await page.getByRole("button", { name: /^(Put the crew on it|Run again)$/ }).click();
+  await dismissScrim(page);
+  await page.getByRole("tab", { name: /^Decisions/ }).click();
+  const statutory = page.locator(".station", { hasText: "DP-STAT-" }).first();
+  if (await statutory.count()) {
+    await statutory.getByRole("button", { name: "Take this decision" }).click();
+    await page.getByRole("textbox", { name: /^Decision/ }).fill("MONTHLY");
+    const evidence = page.getByLabel(/[Ee]vidence/);
+    if (await evidence.count()) await evidence.first().fill("BCEA s20 — client legal memo");
+    await page.getByRole("button", { name: "Record the decision" }).click();
+    await dismissScrim(page);
+  }
+  await page.getByRole("tab", { name: /^Crew/ }).click();
+  await page.getByRole("button", { name: "Run again" }).click();
+  await dismissScrim(page);
+  // Somebody for the night to address: a request sent to a role is a request nobody answers.
+  await page.getByLabel("Who").fill("T. Mabaso");
+  await page.getByLabel("May", { exact: true }).fill("approve, resolve_dp, execute");
+  await page.getByRole("button", { name: "Add to the team" }).click();
+  await dismissScrim(page);
+
+  // The night shift: the same checks, unattended, and a handover in the morning.
+  await page.getByRole("button", { name: /^(Work the night|Work another night)$/ }).click();
+  await dismissScrim(page);
+  // An object the product publishes no read path for is never chased: a person attests to it.
+  // Not guarded by a count check — the walk loads a Tier-C record precisely so this path runs,
+  // and a silently skipped step is how a spec stops covering the thing it claims to cover.
+  await page.getByRole("button", { name: "I made this change" }).first().click();
+  await dismissScrim(page);
+
+  // Insight: read a live tenant into drafts, sign one into intent (the door from archaeology
+  // into the ordinary machinery), replay the ledger to a moment, and count a change in people.
+  await page.getByRole("tab", { name: /^Insight/ }).click();
+  await page.getByLabel("System to read").selectOption("KOM-SF-DEV");
+  await page.getByLabel("Entities").fill("FOCostCenter");
+  await page.getByRole("button", { name: "Read the system" }).click();
+  await dismissScrim(page);
+  await page.getByRole("checkbox", { name: /^Select / }).first().check();
+  await page.getByLabel("Workbook").fill("brownfield-review");
+  await page.getByRole("button", { name: /^Sign \d+ into intent$/ }).click();
+  await dismissScrim(page);
+  await page.getByLabel("As of").fill(new Date().toISOString().slice(0, 19) + "Z");
+  await page.getByRole("button", { name: "Replay to this moment" }).click();
+  await dismissScrim(page);
+  await page.getByLabel("Population system").selectOption("KOM-SF-DEV");
+  await page.getByLabel("Entity", { exact: true }).fill("FOCostCenter");
+  await page.getByLabel("Where field").fill("cust_region");
+  await page.getByLabel("equals").fill("EMEA");
+  await page.getByLabel("Change", { exact: true }).fill("region rollup corrected");
+  await page.getByRole("button", { name: "Count the people" }).click();
+  await dismissScrim(page);
+
   // Documents: the pack is projected from signed intent, so opening it is the whole path.
   await page.getByRole("tab", { name: /^Documents/ }).click();
   await expect(page.locator(".doc-tab").first()).toBeVisible();
   await page.locator(".doc-tab").nth(1).click();
   await dismissScrim(page);
+
+  // Two environments, compared. The second system is bound read-only, which is the binding this
+  // question actually wants: the design names one system and the question is about another.
+  await page.getByRole("tab", { name: /^Landscape/ }).click();
+  await page.getByRole("button", { name: "Register a system" }).click();
+  await page.getByLabel("System id").fill("KOM-SF-PROD");
+  await page.getByLabel("Product").fill("SuccessFactors");
+  await page.getByLabel("Role").selectOption("TARGET");
+  await page.getByLabel("Environment").selectOption("PROD");
+  await page.getByRole("checkbox").check();
+  await page.getByRole("button", { name: "Register", exact: true }).click();
+  await dismissScrim(page);
+
+  // What happened outside the platform: the product's own change log against ours.
+  const rec = page.locator(".sec", { hasText: "What happened outside the platform" });
+  await expect(rec.getByText("assumption, not a finding")).toBeVisible();
+  await rec.getByLabel("Which system").selectOption("KOM-SF-DEV");
+  await rec.getByRole("button", { name: "Reconcile" }).click();
+  await dismissScrim(page);
+
+  const env = page.locator(".sec", { hasText: "Two environments, compared" });
+  await env.getByLabel("Compare this system").selectOption("KOM-SF-DEV");
+  await env.getByLabel("With this system").selectOption("KOM-SF-PROD");
+  await env.getByRole("button", { name: /^Bind a read-only connector/ }).first().click();
+  await env.getByRole("button", { name: "Compare" }).click();
+  await expect(env.getByText(/agree on all|are not the same/)).toBeVisible();
+
+  // The delta pool: a number somebody agreed to, recorded where the contracts it counts are.
+  await page.getByRole("tab", { name: /^Intent/ }).click();
+  await page.getByLabel("Customisations agreed").fill("30");
+  await page.getByRole("button", { name: "Record the pool" }).click();
+  await dismissScrim(page);
+
+  // The platform's own position: overriding one takes a name, and the revisit closes the loop.
+  // Both are reachable only where the crew has actually objected, which the run above ensures.
+  await page.getByRole("tab", { name: /^Decisions/ }).click();
+  await page.getByRole("button", { name: "Override" }).first().click();
+  await page.getByLabel("Overridden by").fill("T. Mabaso");
+  await page.getByLabel("Because").fill("the vendor confirmed it in writing");
+  await page.getByRole("button", { name: "Record the override" }).click();
+  await dismissScrim(page);
+
+  // The night's cadence: a statement about this programme, and what the clock measures against.
+  await page.getByRole("tab", { name: /^Crew/ }).click();
+  await page.getByRole("button", { name: "Set the cadence" }).click();
+  await dismissScrim(page);
+
+  /* The programme. Registered out of band, as a signed bundle is, and then answered on the screen:
+     a condition confirmed, one breached, a gate passed on evidence, a task the platform cannot see
+     accounted for by a person. */
+  expect((await request.post(`/engagements/${eid}/programme`, {
+    data: {
+      conditions: [{ what: "DEV and QAL provisioned", by: "1 Oct",
+                     consequence: "Week 1 cannot start" },
+                   { what: "Legacy read access", by: "1 Oct", consequence: "No baseline" }],
+      gates: [{ gate_id: "PG1", name: "Baseline accepted", date: "Fri 9 Oct",
+                criteria: "extract accepted", evidence: "baseline manifest", approver: "Lead" }],
+      tasks: [{ task_id: "PT-001", task: "Access check", week: "B1", owner: "PM", gate: "PG1",
+                declared_status: "Complete" }],
+    },
+  })).ok()).toBeTruthy();
+
+  await openView(page, /^Programme/);
+  await expect(page.getByRole("heading", { name: "The plan of record" })).toBeVisible();
+
+  const answer = async (button: string, what: string) => {
+    await page.getByRole("button", { name: button, exact: true }).first().click();
+    await page.getByLabel("What happened").fill(what);
+    await page.locator(".scrim").getByRole("button").first().click();
+    await dismissScrim(page);
+  };
+  await answer("It holds", "QAL login screenshot");
+  await answer("It has failed", "access request refused");
+  await answer("Report it done", "confirmed in the workshop");
+
+  await page.getByRole("button", { name: "Pass on evidence" }).first().click();
+  await page.getByLabel("Evidence for this gate").fill("manifest sha 9f2c");
+  await page.getByRole("button", { name: "Pass it" }).click();
+  await dismissScrim(page);
+
+  /* The specification. Registered out of band, like the programme, and then answered on the
+     screen: a requirement traced to the objects that satisfy it, by a person, under their name. */
+  expect((await request.post(`/engagements/${eid}/specification`, {
+    data: {
+      requirements: [{ req_id: "BRS-EC-001", requirement: "Single instance, four country layers",
+                       rationale: "the baseline", fit: "STD", control: "C01" }],
+      controls: [{ control_id: "C01", objective: "Every change is attributable", owner: "GONXT",
+                   frequency: "per cycle", evidence: "the change log" }],
+    },
+  })).ok()).toBeTruthy();
+
+  await openView(page, /^Specification/);
+  await expect(page.getByRole("heading", { name: "The specification" })).toBeVisible();
+  await page.getByRole("button", { name: "Trace it" }).first().click();
+  await page.getByLabel("Objects that satisfy it").fill("FOPayComponent");
+  await page.getByLabel("Why this satisfies it").fill("agreed in the design authority");
+  await page.getByRole("button", { name: "Record the trace" }).click();
+  await dismissScrim(page);
+
+  // Every engagement at once — the partner's screen, and the only one that reads the whole store.
+  await page.getByRole("tab", { name: /^Portfolio/ }).click();
+  await expect(page.getByRole("heading", { name: "Every engagement" })).toBeVisible();
 
   // Phase advance, ledger, evidence
   await page.getByRole("tab", { name: /^Line/ }).click();
@@ -196,6 +395,20 @@ test("the console reaches every endpoint the API publishes", async ({ page, requ
   await page.getByRole("tab", { name: /^Ledger/ }).click();
   await page.getByRole("tab", { name: /^Evidence/ }).click();
   await expect(page.getByText(/The chain verifies|The chain breaks/)).toBeVisible();
+
+  // Last, because it is one-way: an objection is revisited at the phase where what it predicted
+  // becomes observable, and that is HYPERCARE. Nothing is due before then — a revisit early is a
+  // platform asking to be told it was right — so the walk has to actually get there.
+  await page.getByRole("tab", { name: /^Line/ }).click();
+  for (let i = 0; i < 4; i += 1) {
+    const advance = page.getByRole("button", { name: /^Advance to/ }).first();
+    if (!(await advance.count())) break;
+    await advance.click();
+    await dismissScrim(page);
+  }
+  await page.getByRole("tab", { name: /^Decisions/ }).click();
+  await page.getByRole("button", { name: "Revisit" }).first().click();
+  await dismissScrim(page);
 
   const missing = [...published].filter((e) => !seen.has(e) && !OUT_OF_BAND.has(e)).sort();
   expect(missing, `endpoints with no path through the console:\n${missing.join("\n")}`).toEqual([]);
@@ -219,6 +432,20 @@ async function signInAs(page: import("@playwright/test").Page, who: string) {
   await page.getByRole("button", { name: "Enter the console" }).click();
 }
 
+/* Open a view and prove it opened.
+
+   The dialog before a rail click closes on a 500ms timer, and a scrim still on the page swallows the
+   click: the tab never changes, and the next assertion fails on a screen that was fine. A fixed wait
+   only moves the race, so this waits the scrim out with Playwright's own retry and then asserts the
+   tab is selected — which turns a swallowed click into a failure that names itself, instead of a
+   flake that reads like a broken panel. */
+async function openView(page: import("@playwright/test").Page, name: RegExp) {
+  await expect(page.locator(".scrim")).toHaveCount(0);
+  const tab = page.getByRole("tab", { name });
+  await tab.click();
+  await expect(tab).toHaveAttribute("aria-selected", "true");
+}
+
 async function dismissScrim(page: import("@playwright/test").Page) {
   await page.waitForTimeout(500);
   for (let i = 0; i < 4 && await page.locator(".scrim").count(); i++) {
@@ -233,6 +460,14 @@ function templated(p: string): string {
     .replace(/^\/engagements\/[^/]+\/decisions\/[^/]+\/resolve$/, "/engagements/{eid}/decisions/{dp_id}/resolve")
     .replace(/^\/engagements\/[^/]+\/execution\/arm\/[^/]+$/, "/engagements/{eid}/execution/arm/{system_id}")
     .replace(/^\/engagements\/[^/]+\/documents\/[^/]+$/, "/engagements/{eid}/documents/{document}")
+    .replace(/^\/engagements\/[^/]+\/objections\/[^/]+\/(override|revisit)$/,
+             (_m, act) => `/engagements/{eid}/objections/{oid}/${act}`)
+    .replace(/^\/engagements\/[^/]+\/specification\/requirements\/[^/]+\/trace$/,
+             "/engagements/{eid}/specification/requirements/{req_id}/trace")
+    .replace(/^\/engagements\/[^/]+\/programme\/gates\/[^/]+\/pass$/,
+             "/engagements/{eid}/programme/gates/{gate_id}/pass")
+    .replace(/^\/engagements\/[^/]+\/programme\/tasks\/[^/]+\/done$/,
+             "/engagements/{eid}/programme/tasks/{task_id}/done")
     .replace(/^\/engagements\/[^/]+\/memory\/[^/]+\/(recheck|correct|promote)$/,
              (_m, act) => `/engagements/{eid}/memory/{claim_id}/${act}`)
     .replace(/^\/engagements\/[^/]+(\/.*)?$/, (_m, rest) => `/engagements/{eid}${rest ?? ""}`)

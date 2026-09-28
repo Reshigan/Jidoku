@@ -7,11 +7,14 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "check": "esbuild src/derive.check.ts --bundle --format=esm --platform=node | node --input-type=module",
+    "check": "esbuild src/derive.check.ts --bundle --format=esm --platform=node | node --input-type=module && node src/fonts.check.mjs",
     "e2e": "playwright test",
-    "shots": "node e2e/shot.mjs"
+    "shots": "node e2e/shot.mjs",
+    "fonts": "node src/fonts.check.mjs --write"
   },
   "dependencies": {
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@fontsource/zen-kaku-gothic-new": "^5.3.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

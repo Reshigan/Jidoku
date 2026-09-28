@@ -12,6 +12,14 @@ name = "jidoka"
 main = "src/index.ts"
 compatibility_date = "2026-08-01"
 
+# Which Cloudflare account this Worker belongs to. An identifier, not a credential: it names the
+# account and grants nothing, and committing it is what lets `npm run deploy` work from a clean
+# clone without a flag to remember. Everything that *is* a credential — the API token, NIGHT_TOKEN
+# — is set by a human out of band and appears nowhere in this repository. CI still passes
+# `accountId` from a repository secret, and the CLOUDFLARE_ACCOUNT_ID environment variable wins
+# over this line, so a fork deploying to its own account overrides it without editing the file.
+account_id = "08596e523c096f04b56d7ae43f7821f4"
+
 [assets]
 directory = "../../apps/web/dist"
 binding = "ASSETS"
@@ -20,15 +28,27 @@ not_found_handling = "single-page-application"   # client-side routing: unknown 
 # would return index.html instead of reaching the kernel. The API prefixes must run the Worker first.
 run_worker_first = [
   "/engagements", "/engagements/*",
+  "/portfolio",
   "/health",
+  "/__edge",          # is this deployment wired up? booleans only — see src/index.ts
   "/auth", "/auth/*",
   "/schema", "/schema/*",
   "/openapi.json",
 ]
 
+# The night shift's clock (ADR-0027, ADR-0028). The shift itself is a call the kernel serves; this
+# is only what makes it happen at 02:00 UTC without somebody remembering. Cron lives here rather
+# than inside the kernel because the platform runs in two deployment shapes and a clock inside the
+# process would have picked one.
+[triggers]
+crons = ["0 2 * * *"]
+
 [env.production]
 name = "jidoka"
 routes = [{ pattern = "jidoka.vantax.co.za", custom_domain = true }]
+
+[env.production.triggers]
+crons = ["0 2 * * *"]
 
 [env.production.vars]
 # Origin of the FastAPI kernel. Empty here on purpose — no environment's origin is committed; the

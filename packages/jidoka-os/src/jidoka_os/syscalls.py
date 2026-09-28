@@ -15,6 +15,12 @@ SYSCALL_TABLE = {
     "sys_plan":           Cap.PLAN,
     "sys_emit_artefact":  Cap.EMIT,
     "sys_write_tier_a":   Cap.WRITE_TARGET,
+    # Moving a change one hop closer to production is a write to a customer's landscape
+    # (ADR-0009), so it costs the same capability as making the change in the first place.
+    "sys_advance_transport": Cap.WRITE_TARGET,
+    # So is putting a system back. The direction of a change is irrelevant to the invariants, and
+    # a crew that can write and cannot undo is a crew that leaves half-landed batches behind.
+    "sys_rollback":       Cap.WRITE_TARGET,
     "sys_ledger_append":  Cap.LEDGER_WRITE,
     "sys_ledger_approve": Cap.APPROVE,      # unreachable from ring 2+ by construction
     "sys_raise_dp":       Cap.RAISE_DP,

@@ -10,6 +10,263 @@ export type Engagement = {
 };
 export type EngagementSummary = Engagement;
 
+/** A record recovered from a live system. Unsigned by construction: `source.signed_by` is empty,
+    which is exactly what makes it unloadable as intent until a person signs it. */
+export type Draft = {
+  key: string;
+  object: string;
+  product: string;
+  system_binding: string;
+  external_code: string;
+  tier: string;
+  intent: Record<string, unknown>;
+  source: { workbook: string; cell_range: string; signed_by: string; date: string };
+  provenance_status: string;
+  rationale: string | null;
+  signed: boolean;
+};
+
+export type Debt = {
+  score: number;
+  grade: string;
+  top_driver: string | null;
+  items: Record<string, number>;
+  counts: Record<string, number>;
+  /** The published weights, sent rather than derived: a weight inferred from a contribution
+      divided by a zero count prints as 0, which is exactly what "published" must not mean. */
+  weights: Record<string, number>;
+  /** counter -> what it was derived from. A counter absent here contributed nothing. */
+  measured: Record<string, string>;
+  /** Weights with no measurement behind them. Published so the score cannot imply more than it knows. */
+  unmeasured: string[];
+};
+
+export type Backlog = {
+  drafts: Draft[];
+  unexplained: string[];
+  systems: string[];
+  debt: Debt;
+};
+
+export type TimeTravel = {
+  at: string;
+  approved: string[];
+  rolled_back: string[];
+  open_dps: string[];
+  halted: boolean;
+  entries: number;
+};
+
+/** What one agent was allowed to do, and what it did with that. Both, always. */
+export type CrewCard = {
+  name: string;
+  ring: "AGENT" | "SERVICE" | "UNTRUSTED";
+  objective: string;
+  capabilities: string[];
+  syscalls: number;
+  tokens: number;
+  state: string;
+  exit_reason: string;
+  did: string[];
+};
+
+export type CrewRun = {
+  crew: CrewCard[];
+  plan: Plan | null;
+  /** The planner's refusal, verbatim. An open decision stopping the plan is the platform working. */
+  plan_blocked: string | null;
+  steps: {
+    key: string; tier: string; system: string; status: string; detail: string;
+    /** Where an ABAP change sits on its route. Absent on products that do not transport. */
+    transport?: TransportState;
+  }[];
+  artefacts: { key: string; tier: string; kind: string; human_step: string; steps: string[] }[];
+  decisions_raised: string[];
+  objections: { from: string; kind: string; body: Record<string, string> }[];
+  economics: {
+    steps: Record<string, number>; manual_steps: number; rehearsed: number; refused: number;
+    open_questions: number; not_priced: string[];
+  } | null;
+  verification: VerificationRun | null;
+  /** The handover. A run ends here rather than in a fait accompli — arming and approval are human. */
+  waiting_on_a_person: { what: string; who: string; why: string }[];
+  halted: boolean;
+  halt_reason: string;
+};
+
+/** A night's work and the handover it left. `interrupted` earned a wake-up; everything else
+    waited for the morning, which is the whole point of the budget (M3). */
+export type NightShift = {
+  did: string[];
+  interrupted: NightFinding[];
+  waited: NightFinding[];
+  deferred: NightFinding[];
+  budget: { of: number; spent: number; held_back: number; threshold: number } | null;
+  handover: string;
+  cost_of_silence: Record<string, number>;
+  /** Whether the budget's interruptions reached anybody, or had nowhere to go. */
+  notified: Notified;
+  /** Whether the clock that runs the nights is still running, read off the ledger rather than out
+      of the API's memory. Nothing inside a night can report its own absence. */
+  clock: NightClock;
+};
+
+export type NightClock = {
+  last_worked: string;
+  silent_for_hours: number | null;
+  running: boolean;
+  says: string;
+};
+
+export type NightFinding = {
+  kind: string; what: string; who: string; detail: string; cost: number;
+};
+
+/** Somebody the platform may ask for something. Authority is written in the platform's own
+    permission names, and cost is declared by the organisation — never inferred (M4). */
+export type TeamMember = {
+  name: string;
+  authority: string[];
+  cost: number;
+  hours: [number, number];
+  /** IANA zone name. Named, so their hours move with daylight saving; empty falls back to the
+      offset, which does not. */
+  tz: string;
+  utc_offset: number;
+  days: number[];
+  capacity_per_week: number;
+};
+
+/** The platform's account of itself: where it was wrong, and where its gates were friction.
+    Nothing here is scored — a single number would be quoted, and the questions are the product. */
+export type Accountability = {
+  refusals: {
+    gates: RefusedGate[];
+    fired: number;
+    cleared: number;
+    still_standing: number;
+    friction_within_hours: number;
+    method: string;
+  };
+  mistakes: { drift_after_verified: string[]; landed_in_part: string[]; rolled_back: string[]; method: string };
+  twin: Record<string, unknown>;
+  unmeasurable: string[];
+  says: string;
+};
+
+export type RefusedGate = {
+  gate: string; kind: string; status: number; fired: number; cleared: number;
+  cleared_fast: number; standing: number; words: string; people: number; reads_as: string;
+};
+
+/** Every engagement on this kernel, worst first. Each number is the same projection the
+    engagement's own screen shows — a roll-up with a second opinion is an argument, not a view. */
+export type Portfolio = {
+  engagements: PortfolioRow[];
+  total: number;
+  need_a_person: number;
+  says: string;
+};
+
+export type PortfolioRow = {
+  engagement_id: string; name: string; client: string; phase: string;
+  records: number; people: number; chain_ok: boolean;
+  night_running: boolean; night_says: string;
+  statutory_open: string[]; decisions_open: string[];
+  proven: number | null; claimed: number;
+  refusals_standing: number; needs_a_person: string;
+  /** Rank, not a keyword match on the sentence: rewording a message must not reorder the list. */
+  urgency: number;
+};
+
+/** The platform's stated position on something it cannot prevent (M6). Not a gate. */
+export type ObjectionRow = {
+  objection_id: string; about: string; finding: string; grounds: string;
+  consequence: string; recommendation: string; revisit_at: string;
+  status: "open" | "overridden" | "withdrawn" | "revisited";
+  raised_at: string; raised_by: string; restated: number;
+  overridden_by: string; override_reason: string; overridden_at: string;
+  revisited_at: string; what_happened?: string;
+};
+
+/** One writer, declared readers: the cross-module contract a built object carries. */
+export type Contracts = {
+  contracts: { key: string; owner: string; consumers: string[]; feeds: string[]; statutory: string }[];
+  conflicts: { key: string; says: string }[];
+  undeclared_readers: { reader: string; reads: string; module: string; owner: string; says: string }[];
+  rule: string;
+  delta_pool: DeltaPool;
+};
+
+/** C1: refinements that do not hold, and required fields that are empty. Absence and
+    disagreement stay apart because an auditor reads the two differently. */
+export type TypeCheck = {
+  disagrees: TypeFailure[];
+  absent: TypeFailure[];
+  holds: boolean;
+  kinds: string[];
+  method: string;
+};
+
+export type TypeFailure = { key: string; path: string; kind: string; authority: string; says: string };
+
+/** A fixed budget of customisations, debited from the design (ADR-0041). */
+export type DeltaPool = {
+  of: number; spent: number; remaining: number; over: number;
+  objects: string[]; says: string; method: string;
+};
+
+/** Where an interruption actually went (ADR-0040). */
+export type Notified = { configured: boolean; sent: string[]; failed: string[]; says: string };
+
+/** What a new version of the design did to the last one, and what it left live (ADR-0039). */
+export type Superseded = {
+  records: number;
+  superseded?: { added: string[]; removed: string[]; changed: string[]; unchanged: string[] };
+  orphaned?: { key: string; last: string; says: string }[];
+  delta_pool?: DeltaPool;
+};
+
+/** Two registered systems, read and compared, with neither treated as the truth (ADR-0042). */
+export type EnvironmentDiff = {
+  entities: EntityDiff[];
+  apart: number;
+  same: number;
+  aligned: boolean;
+  says: string;
+  unreadable: { entity: string; reason: string }[];
+  method: string;
+};
+
+export type EntityDiff = {
+  entity: string; left: string; right: string; key_field: string;
+  only_in_left: { key: string }[];
+  only_in_right: { key: string }[];
+  differs: { key: string; fields: Record<string, { left: unknown; right: unknown }>;
+             signed: boolean; matches?: string[]; says: string }[];
+  same: string[];
+  aligned: boolean;
+  says: string;
+};
+
+/** The product's own change log against ours (ADR-0044). */
+export type Reconciliation = {
+  ever_run: boolean;
+  runs: number;
+  last_run: string;
+  out_of_band: { object: string; says: string; by: string; at: string }[];
+  window_minutes: number;
+  says: string;
+};
+
+export type Blast = {
+  population: number;
+  affected: number;
+  affected_ids: (string | number)[];
+  unaffected: number;
+  statement: string;
+};
+
 export type PlanStep = {
   seq: number;
   key: string;
@@ -93,7 +350,12 @@ export type TransportState = {
 
 export type StepTransport = TransportState & { key: string };
 
-export type ArmedTarget = { system_id: string; armed_by: string; reason: string };
+/** An arming is a window, not a standing authority (ADR-0021): it names the moment it lapses,
+    and a lapsed one is never listed here — the console must not offer a write about to be
+    refused. `expires_at` is empty only for an arming made without one, which the API never does. */
+export type ArmedTarget = {
+  system_id: string; armed_by: string; reason: string; expires_at: string; minutes?: number;
+};
 export type Connector = { system_id: string; kind: string; describe: string };
 
 /** A call the server refused, or could not answer. Carries the server's own words. */
@@ -159,8 +421,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  /** Loading a new version supersedes the old one: what came back says what changed and what it
+      left live in a customer's system with nothing claiming it (ADR-0039). */
   uploadIR: (eid: string, records: unknown[]) =>
-    call<{ records: number; open_decision_points: Record<string, string[]> }>(
+    call<Superseded & { open_decision_points: Record<string, string[]> }>(
       `/engagements/${eid}/ir`,
       { method: "POST", body: JSON.stringify(records) },
     ),
@@ -275,8 +539,72 @@ export type VerificationRun = {
   verified: string[];
   drift: DriftFindingView[];
   skipped: { key: string; reason: string }[];
+  /** Signed intent describes it and nobody has built it yet. Not drift — nothing changed under
+      anyone, because nothing was ever there. It is unbuilt work, and the plan is what closes it. */
+  not_applied: { key: string; system: string; reason: string }[];
+  /** Handed to a person and not in the system yet. Also not drift: the platform did its half of
+      a Tier B/C step and the work is outstanding, which is a thing to chase with a date on it. */
+  awaiting_a_person: { key: string; system: string; tier: string; handed_over: string; reason: string }[];
+  /** The product publishes no way to read this object back, so no re-read will ever confirm it.
+      Waiting would be waiting forever; what is owed is a named person's attestation (ADR-0022). */
+  unconfirmable: { key: string; system: string; tier: string; reason: string }[];
+  /** A person said they did it, on the chain, against one version of the record's intent. Weaker
+      than verified and never shown as if it were — the platform has not seen the system. */
+  attested: { key: string; system: string; tier: string; reason: string;
+              attested_by: string; at: string; note: string }[];
   planning_blocked: boolean;
 };
+/** What this engagement can prove, counted from its own chain (ADR-0023). `fraction` is null when
+    nothing claims to be done — an empty set has no score, and 0 would read as a failure. */
+export type AssuranceView = {
+  records: number;
+  basis: Record<string, string[]>;
+  counts: Record<string, number>;
+  claimed: number;
+  proven: number;
+  fraction: number | null;
+  /** Published with the number, so nobody has to take the number on trust. */
+  formula: string;
+  not_counted: string[];
+};
+
+/** A control written as a predicate over the whole ledger (C6). Violations are enumerated in
+    full, never counted: a control that cannot show its violations is prose again. */
+export type ControlResult = {
+  control_id: string;
+  statement: string;
+  population: string;
+  tested: number;
+  passed: boolean;
+  /** NOT_EXERCISED is not a pass — there was nothing on the chain to test. */
+  status: "PASS" | "FAIL" | "NOT_EXERCISED";
+  violations: { task: string; actor: string; ts: string; why: string }[];
+};
+
+export type ControlsView = {
+  controls: ControlResult[];
+  failing: string[];
+  not_exercised: string[];
+  population_complete: boolean;
+  method: string;
+};
+
+/** What the twin predicts, and how much that is worth. `fidelity` is null until the twin has
+    scored enough predictions to have earned a rate — a percentage from four comparisons is the
+    kind of number that gets quoted (ADR-0026). */
+export type TwinView = {
+  predictions: { key: string; verdict: "ACCEPT" | "REJECT"; reasons: string[]; at?: string }[];
+  rules_evaluatable: number;
+  refused_rules: { rule_id: string; why: string }[];
+  skipped?: { key: string; reason: string }[];
+  fidelity: {
+    scored: number; agreed: number; disagreed: number; unsettled: number;
+    fidelity: number | null; status: "CALIBRATED" | "UNCALIBRATED"; min_scored: number;
+    misses: { task: string; predicted: string; outcome: string }[];
+    method: string;
+  };
+};
+
 export type NumberRangeView = {
   range_id: string; object_type: string; prefix: string;
   start: number; end: number; width: number; next_free: string | null;
@@ -420,6 +748,13 @@ const api2 = {
       method: "POST",
       body: JSON.stringify({ key }),
     }),
+  /** A person's word about work this platform has no way to read back. Refused with a 409 where
+      the object IS readable — there, the live system answers and nobody's word substitutes. */
+  attest: (eid: string, key: string, note = "") =>
+    call<{ key: string; attested_by: string; at: string; note: string }>(
+      `/engagements/${eid}/execution/attest`,
+      { method: "POST", body: JSON.stringify({ key, note }) },
+    ),
   /** A restore is a write: it wears the same armed target, snapshot and builder-is-not-approver
       gates an execute does. The server refuses; the console only offers. */
   rollback: (eid: string, key: string, reason = "") =>
@@ -489,6 +824,19 @@ const api2 = {
       blocking decision point on the server; the console never reconciles anything. */
   verify: (eid: string) =>
     call<VerificationRun>(`/engagements/${eid}/verification`, { method: "POST" }),
+  /** A read of the chain: it costs nothing and cannot disagree with the ledger it is drawn from. */
+  assurance: (eid: string) => call<AssuranceView>(`/engagements/${eid}/verification/assurance`),
+  /** Every control, over every row. Read-only, and an auditor asks it more than anybody. */
+  controls: (eid: string) => call<ControlsView>(`/engagements/${eid}/controls`),
+  twin: (eid: string) => call<TwinView>(`/engagements/${eid}/twin`),
+  /** Predicts and ledgers the prediction. It never blocks — see the view's own note. */
+  runTwin: (eid: string) => call<TwinView>(`/engagements/${eid}/twin`, { method: "POST" }),
+  /** Rules outside the evaluatable subset come back named, and are shown rather than swallowed. */
+  loadTwinRules: (eid: string, rules: unknown[], source = "") =>
+    call<{ evaluatable: number; refused: { rule_id: string; why: string }[] }>(
+      `/engagements/${eid}/twin/rules`,
+      { method: "POST", body: JSON.stringify({ rules, source }) },
+    ),
   numbering: (eid: string) => call<NumberingSnapshot>(`/engagements/${eid}/numbering`),
   registerRange: (eid: string, body: {
     range_id: string; object_type: string; prefix: string; start: number; end: number; width?: number;
@@ -504,5 +852,162 @@ const api2 = {
     ),
 };
 
+const api3 = {
+  /* ---- insight: the brownfield door. Archaeology reads a live tenant into drafts that are
+     unsigned by construction; signing one turns it into ordinary IR that the planner, the
+     documents and verification already handle. Nothing here reconciles or writes to a tenant. ---- */
+  /** Reverse a bound system into draft records. Reads only. */
+  dig: (eid: string, system_id: string, entities: string[]) =>
+    call<Backlog>(`/engagements/${eid}/insight/archaeology`, {
+      method: "POST",
+      body: JSON.stringify({ system_id, entities }),
+    }),
+  backlog: (eid: string) => call<Backlog>(`/engagements/${eid}/insight/archaeology`),
+  /** The signature is the server's view of who is calling (ADR-0015) — there is no signer field
+      to send, and the console does not offer one. */
+  signDrafts: (eid: string, keys: string[], workbook: string, rationale = "") =>
+    call<{ signed: string[]; open_dps: Record<string, string[]>; ir_records: number; backlog: Backlog }>(
+      `/engagements/${eid}/insight/archaeology/sign`,
+      { method: "POST", body: JSON.stringify({ keys, workbook, rationale }) },
+    ),
+  debt: (eid: string) => call<Debt>(`/engagements/${eid}/insight/debt`),
+  timetravel: (eid: string, at: string) =>
+    call<TimeTravel>(`/engagements/${eid}/insight/timetravel?at=${encodeURIComponent(at)}`),
+  /** Counted in people, from the live system. A blast radius from a design document counts the
+      people somebody meant to have. */
+  blast: (eid: string, body: { system_id: string; entity: string; id_field: string;
+                               selector: Record<string, string>; delta: string }) =>
+    call<Blast>(`/engagements/${eid}/insight/blast`, { method: "POST", body: JSON.stringify(body) }),
+
+  /* ---- the crew run (ADR-0018). The team takes the engagement as far as it can go alone and
+     stops at every human gate: it cannot arm a live write and no ring it can occupy can approve. ---- */
+  runCrew: (eid: string) => call<CrewRun>(`/engagements/${eid}/run`, { method: "POST" }),
+  /** Work the night and compose the morning's handover. Writes the ledger, like any check does. */
+  runNight: (eid: string) => call<NightShift>(`/engagements/${eid}/nightshift`, { method: "POST" }),
+  lastNight: (eid: string) => call<NightShift>(`/engagements/${eid}/nightshift`),
+  /** How often nights run here. Declared on the ledger, so the clock reads the cadence and the
+      runs off one chain and there is no second copy to disagree. */
+  setCadence: (eid: string, hours: number) =>
+    call<{ every_hours: number }>(`/engagements/${eid}/nightshift/cadence?hours=${hours}`,
+      { method: "POST" }),
+  /** The team as declared, plus two things observed rather than declared: how long each person
+      has taken to answer a decision here, and how much of this week they have been asked for.
+      Reported so a queue behind one name is visible — never used to route around anybody. */
+  team: (eid: string) =>
+    call<{ people: TeamMember[]; can_be_asked_for: string[];
+           answers_in_hours: Record<string, number>;
+           asked_this_week: Record<string, number> }>(`/engagements/${eid}/people`),
+  /** Replaces the team: it is a statement about now, not an append log. */
+  registerTeam: (eid: string, people: unknown[]) =>
+    call<{ people: TeamMember[] }>(`/engagements/${eid}/people`,
+      { method: "POST", body: JSON.stringify(people) }),
+  lastRun: (eid: string) => call<CrewRun>(`/engagements/${eid}/run`),
+  /** Where this platform was wrong, and where its gates were friction. Read access on purpose:
+      somebody deciding whether to trust it should not need a privileged role to see. */
+  accountability: (eid: string) =>
+    call<Accountability>(`/engagements/${eid}/accountability`),
+  /** Every engagement at once, worst first. */
+  portfolio: () => call<Portfolio>("/portfolio"),
+  contracts: (eid: string) => call<Contracts>(`/engagements/${eid}/contracts`),
+  types: (eid: string) => call<TypeCheck>(`/engagements/${eid}/types`),
+  reconciliation: (eid: string) => call<Reconciliation>(`/engagements/${eid}/reconcile`),
+  /** Read the system's own change log and say what happened there that never came through here. */
+  reconcile: (eid: string, system_id: string) =>
+    call<Reconciliation & { matched: unknown[] }>(
+      `/engagements/${eid}/reconcile?system_id=${encodeURIComponent(system_id)}`,
+      { method: "POST" }),
+  /** Reads both systems and writes to neither, so it needs nothing beyond read. */
+  compareEnvironments: (eid: string, left: string, right: string) =>
+    call<EnvironmentDiff>(
+      `/engagements/${eid}/environments/compare?left=${encodeURIComponent(left)}&right=${encodeURIComponent(right)}`),
+  /** The number of customisations somebody agreed to. A commercial fact, so it takes `approve`. */
+  setDeltaPool: (eid: string, size: number) =>
+    call<DeltaPool>(`/engagements/${eid}/contracts/pool?size=${size}`, { method: "POST" }),
+  objections: (eid: string) =>
+    call<{ objections: ObjectionRow[]; open: ObjectionRow[]; due_for_revisit: ObjectionRow[];
+           phase: string; grounds: string[] }>(`/engagements/${eid}/objections`),
+  /** Setting the platform's position aside takes a name and a reason — never a role. */
+  overrideObjection: (eid: string, oid: string, decided_by: string, reason: string) =>
+    call<{ objection_id: string; status: string; decided_by: string }>(
+      `/engagements/${eid}/objections/${oid}/override`,
+      { method: "POST", body: JSON.stringify({ decided_by, reason }) }),
+  /** The loop closing: what the chain says happened, never a verdict on who was right. */
+  revisitObjection: (eid: string, oid: string) =>
+    call<{ objection_id: string; says: string; objection_said: string; overridden_by: string }>(
+      `/engagements/${eid}/objections/${oid}/revisit`, { method: "POST" }),
+  /** The plan of record against the chain. `today` is passed so lateness is the caller's clock,
+      not the server's: a gate is late in somebody's timezone, and the console knows whose. */
+  programme: (eid: string, today?: string) =>
+    call<Programme>(`/engagements/${eid}/programme${today ? `?today=${today}` : ""}`),
+  /** Confirming a boundary condition takes a name and something that was checked. */
+  confirmCondition: (eid: string, what: string, evidence: string) =>
+    call<Programme>(
+      `/engagements/${eid}/programme/conditions/confirm?what=${encodeURIComponent(what)}`,
+      { method: "POST", body: JSON.stringify({ evidence }) }),
+  breachCondition: (eid: string, what: string, evidence: string) =>
+    call<Programme>(
+      `/engagements/${eid}/programme/conditions/breach?what=${encodeURIComponent(what)}`,
+      { method: "POST", body: JSON.stringify({ evidence }) }),
+  /** A gate is an approval, so this needs `approve` — not merely write access. */
+  passGate: (eid: string, gate: string, evidence: string, on_behalf_of: string) =>
+    call<Programme>(`/engagements/${eid}/programme/gates/${gate}/pass`,
+      { method: "POST", body: JSON.stringify({ evidence, on_behalf_of }) }),
+  /** Only for a task the platform cannot see. It refuses one that watches something. */
+  reportTaskDone: (eid: string, task: string, evidence: string) =>
+    call<Programme>(`/engagements/${eid}/programme/tasks/${task}/done`,
+      { method: "POST", body: JSON.stringify({ evidence }) }),
+  /** What the client asked for, against what has been signed. `read` on purpose. */
+  specification: (eid: string) => call<SpecificationView>(`/engagements/${eid}/specification`),
+  /** Which objects satisfy a requirement. A judgement about a client's design, so it takes a
+      person and goes on the chain under their name — the platform never infers it. */
+  traceRequirement: (eid: string, reqId: string, objects: string[], why: string) =>
+    call<SpecificationView>(`/engagements/${eid}/specification/requirements/${reqId}/trace`,
+      { method: "POST", body: JSON.stringify({ objects, why }) }),
+};
+
+/** The engagement plan, as the platform accounts for it. There is deliberately no percentage here:
+    a number made partly of tasks the platform cannot see would be quoted as progress. */
+export interface ProgrammeCondition {
+  what: string; by: string; consequence: string;
+  holding: boolean | null; who_said: string; evidence: string; says: string;
+}
+export interface ProgrammeGate {
+  gate_id: string; name: string; date: string; criteria: string; evidence_required: string;
+  approver: string; passed: boolean; passed_by: string; passed_on: string; evidence_given: string;
+  late: boolean; due_on: string; date_understood: boolean; says: string;
+}
+export interface ProgrammeTask {
+  task_id: string; task: string; week: string; owner: string; due: string; gate: string;
+  depends_on: string[]; declared_status: string; visible_to_platform: boolean; done: boolean;
+  says: string; waiting_on?: string[];
+}
+export interface Programme {
+  conditions: ProgrammeCondition[]; gates: ProgrammeGate[]; tasks: ProgrammeTask[];
+  blocked: ProgrammeTask[];
+  unspoken_conditions: number; breached_conditions: number; gates_passed: number;
+  gates_late: string[]; tasks_the_platform_cannot_see: number;
+  says: string; method: string;
+}
+
+/** The specification against the configuration — the question a programme cannot otherwise
+    answer. NOT_TRACEABLE is its own state and is never counted as covered. */
+export interface RequirementRow {
+  req_id: string; requirement: string; rationale: string; countries: string; wave: string;
+  fit: string; fit_recognised: boolean; control: string; control_named_but_absent: boolean;
+  control_owner: string; control_evidence: string;
+  objects: string[]; configured: string[]; not_configured: string[];
+  state: "CONFIGURED" | "NOT_CONFIGURED" | "NOT_TRACEABLE"; says: string;
+}
+export interface ControlRow {
+  control_id: string; objective: string; owner: string; frequency: string; evidence: string;
+}
+export interface SpecificationView {
+  requirements: RequirementRow[]; controls: ControlRow[];
+  uncontrolled: { kind: string; id: string; says: string }[];
+  configured: number; not_configured: string[]; not_traceable: string[];
+  declared_gaps: string[]; unrecognised_fit: string[];
+  says: string; method: string;
+}
+
 /** One client surface. Typed by construction, so a missing endpoint is a compile error. */
-export const platform = { ...api, ...api2 };
+export const platform = { ...api, ...api2, ...api3 };

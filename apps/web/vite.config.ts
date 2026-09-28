@@ -12,7 +12,10 @@ export default defineConfig({
     port: 5273,
     strictPort: true,
     proxy: Object.fromEntries(
-      ["/engagements", "/health", "/auth", "/schema", "/openapi.json"].map((p) => [p, API]),
+      // Kept in step with the Worker's API_PREFIXES, which src/routing.check.mjs asserts. A path
+      // missing here is served the console's index.html with a 200, and the caller parses a web
+      // page as JSON — the failure reads as a bug in the view, not as a missing route.
+      ["/engagements", "/portfolio", "/health", "/auth", "/schema", "/openapi.json"].map((p) => [p, API]),
     ),
   },
 });

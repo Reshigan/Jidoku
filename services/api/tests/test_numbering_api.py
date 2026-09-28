@@ -70,7 +70,10 @@ def test_ir_load_accepts_a_code_inside_its_governed_range():
 def test_ungoverned_object_types_load_as_before():
     eid = _eng()
     _range(eid, object_type="TimeType", prefix="TT-", start=1, end=9)
-    rec = {"object": "LegalEntity", "product": "SuccessFactors", "system_binding": "S1", "tier": "A",
+    # FOCompany, because the SuccessFactors adapter declares it tier A. The fixture used to say
+    # LegalEntity, which the adapter does not publish a write path for — the load gate added in
+    # ADR-0045 refuses that now, and it was wrong before it was refused.
+    rec = {"object": "FOCompany", "product": "SuccessFactors", "system_binding": "S1", "tier": "A",
            "external_code": "ZA01", "intent": {"externalCode": "ZA01"},
            "source": {"workbook": "WB", "signed_by": "x", "date": "2026-09-01"}}
     assert c.post(f"/engagements/{eid}/ir", json=[rec]).status_code == 200

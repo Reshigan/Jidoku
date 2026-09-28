@@ -54,7 +54,7 @@ function Markdown({ text }: { text: string }) {
            the panel, and a page that scrolls sideways loses the andon rail. */
         <div className="doc-tablewrap" key={k}>
           <table className="doc-table">
-            <thead><tr>{head.map((h, j) => <th key={j}>{inline(h, `${k}h${j}`)}</th>)}</tr></thead>
+            <thead><tr>{head.map((h, j) => <th scope="col" key={j}>{inline(h, `${k}h${j}`)}</th>)}</tr></thead>
             <tbody>
               {rows.map((r, ri) => (
                 <tr key={ri}>{r.map((c, ci) => <td key={ci}>{inline(c, `${k}r${ri}c${ci}`)}</td>)}</tr>

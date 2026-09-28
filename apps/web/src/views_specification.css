@@ -1,0 +1,5 @@
+/* The specification screen. */
+.spec-req { font-size: 12px; max-width: 46ch; }
+.spec-gaps { margin: 0 0 12px; padding-left: 18px; color: var(--ink-mut); font-size: 12.5px; }
+.spec-gaps > li { margin-bottom: 4px; }
+.spec-actions { display: flex; gap: 8px; margin-top: 8px; }

@@ -1,7 +1,7 @@
 """Documents are projections. They may say less than the truth; they may never say more."""
 import pytest
-from jidoka_compiler.project import (ProjectionError, config_rationale, decision_register, render,
-                                     solution_design)
+from jidoka_compiler.project import (ProjectionError, archaeology_backlog, config_rationale,
+                                     decision_register, render, solution_design)
 from jidoka_core.decisions import DecisionEngine, DecisionPoint
 from jidoka_core.ir import IRRecord
 from jidoka_core.ledger import Ledger
@@ -11,10 +11,11 @@ from jidoka_core.registry import SystemRecord, SystemRegistry
 class Eng:
     """The shape services/api holds. Built by hand so the tests do not depend on the API layer."""
 
-    def __init__(self, ir=None, dps=None, open_dps=None):
+    def __init__(self, ir=None, dps=None, open_dps=None, drafts=None):
         self.engagement_id, self.name, self.client = "E-1", "Payroll rollout", "Kruger Mining"
         self.phase = "DESIGN"
         self.ir = ir or []
+        self.drafts = drafts or []
         self.open_dps = open_dps or {}
         self.ledger = Ledger()
         self.registry = SystemRegistry()
@@ -247,3 +248,45 @@ def test_open_drift_decisions_appear_with_their_owner():
     assert "## Unexplained differences" in doc
     assert "DP-DRIFT-" in doc and "T. Mabaso" in doc
     assert "**DRIFT**" in doc
+
+
+# --- archaeology: projecting the absence of intent -------------------------------------------------
+
+def _draft(code="CC-9000", rationale=None):
+    """The shape jidoka_insight.archaeology.reverse_ir emits — unsigned on purpose."""
+    return {"object": "FOCostCenter", "product": "SuccessFactors", "system_binding": "SF-PRD",
+            "external_code": code, "tier": "A", "intent": {"externalCode": code, "name": "Legacy"},
+            "depends_on": [], "provenance_status": "UNVERIFIED", "rationale": rationale,
+            "source": {"workbook": "tenant-extract:SF-PRD", "cell_range": f"FOCostCenter/{code}",
+                       "signed_by": "", "date": ""}}
+
+
+def test_an_unread_system_does_not_render_as_a_clean_one():
+    doc = archaeology_backlog(Eng())
+    assert "No live system has been read" in doc
+    assert "not a claim that the system is clean" in doc
+    assert "Score" not in doc          # no number is invented for a measurement never taken
+
+
+def test_the_backlog_names_what_nobody_can_explain():
+    doc = archaeology_backlog(Eng(drafts=[_draft("CC-9000"), _draft("CC-9100", "kept for ZA payroll")]))
+    assert "**1 have no recorded rationale.**" in doc
+    assert "kept for ZA payroll" in doc
+    assert "**unexplained**" in doc
+
+
+def test_the_debt_score_publishes_its_weights_and_its_blind_spots():
+    """A number nobody can trace is an opinion — so the document prints both halves."""
+    doc = archaeology_backlog(Eng(drafts=[_draft("CC-9000"), _draft("CC-9100")]))
+    assert "Score 12" in doc                      # 2 unexplained x weight 6, reproducible
+    assert "`custom_object`" in doc and "*not measured*" in doc
+
+
+def test_drafts_are_never_presented_as_configuration():
+    doc = archaeology_backlog(Eng(drafts=[_draft()]))
+    assert "unsigned by construction and therefore unexecutable" in doc
+    assert "UNVERIFIED" in doc
+
+
+def test_the_backlog_is_reachable_through_render():
+    assert "Archaeology Backlog" in render(Eng(drafts=[_draft()]), "archaeology-backlog")

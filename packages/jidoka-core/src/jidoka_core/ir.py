@@ -17,12 +17,31 @@ class IRRecord:
     country: str | None = None
     depends_on: list = field(default_factory=list)
     external_code: str | None = None
+    #: The cross-module contract, where the object has one: which single module writes it, which
+    #: modules are registered to read it, what it feeds, and its statutory linkage. Optional —
+    #: delivered standard configuration does not need one. It exists for the objects a programme
+    #: builds, which are exactly the objects that later surprise it (ADR-0034).
+    contract: dict | None = None
 
     @property
     def key(self) -> str:
-        return f"{self.product}:{self.object}:{self.external_code or self.intent.get('externalCode','?')}"
+        return record_key(self)
 
 class IRValidationError(Exception): ...
+
+
+def record_key(record) -> str:
+    """The name one IR record answers to, from a dataclass or from the dict it was loaded as.
+
+    Both are real — the API holds dataclasses, the repository and the projections hold rows — and
+    they have to produce the same string, because that string is the ledger's task name. It was
+    written twice, and the copy that took a dict quietly returned nothing, so an assurance count
+    read off the chain reported every record as unexamined.
+    """
+    get = record.get if isinstance(record, dict) else lambda f, d=None: getattr(record, f, d)
+    intent = get("intent") or {}
+    code = get("external_code") or intent.get("externalCode") or "?"
+    return f"{get('product')}:{get('object')}:{code}"
 
 def _find_decision_points(node: Any, path="intent") -> list[str]:
     hits = []
@@ -49,6 +68,18 @@ def validate_record(raw: dict) -> tuple[IRRecord, list[str]]:
             raise IRValidationError(f"Unsigned source on {raw['object']}: missing source.{k} "
                                     f"— JIDOKA does not execute unsigned intent.")
     rec = IRRecord(**{k: raw[k] for k in raw if k in IRRecord.__dataclass_fields__})
+    # A contract that names no owner is a field with paperwork, and it is structurally invalid for
+    # the same reason an unsigned source is: the thing it claims to establish, it does not.
+    from .contracts import ContractError, validate as validate_contract
+    from .refinements import RefinementError, validate as validate_refinements
+
+    try:
+        validate_contract(rec)
+        # A refinement that cannot be checked is a comment that looks like protection, and a
+        # statutory bound with no signed authority is unsigned intent wearing a type.
+        validate_refinements(rec)
+    except (ContractError, RefinementError) as ex:
+        raise IRValidationError(str(ex)) from None
     return rec, _find_decision_points(raw["intent"])
 
 def load_ir(records: list[dict]) -> tuple[list[IRRecord], dict[str, list[str]]]:

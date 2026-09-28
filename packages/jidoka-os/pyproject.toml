@@ -3,7 +3,7 @@ name = "jidoka-os"
 version = "0.1.0"
 description = "JIDOKA Agent OS: rings, capabilities, syscalls, processes, scheduler, supervision"
 requires-python = ">=3.11"
-dependencies = ["jidoka-core"]
+dependencies = ["jidoka-core", "tzdata"]  # the IANA database, for images that ship without one
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"

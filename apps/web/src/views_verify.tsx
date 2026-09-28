@@ -6,8 +6,24 @@
    answers. The other half of the screen is number ranges (ADR-0014): codes as ledgered
    allocations, where a collision is a refusal with a name in it. */
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, NumberingSnapshot, VerificationRun, platform } from "./api";
-import { Empty, Field, Pill, Section } from "./ui";
+import { ApiError, AssuranceView, NumberingSnapshot, TwinView, VerificationRun, platform } from "./api";
+import { Empty, Field, Pill, Section, Skeleton, useStillHere } from "./ui";
+
+const BASIS_WORDS: Record<string, string> = {
+  checked: "read back from the live system by this platform",
+  disagrees: "read, and the system says something else — each one is an open decision",
+  attested: "a named person's word; no read path exists, so nobody has seen the system",
+  unevidenced: "no read path and no attestation — nothing supports it at all",
+  outstanding: "handed to a person and not done yet",
+  unbuilt: "nothing has been written yet",
+  unexamined: "no verification has ever looked at it",
+};
+
+/** Proven reads green, a person's word amber, nothing at all red. The colour is the argument. */
+const BASIS_LAMP: Record<string, string> = {
+  checked: "run", disagrees: "stop", attested: "call", unevidenced: "stop",
+  outstanding: "call", unbuilt: "idle", unexamined: "idle",
+};
 
 export function VerifyView(props: {
   eid: string | null;
@@ -18,19 +34,47 @@ export function VerifyView(props: {
 }) {
   const { eid, onRefusal } = props;
   const [run, setRun] = useState<VerificationRun | null>(null);
+  const [assurance, setAssurance] = useState<AssuranceView | null>(null);
+  const [twin, setTwin] = useState<TwinView | null>(null);
+  const [rules, setRules] = useState("");
   const [numbering, setNumbering] = useState<NumberingSnapshot | null>(null);
   const [busy, setBusy] = useState(false);
   const [stamp, setStamp] = useState("");
   const [form, setForm] = useState({ range_id: "", object_type: "", prefix: "", start: "1", end: "9999" });
 
+  const stillHere = useStillHere(eid);
+
+  /* The question an auditor actually asks, answered from the chain rather than from this run:
+     a verification nobody has run yet still has a true answer, and it is "nothing is proven". */
+  const refreshAssurance = useCallback(() => {
+    if (!eid) return;
+    platform.assurance(eid)
+      .then((a) => { if (stillHere(eid)) setAssurance(a); })
+      .catch((e) => { if (e instanceof ApiError && !e.notAvailable) onRefusal("Assurance", e.detail); });
+  }, [eid, onRefusal]);
+
+  const refreshTwin = useCallback(() => {
+    if (!eid) return;
+    platform.twin(eid)
+      .then((t) => { if (stillHere(eid)) setTwin(t); })
+      .catch((e) => { if (e instanceof ApiError && !e.notAvailable) onRefusal("The twin", e.detail); });
+  }, [eid, onRefusal]);
+
   const refreshNumbering = useCallback(() => {
     if (!eid) return;
     platform.numbering(eid)
-      .then(setNumbering)
+      .then((n) => { if (stillHere(eid)) setNumbering(n); })
       .catch((e) => { if (e instanceof ApiError && !e.notAvailable) onRefusal("Number ranges", e.detail); });
   }, [eid, onRefusal]);
 
-  useEffect(() => { setRun(null); setStamp(""); refreshNumbering(); }, [refreshNumbering]);
+  useEffect(() => {
+    setRun(null);
+    setStamp("");
+    setTwin(null);
+    refreshNumbering();
+    refreshAssurance();
+    refreshTwin();
+  }, [refreshNumbering, refreshAssurance, refreshTwin]);
 
   if (!eid) return <Empty title="No engagement" body="Choose an engagement to verify it." />;
 
@@ -40,11 +84,36 @@ export function VerifyView(props: {
       const out = await platform.verify(eid);
       setRun(out);
       setStamp(new Date().toLocaleTimeString());
+      refreshAssurance();
       await props.onChanged();
     } catch (e) {
       if (e instanceof ApiError) onRefusal("Verification did not run", e.detail);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const predict = async () => {
+    setBusy(true);
+    try {
+      setTwin(await platform.runTwin(eid));
+    } catch (e) {
+      if (e instanceof ApiError) onRefusal("The twin did not run", e.detail);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const loadRules = async () => {
+    try {
+      // The export is somebody else's file, so a bad one is a refusal to read, not a crash.
+      const parsed = JSON.parse(rules);
+      await platform.loadTwinRules(eid, Array.isArray(parsed) ? parsed : [parsed], "pasted export");
+      setRules("");
+      refreshTwin();
+    } catch (e) {
+      onRefusal("The rule export was not loaded",
+                e instanceof ApiError ? e.detail : "That is not valid JSON.");
     }
   };
 
@@ -76,6 +145,49 @@ export function VerifyView(props: {
   return (
     <>
       <Section
+        title="What can be proven"
+        note="Of everything this engagement claims is done, how much this platform read back itself — and how much rests on somebody's word."
+        lamp={assurance?.fraction === null || assurance === null ? undefined
+              : assurance.fraction === 1 ? "run" : assurance.fraction >= 0.5 ? "call" : "stop"}
+        status={assurance && assurance.fraction !== null
+          ? `${assurance.proven} of ${assurance.claimed} proven`
+          : undefined}
+      >
+        {!assurance ? <Skeleton rows={2} /> : assurance.fraction === null ? (
+          <p className="mut">
+            Nothing here claims to be done yet, so there is nothing to prove. That is a state, not
+            a score — a percentage printed now would be an opinion about an empty set.
+          </p>
+        ) : (
+          <>
+            <p>
+              <strong>{assurance.proven} of {assurance.claimed}</strong> record
+              {assurance.claimed === 1 ? "" : "s"} that claim to be done{" "}
+              {assurance.claimed === 1 ? "is" : "are"} proven — {Math.round(assurance.fraction * 100)}%.
+            </p>
+            <div className="tblwrap">
+              <table className="tbl">
+                <thead><tr><th scope="col">Rests on</th><th scope="col">Records</th><th scope="col">What that means</th></tr></thead>
+                <tbody>
+                  {Object.keys(assurance.counts).sort().map((b) => (
+                    <tr key={b}>
+                      <td><Pill lamp={BASIS_LAMP[b]}>{b}</Pill></td>
+                      <td className="num">{assurance.counts[b]}</td>
+                      <td className="mut" style={{ fontSize: 12.5 }}>{BASIS_WORDS[b] ?? b}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="mut" style={{ marginTop: 12, fontSize: 12.5 }}>
+              {assurance.formula} Not counted: {assurance.not_counted.join("; ")}. Counting those
+              would move the number for reasons that have nothing to do with evidence.
+            </p>
+          </>
+        )}
+      </Section>
+
+      <Section
         title="Verification"
         note="Signed intent checked against live state. Reading only — a difference becomes a decision, never a silent fix."
         lamp={run ? (run.planning_blocked ? "stop" : "run") : undefined}
@@ -103,7 +215,7 @@ export function VerifyView(props: {
               <div className="tblwrap">
                 <table className="tbl">
                   <thead>
-                    <tr><th>Record</th><th>Found</th><th>System</th><th>Fields</th><th>Decision</th></tr>
+                    <tr><th scope="col">Record</th><th scope="col">Found</th><th scope="col">System</th><th scope="col">Fields</th><th scope="col">Decision</th></tr>
                   </thead>
                   <tbody>
                     {run.drift.map((f) => (
@@ -147,6 +259,74 @@ export function VerifyView(props: {
       </Section>
 
       <Section
+        title="The twin"
+        note="What the system is predicted to do with this intent, before anything is written. A prediction never blocks a write — it is a model's opinion, and this one publishes how often it has been right."
+        lamp={twin?.fidelity.status === "CALIBRATED" ? "run" : twin ? "call" : undefined}
+        status={twin
+          ? twin.fidelity.fidelity !== null
+            ? `${Math.round(twin.fidelity.fidelity * 100)}% over ${twin.fidelity.scored} scored`
+            : `uncalibrated · ${twin.fidelity.scored} of ${twin.fidelity.min_scored} scored`
+          : undefined}
+        actions={
+          <button className="btn" disabled={!props.canVerify || busy} onClick={() => void predict()}>
+            {busy ? "Predicting…" : twin?.predictions.length ? "Predict again" : "Run the twin"}
+          </button>
+        }
+      >
+        {!twin || twin.predictions.length === 0 ? (
+          <p className="mut">
+            The twin has predicted nothing on this engagement. It reads the system's own
+            $metadata and any rule export loaded below, then says what the substrate would do with
+            each record — and is graded afterwards against what the substrate actually did.
+          </p>
+        ) : (
+          <>
+            <div className="tblwrap">
+              <table className="tbl">
+                <thead><tr><th scope="col">Record</th><th scope="col">Predicted</th><th scope="col">Why</th></tr></thead>
+                <tbody>
+                  {twin.predictions.map((p) => (
+                    <tr key={p.key}>
+                      <td className="mono">{p.key}</td>
+                      <td><Pill lamp={p.verdict === "ACCEPT" ? "run" : "stop"}>{p.verdict.toLowerCase()}</Pill></td>
+                      <td className="mut" style={{ fontSize: 12.5 }}>
+                        {p.reasons.length ? p.reasons.join("; ") : "nothing objects"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="mut" style={{ marginTop: 12, fontSize: 12.5 }}>
+              {twin.fidelity.status === "CALIBRATED"
+                ? `Matched the system on ${twin.fidelity.agreed} of ${twin.fidelity.scored} scored predictions.`
+                : `Uncalibrated: ${twin.fidelity.scored} of ${twin.fidelity.min_scored} predictions have been settled by the system, so this twin has earned no rate yet.`}
+              {" "}{twin.fidelity.unsettled > 0 && `${twin.fidelity.unsettled} prediction${twin.fidelity.unsettled === 1 ? " is" : "s are"} still unanswered. `}
+              {twin.fidelity.method}
+            </p>
+          </>
+        )}
+        {twin && twin.refused_rules.length > 0 && (
+          <p className="mut" style={{ marginTop: 10, fontSize: 12.5 }}>
+            Not evaluated, and not approximated:{" "}
+            {twin.refused_rules.map((r) => `${r.rule_id} (${r.why})`).join("; ")}.
+          </p>
+        )}
+        {props.canAllocate && (
+          <div className="row" style={{ gap: 12, alignItems: "flex-end", marginTop: 14, flexWrap: "wrap" }}>
+            <Field label="Rule export" value={rules} placeholder='[{"rule_id":"R-107","entity":"TimeType", ...}]'
+                   onChange={setRules} />
+            <button className="btn" disabled={!rules.trim()} onClick={() => void loadRules()}>
+              Load rules
+            </button>
+            <span className="mut" style={{ fontSize: 12.5 }}>
+              {twin ? `${twin.rules_evaluatable} rule${twin.rules_evaluatable === 1 ? "" : "s"} loaded` : ""}
+            </span>
+          </div>
+        )}
+      </Section>
+
+      <Section
         title="Number ranges"
         note="Codes as governed allocations. A collision is refused with the holder's name; a code once used is never released."
         status={numbering ? `${Object.keys(numbering.allocated).length} allocated` : ""}
@@ -156,7 +336,7 @@ export function VerifyView(props: {
           <div className="tblwrap">
             <table className="tbl">
               <thead>
-                <tr><th>Range</th><th>Governs</th><th>Codes</th><th>Next free</th><th /></tr>
+                <tr><th scope="col">Range</th><th scope="col">Governs</th><th scope="col">Codes</th><th scope="col">Next free</th><th /></tr>
               </thead>
               <tbody>
                 {numbering.ranges.map((r) => (
@@ -186,7 +366,7 @@ export function VerifyView(props: {
             <p className="mut" style={{ marginTop: 12 }}>Allocated — each entry is on the ledger:</p>
             <div className="tblwrap">
               <table className="tbl">
-                <thead><tr><th>Code</th><th>Held by</th></tr></thead>
+                <thead><tr><th scope="col">Code</th><th scope="col">Held by</th></tr></thead>
                 <tbody>
                   {Object.entries(numbering.allocated).map(([code, holder]) => (
                     <tr key={code}><td className="mono">{code}</td><td>{holder}</td></tr>

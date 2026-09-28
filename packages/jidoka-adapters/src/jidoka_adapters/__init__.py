@@ -13,10 +13,11 @@ ADAPTERS: dict[str, type[Adapter]] = {}
 
 
 def _register():
+    from .btp import BTPAdapter
     from .s4hana import S4Adapter
     from .successfactors import SFAdapter
 
-    for cls in (S4Adapter, SFAdapter):
+    for cls in (BTPAdapter, S4Adapter, SFAdapter):
         ADAPTERS[cls.product] = cls
 
 

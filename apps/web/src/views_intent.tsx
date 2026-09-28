@@ -115,8 +115,8 @@ export function IntentView(props: {
             <table className="tbl intent-tbl">
               <thead>
                 <tr>
-                  <th>Object</th><th>Product</th><th>Tier</th><th>Binds to</th>
-                  <th>Source</th><th>Signed by</th><th></th>
+                  <th scope="col">Object</th><th scope="col">Product</th><th scope="col">Tier</th><th scope="col">Binds to</th>
+                  <th scope="col">Source</th><th scope="col">Signed by</th><th scope="col"></th>
                 </tr>
               </thead>
               <tbody>
@@ -308,7 +308,7 @@ export function LedgerView(props: {
           <div className="scroll-x">
             <table className="tbl">
               <thead>
-                <tr><th>#</th><th>When</th><th>Task</th><th>What happened</th><th>Who</th><th>Detail</th><th>Hash</th></tr>
+                <tr><th scope="col">#</th><th scope="col">When</th><th scope="col">Task</th><th scope="col">What happened</th><th scope="col">Who</th><th scope="col">Detail</th><th scope="col">Hash</th></tr>
               </thead>
               <tbody>
                 {rows.map((e, i) => (

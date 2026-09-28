@@ -1,0 +1,7 @@
+/* The programme screen. Deliberately no progress bar: see the module comment. */
+.pg-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.pg-list > li { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
+.pg-list > li.pg-breached { border-color: var(--stop); }
+.pg-list > li.pg-held { opacity: 0.75; }
+.pg-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.pg-actions { display: flex; gap: 8px; margin-top: 8px; }

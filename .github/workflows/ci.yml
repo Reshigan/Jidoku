@@ -36,6 +36,10 @@ jobs:
       - run: npm install --no-audit --no-fund
       - run: npx tsc --noEmit
       - run: node src/routing.check.mjs
+      # The one file that reimplements a kernel invariant in a second language, held to the same
+      # fixture the Python suite is held to. If these two ever disagree, the deployment has two
+      # ledgers and "governance must not vary by hosting" has quietly stopped being true.
+      - run: node src/ledger.check.mjs
       # Validates wrangler.toml itself — a bad binding or a missing env var fails here, on a PR,
       # instead of half-publishing the production hostname on merge.
       - run: mkdir -p ../../apps/web/dist && npx wrangler deploy --env production --dry-run --outdir /tmp/wr
