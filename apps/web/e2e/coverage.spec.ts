@@ -52,6 +52,11 @@ test("the console reaches every endpoint the API publishes", async ({ page, requ
   // Held from here, because the walk switches identity twice and a selector read later would be
   // whatever the console happens to have selected by then.
   await expect(page.locator(".scrim")).toHaveCount(0);
+  /* Opening selects it — assert that before reading the id. A parallel worker creating its own
+     engagement refreshes this list, and reading the selector's value without checking whose
+     engagement is open hands the rest of the walk somebody else's id: every request succeeds, and
+     the screen is looking at a different programme. panels.spec.ts learned this the same way. */
+  await expect(page.locator(".head h1")).toHaveText(eng);
   const eid = await page.getByLabel("Engagement", { exact: true }).inputValue();
 
   // Landscape
@@ -343,11 +348,7 @@ test("the console reaches every endpoint the API publishes", async ({ page, requ
     },
   })).ok()).toBeTruthy();
 
-  // The dialog before this one closes on a 500ms timer, and a scrim still on the page swallows the
-  // click on the rail. The tab then never changes and the assertion below fails on a screen that
-  // was fine — which is how a walk this long acquires a flake that reads like a bug.
-  await dismissScrim(page);
-  await page.getByRole("tab", { name: /^Programme/ }).click();
+  await openView(page, /^Programme/);
   await expect(page.getByRole("heading", { name: "The plan of record" })).toBeVisible();
 
   const answer = async (button: string, what: string) => {
@@ -376,8 +377,7 @@ test("the console reaches every endpoint the API publishes", async ({ page, requ
     },
   })).ok()).toBeTruthy();
 
-  await dismissScrim(page);
-  await page.getByRole("tab", { name: /^Specification/ }).click();
+  await openView(page, /^Specification/);
   await expect(page.getByRole("heading", { name: "The specification" })).toBeVisible();
   await page.getByRole("button", { name: "Trace it" }).first().click();
   await page.getByLabel("Objects that satisfy it").fill("FOPayComponent");
@@ -430,6 +430,20 @@ async function signInAs(page: import("@playwright/test").Page, who: string) {
     if (!((await btn.getAttribute("class")) || "").includes("primary")) await btn.click();
   }
   await page.getByRole("button", { name: "Enter the console" }).click();
+}
+
+/* Open a view and prove it opened.
+
+   The dialog before a rail click closes on a 500ms timer, and a scrim still on the page swallows the
+   click: the tab never changes, and the next assertion fails on a screen that was fine. A fixed wait
+   only moves the race, so this waits the scrim out with Playwright's own retry and then asserts the
+   tab is selected — which turns a swallowed click into a failure that names itself, instead of a
+   flake that reads like a broken panel. */
+async function openView(page: import("@playwright/test").Page, name: RegExp) {
+  await expect(page.locator(".scrim")).toHaveCount(0);
+  const tab = page.getByRole("tab", { name });
+  await tab.click();
+  await expect(tab).toHaveAttribute("aria-selected", "true");
 }
 
 async function dismissScrim(page: import("@playwright/test").Page) {

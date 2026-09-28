@@ -68,6 +68,30 @@ def headings(path) -> list[str]:
     return out
 
 
+def sections(path) -> dict[str, str]:
+    """Heading -> the prose under it, in document order.
+
+    The absorber deliberately does not interpret prose, and for a long time that meant the reasoning
+    in a design document — which is most of it — was simply absent from the platform. This makes it
+    *available* without interpreting it: a caller (a person, or the design pass) asks for a section
+    by name and gets what the document says, unaltered. Tables are skipped, because they are already
+    read as registers and a table flattened into a paragraph is worse than either.
+    """
+    out: dict[str, list[str]] = {}
+    current = ""
+    for p in _document(path).find(W + "body"):
+        if p.tag != W + "p":                    # a w:tbl is a register, read by `rows`
+            continue
+        style = p.find(f"{W}pPr/{W}pStyle")
+        text = _text(p)
+        if style is not None and "Heading" in (style.get(W + "val") or ""):
+            current = text
+            out.setdefault(current, [])
+        elif text and current:
+            out[current].append(text)
+    return {head: "\n\n".join(paras) for head, paras in out.items()}
+
+
 def rows(path, header: tuple[str, ...]) -> list[dict]:
     """Rows of every table whose first row starts with `header`, keyed by that header.
 

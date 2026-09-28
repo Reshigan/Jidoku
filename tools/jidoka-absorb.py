@@ -136,6 +136,7 @@ def main(argv=None) -> int:
         "records": [r if isinstance(r, dict) else r.__dict__ for r in pack.records],
         "interlocks": pack.interlocks,
         "scope": pack.scope,
+        "documents": pack.documents,
         "contracts": pack.contracts,
         "contracts_placed": placed,
         "decision_points": pack.decisions,

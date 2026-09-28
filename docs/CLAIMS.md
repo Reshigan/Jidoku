@@ -160,6 +160,18 @@ of it.
     tool we know of either has the specification or has the configuration; the ones that claim to
     trace between them infer it. ADR-0047.
 
+19. **The platform authors the design, and then refuses its own work.** The agent reads the
+    client's documents — the prose an absorber will not interpret — and authors configuration intent
+    object by object. Every proposal passes four gates before it counts: IR validation, the
+    *adapter's* tier rather than the model's, the *tenant's own* `$metadata` rather than the model's
+    memory of the product, and a required provenance for every value. A record with no source is
+    refused, because the alternative is a guessed statutory value. Refusals are reported with the
+    reason, not dropped. And the pass is marked by withholding a register from the pack and comparing
+    what it authors against configuration real consultants really built from the same documents —
+    where `extra` is never scored as wrong, because a benchmark punishing it would train the pass to
+    author less. We know of no configuration tool that generates intent and then declines to accept
+    it until the substrate agrees. ADR-0048.
+
 ## Claims we cannot yet make
 
 - **"Proven on real engagements."** Zero production engagements have run on this platform. The
@@ -213,10 +225,20 @@ of it.
 - **"We know which requirements are met."** We know which are described by signed intent, for the
   ones somebody traced. On a freshly absorbed pack that is zero of sixty-two, and the platform says
   so rather than implying the traceability work is done.
+- **"The design pass works."** It has **never been run against the live Anthropic API from this
+  repository.** The loop, all four gates, the request shape and the benchmark's marking scheme are
+  tested with a scripted client and no network — which is why they are testable at all, and is not
+  the same as proven. What a frontier model actually authors from a real SDD is unmeasured, and the
+  benchmark exists precisely so that it stops being a matter of opinion.
+- **"The agent configures the whole solution."** It can author intent for anything the design names,
+  including the objects SAP publishes no write API for — authoring and writing are different
+  problems. Three limits remain and none is a capability limit: partner Provisioning access we may
+  never be granted, approval authority the platform must not hold (invariant 7), and decisions that
+  are the client's to make (invariant 2).
 - **"The programme's tasks are tracked."** Most of them are not visible to the platform at all, and
   the screen says so per row. What is tracked is what the chain can answer plus what a named person
   has accounted for.
-- **"World first" as a totality.** The eighteen claims above are shapes we believe are new. The only
+- **"World first" as a totality.** The nineteen claims above are shapes we believe are new. The only
   honest form of the headline is: *the first SAP configuration platform we know of where drift,
   documents, tests and number ranges are all projections of one signed, hash-chained record — and
   where the machine can never approve its own work.*

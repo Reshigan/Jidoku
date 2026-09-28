@@ -22,8 +22,7 @@ Absorbing is not parsing. Three rules make the difference:
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from .docx import DocxError, headings, rows as docx_rows, unread
-from .profile import DecisionProfile, Profile, compile_decisions, compile_profiled, _header_row
+from .docx import DocxError, headings, rows as docx_rows, sections, unread
 from openpyxl import load_workbook
 
 #: Register prefixes. A pack numbers each register from one — gates G1.., deliverables T1..,
@@ -106,6 +105,10 @@ class Absorbed:
     interlocks: list = field(default_factory=list)
     #: The scope catalogue — G01..G15 — that every register above is scoped to.
     scope: list = field(default_factory=list)
+    #: Each document's outline and the prose under each heading, unaltered and uninterpreted. Kept
+    #: so the reasoning a design document states in sentences is *available* to whoever reads next —
+    #: a person or the design pass — rather than absent because nothing here summarises it.
+    documents: dict = field(default_factory=dict)
     tasks: list = field(default_factory=list)
     notes: list = field(default_factory=list)
 
@@ -526,9 +529,13 @@ def absorb_document(path) -> Absorbed:
             + "; ".join(f"{first!r} ({n} row(s))" for first, n in left[:8])
             + ("…" if len(left) > 8 else "")
             + ". Nothing here checked whether they matter.")
+    prose = sections(path)
+    out.documents[name] = {"headings": headings(path), "sections": prose}
     out.notes.append(
-        f"{name}: {len(headings(path))} section(s) of prose were not read at all. A design document "
-        f"states most of its reasoning in sentences, and none of that is in the platform.")
+        f"{name}: {len(prose)} section(s) of prose are carried verbatim and interpreted by nothing "
+        f"here. A design document states most of its reasoning in sentences; it is available to "
+        f"whoever reads next, and it is not summarised, because a summary of a design document is a "
+        f"new document nobody signed.")
     return out
 
 
@@ -539,6 +546,7 @@ def merge(into: Absorbed, other: Absorbed) -> None:
                        "notes"):
         getattr(into, field_name).extend(getattr(other, field_name))
     into.contracts.update(other.contracts)
+    into.documents.update(other.documents)
 
 
 #: What each register loses when two copies of it disagree. Stated per register rather than in one

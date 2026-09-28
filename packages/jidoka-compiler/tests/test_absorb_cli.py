@@ -117,9 +117,12 @@ def test_a_decision_stated_two_ways_across_the_pack_reaches_the_bundles_notes(tm
     assert len([d for d in bundle["decision_points"] if d["dp_id"] == "DP-C04"]) == 2
 
 
-def test_a_document_no_workbook_duplicates_still_reports_its_unread_prose(tmp_path):
+def test_the_bundle_carries_each_documents_prose_for_whoever_reads_next(tmp_path):
     _, bundle = run(tmp_path, pack_with_documents(tmp_path))
-    assert "section(s) of prose were not read at all" in " ".join(bundle["notes"])
+    assert "carried verbatim and interpreted by nothing here" in " ".join(bundle["notes"])
+    doc = bundle["documents"]["Solution Design Document v1.0.docx"]
+    assert "Ordering Constraints" in doc["headings"]
+    assert doc["sections"]["What This Document Governs"]
 
 
 def test_the_one_way_doors_survive_the_merge_into_the_bundle(tmp_path):

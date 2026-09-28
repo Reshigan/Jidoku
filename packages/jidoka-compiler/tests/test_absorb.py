@@ -249,10 +249,16 @@ def test_the_document_carries_the_alignment_matrix_too():
     assert doc().contracts["Employment and job information"]["consumers"] == ["All modules", "ECC"]
 
 
-def test_a_document_reports_what_it_did_not_read_including_the_prose():
-    notes = " ".join(doc().notes)
+def test_a_document_reports_the_tables_it_skipped_and_carries_its_prose_verbatim():
+    got = doc()
+    notes = " ".join(got.notes)
     assert "table(s) were not read" in notes and "Document ID" in notes
-    assert "section(s) of prose were not read at all" in notes
+    # The prose is available and uninterpreted — a summary of a design document is a new document
+    # nobody signed, and the design pass cites sections rather than a précis of them (ADR-0048).
+    assert "carried verbatim and interpreted by nothing here" in notes
+    assert "not summarised" in notes
+    sections = got.documents["design_document.docx"]["sections"]
+    assert sections["What This Document Governs"].startswith("The design authority owns")
 
 
 def test_the_same_decision_stated_two_ways_across_a_pack_is_named_not_reconciled():

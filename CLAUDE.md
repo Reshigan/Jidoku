@@ -19,6 +19,9 @@ hash-chained governance ledger with human-in-the-loop decisioning.
                                 (`docx.py`, stdlib) — via `tools/jidoka-absorb.py`. Read ADR-0046 and ADR-0047.
 - `services/api`             — FastAPI: engagements, IR, plans, ledger, decisions, registry.
 - `services/agent`           — the K5 consultant: Anthropic API + governed skills + eval harness.
+                                `design.py` is the pass that *authors* intent from a client's own documents
+                                under four gates; `bench.py` marks it against config people really built.
+                                Read ADR-0048. SDK is the `live` extra — tests inject a client.
 - `apps/web`                 — platform UI (React/Vite). `public/legacy-console.html` is the proven checkpoint UX to port.
 
 ## Non-negotiable invariants (never weaken these, in any PR, ever)
@@ -46,6 +49,8 @@ Conventional commits; CI (`.github/workflows/ci.yml`) must be green before merge
   `packages/jidoka-compiler/tests/fixtures/make_fixtures.py` (it writes .xlsx and .docx with stdlib).
   Requirement→object traceability is a person's judgement on the chain, never inferred (ADR-0047).
 - Agent skills → `services/agent/skills/<name>/SKILL.md`; every skill change must pass `services/agent/evals`.
+- Authoring intent from documents → `tools/jidoka-design.py`, then `tools/jidoka-bench.py` to mark it.
+  Never let the agent post records directly: the four gates in `design.py` are the product (ADR-0048).
 - UI → port interactions from `apps/web/public/legacy-console.html`; state comes from the API, never local truth.
 
 ## Deployment
