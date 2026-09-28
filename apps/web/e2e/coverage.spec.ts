@@ -13,6 +13,10 @@ const OUT_OF_BAND = new Set([
      paste-the-JSON box would be a worse version of the tool. Everything after registration —
      confirming a condition, passing a gate, accounting for a task — is on the screen. */
   "POST /engagements/{eid}/programme",
+  // Same reason: a specification is sixty-two requirements read out of a Word document by the
+  // absorber, not something anybody types into a console. Tracing one — the judgement the platform
+  // will not make for you — is on the screen.
+  "POST /engagements/{eid}/specification",
 ]);
 
 test("the console reaches every endpoint the API publishes", async ({ page, request }) => {
@@ -339,6 +343,10 @@ test("the console reaches every endpoint the API publishes", async ({ page, requ
     },
   })).ok()).toBeTruthy();
 
+  // The dialog before this one closes on a 500ms timer, and a scrim still on the page swallows the
+  // click on the rail. The tab then never changes and the assertion below fails on a screen that
+  // was fine — which is how a walk this long acquires a flake that reads like a bug.
+  await dismissScrim(page);
   await page.getByRole("tab", { name: /^Programme/ }).click();
   await expect(page.getByRole("heading", { name: "The plan of record" })).toBeVisible();
 
@@ -355,6 +363,26 @@ test("the console reaches every endpoint the API publishes", async ({ page, requ
   await page.getByRole("button", { name: "Pass on evidence" }).first().click();
   await page.getByLabel("Evidence for this gate").fill("manifest sha 9f2c");
   await page.getByRole("button", { name: "Pass it" }).click();
+  await dismissScrim(page);
+
+  /* The specification. Registered out of band, like the programme, and then answered on the
+     screen: a requirement traced to the objects that satisfy it, by a person, under their name. */
+  expect((await request.post(`/engagements/${eid}/specification`, {
+    data: {
+      requirements: [{ req_id: "BRS-EC-001", requirement: "Single instance, four country layers",
+                       rationale: "the baseline", fit: "STD", control: "C01" }],
+      controls: [{ control_id: "C01", objective: "Every change is attributable", owner: "GONXT",
+                   frequency: "per cycle", evidence: "the change log" }],
+    },
+  })).ok()).toBeTruthy();
+
+  await dismissScrim(page);
+  await page.getByRole("tab", { name: /^Specification/ }).click();
+  await expect(page.getByRole("heading", { name: "The specification" })).toBeVisible();
+  await page.getByRole("button", { name: "Trace it" }).first().click();
+  await page.getByLabel("Objects that satisfy it").fill("FOPayComponent");
+  await page.getByLabel("Why this satisfies it").fill("agreed in the design authority");
+  await page.getByRole("button", { name: "Record the trace" }).click();
   await dismissScrim(page);
 
   // Every engagement at once — the partner's screen, and the only one that reads the whole store.
@@ -420,6 +448,8 @@ function templated(p: string): string {
     .replace(/^\/engagements\/[^/]+\/documents\/[^/]+$/, "/engagements/{eid}/documents/{document}")
     .replace(/^\/engagements\/[^/]+\/objections\/[^/]+\/(override|revisit)$/,
              (_m, act) => `/engagements/{eid}/objections/{oid}/${act}`)
+    .replace(/^\/engagements\/[^/]+\/specification\/requirements\/[^/]+\/trace$/,
+             "/engagements/{eid}/specification/requirements/{req_id}/trace")
     .replace(/^\/engagements\/[^/]+\/programme\/gates\/[^/]+\/pass$/,
              "/engagements/{eid}/programme/gates/{gate_id}/pass")
     .replace(/^\/engagements\/[^/]+\/programme\/tasks\/[^/]+\/done$/,

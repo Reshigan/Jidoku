@@ -23,8 +23,8 @@ ROOT = Path(__file__).resolve().parents[1]
 for pkg in ("jidoka-core", "jidoka-compiler"):
     sys.path.insert(0, str(ROOT / "packages" / pkg / "src"))
 
-from jidoka_compiler.absorb import (Absorbed, absorb_alignment, absorb_plan,  # noqa: E402
-                                    map_contracts, set_term)
+from jidoka_compiler.absorb import (Absorbed, absorb_alignment, absorb_document,  # noqa: E402
+                                    absorb_plan, duplicates, map_contracts, merge, set_term)
 from jidoka_compiler.profile import (KOMATSU_DECISIONS, KOMATSU_INVENTORY,  # noqa: E402
                                      KOMATSU_PICKLISTS, compile_decisions, compile_profiled)
 
@@ -52,6 +52,17 @@ def absorb(folder: Path, year: int, start_month: int, product: str,
            system: str) -> tuple[Absorbed, list[str], list[Path]]:
     set_term(year, start_month)
     out, notes, unmatched = Absorbed(), [], []
+
+    # The documents first, because the specification is what every register below is scoped to —
+    # and because a pack read as workbooks alone is two thirds of a design. On a real pack the
+    # Word files carry sixty-two requirements, fifteen control objectives, seventeen decisions
+    # nobody wrote into a workbook, eleven ordering constraints and twenty-one design rules.
+    for path in sorted(folder.rglob("*.docx")):
+        if path.name.startswith("~$"):
+            continue
+        merge(out, absorb_document(path))
+        notes.append(f"{path.name}: read as a design document")
+
     for path in sorted(folder.rglob("*.xlsx")):
         if path.name.startswith("~$"):
             continue
@@ -60,15 +71,11 @@ def absorb(folder: Path, year: int, start_month: int, product: str,
             unmatched.append(path)
             continue
         if kind == "plan":
-            got = absorb_plan(path, year, year + 1)
-            out.tasks += got.tasks
-            out.gates += got.gates
-            out.decisions += got.decisions
-            out.conditions += got.conditions
+            # merge, not field-by-field: the one time this was written out by hand it dropped the
+            # one-way doors, which are the entries that need two approvers.
+            merge(out, absorb_plan(path, year, year + 1))
         elif kind == "alignment":
-            got = absorb_alignment(path)
-            out.contracts.update(got.contracts)
-            out.records += got.records
+            merge(out, absorb_alignment(path))
         elif kind in ("picklists", "inventory"):
             profile = KOMATSU_PICKLISTS if kind == "picklists" else KOMATSU_INVENTORY
             records, got_notes = compile_profiled(path, profile, product, system, path.name)
@@ -86,7 +93,6 @@ def absorb(folder: Path, year: int, start_month: int, product: str,
             out.decisions += decisions
             out.notes += got_notes
             continue
-        out.notes += got.notes
         notes.append(f"{path.name}: read as {kind}")
     return out, notes, unmatched
 
@@ -122,12 +128,20 @@ def main(argv=None) -> int:
     pack.decisions += mapping_decisions
     pack.notes += mapping_notes
 
+    for line in duplicates(pack):
+        pack.notes.append(line)
+
     bundle = {
         "term": args.term,
         "records": [r if isinstance(r, dict) else r.__dict__ for r in pack.records],
+        "interlocks": pack.interlocks,
+        "scope": pack.scope,
         "contracts": pack.contracts,
         "contracts_placed": placed,
         "decision_points": pack.decisions,
+        "specification": {"requirements": pack.requirements, "controls": pack.controls},
+        "ordering": pack.ordering,
+        "rules": pack.rules,
         "programme": {"conditions": pack.conditions, "gates": pack.gates, "tasks": pack.tasks},
         "notes": pack.notes,
         "unsigned": ("This bundle is a reading of a pack, not intent. Nothing in it is executable "
@@ -147,9 +161,12 @@ def main(argv=None) -> int:
     for path in unmatched:
         print(f"  ! {path.relative_to(args.folder)}: no declared profile matches this filename, so "
               f"nothing in it was read.", file=sys.stderr)
-    print(f"\n{len(bundle['records'])} record(s), {len(pack.decisions)} decision(s), "
-          f"{len(pack.tasks)} task(s), {len(pack.gates)} gate(s), "
-          f"{len(pack.conditions)} boundary condition(s), {len(pack.contracts)} data domain(s).",
+    print(f"\n{len(bundle['records'])} record(s), {len(pack.scope)} scope item(s), "
+          f"{len(pack.interlocks)} interlock(s), {len(pack.requirements)} requirement(s), "
+          f"{len(pack.controls)} control objective(s), {len(pack.decisions)} decision(s), "
+          f"{len(pack.tasks)} task(s), {len(pack.gates)} gate(s), {len(pack.doors)} door(s), "
+          f"{len(pack.conditions)} boundary condition(s), {len(pack.ordering)} ordering "
+          f"constraint(s), {len(pack.rules)} design rule(s), {len(pack.contracts)} data domain(s).",
           file=sys.stderr)
     if unmatched:
         print(f"{len(unmatched)} file(s) in this pack were not read. Sign nothing until you know "

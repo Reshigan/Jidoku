@@ -11,7 +11,8 @@ fact.
 """
 from pathlib import Path
 
-from jidoka_compiler.absorb import absorb_alignment, absorb_plan, resolve_date, set_term
+from jidoka_compiler.absorb import (Absorbed, absorb_alignment, absorb_document, absorb_plan,
+                                    duplicates, merge, resolve_date, set_term)
 
 FIX = Path(__file__).parent / "fixtures"
 PLAN = FIX / "mobilisation_plan.xlsx"
@@ -133,16 +134,19 @@ def test_the_alignment_matrix_gives_the_contract_registry_owners_and_readers():
 
 def test_interlocks_carry_the_failure_mode_the_design_authority_stated():
     a = absorb_alignment(MATRIX)
-    assert [r["interlock"] for r in a.records] == ["I-01", "I-02"]
-    assert "stale master data" in a.records[0]["failure_mode"]
-    assert all(r["failure_mode"] for r in a.records)
+    # In their own register, never among the records: `records` is signed-intent-shaped, and a
+    # bundle whose records cannot be posted to /ir has a decorative block where its design should be.
+    assert a.records == []
+    assert [r["interlock"] for r in a.interlocks] == ["I-01", "I-02"]
+    assert "stale master data" in a.interlocks[0]["failure_mode"]
+    assert all(r["failure_mode"] for r in a.interlocks)
     assert "interlock(s) with a stated failure mode" in " ".join(a.notes)
 
 
 def test_a_sheet_the_pack_does_not_have_is_absent_rather_than_fatal():
     # A pack is not one shape. A missing register yields nothing and the counts say so.
     a = absorb_alignment(PLAN)
-    assert a.contracts == {} and a.records == []
+    assert a.contracts == {} and a.records == [] and a.interlocks == []
 
 
 def test_a_sheet_holding_two_registers_is_read_as_two_registers():
@@ -188,3 +192,108 @@ def test_no_two_absorbed_entries_share_a_ledger_key():
            + [d["door_id"] for d in p.doors])
     assert len(ids) == len(set(ids))
     assert "register prefixes applied" in " ".join(p.notes)
+
+
+# --------------------------------------------------------------------------------------------
+# The design documents. A pack read as workbooks alone is two thirds of a design: on the real one
+# the Word files carry sixty-two requirements, fifteen control objectives, seventeen decisions
+# that appear in no workbook, eleven ordering constraints and twenty-one design rules.
+DOC = FIX / "design_document.docx"
+LIC = FIX / "licensing_position.docx"
+
+
+def doc():
+    return absorb_document(DOC)
+
+
+def test_a_specification_arrives_with_its_fit_assessment_and_its_control():
+    reqs = {r["req_id"]: r for r in doc().requirements}
+    assert set(reqs) == {"BRS-EC-001", "BRS-EC-002", "BRS-TIM-001"}
+    assert reqs["BRS-EC-001"]["fit"] == "STD" and reqs["BRS-EC-001"]["control"] == "C01"
+    assert reqs["BRS-TIM-001"]["fit"] == "GAP"
+    # Nothing is traced at absorption: which objects satisfy a requirement is a judgement about a
+    # client's design, and guessing it would report the specification as met.
+    assert all(r["objects"] == () for r in doc().requirements)
+
+
+def test_a_control_objective_arrives_with_its_owner_frequency_and_evidence():
+    c = doc().controls[0]
+    assert c["control_id"] == "C01" and c["owner"] == "GONXT (execution)"
+    assert c["frequency"] == "Per load cycle" and c["evidence"] == "Evidence bundle per cycle"
+
+
+def test_a_design_dependency_is_a_decision_the_design_is_already_running_on():
+    # The document states an interim position and the streams build against it. That is a decision
+    # with an answer nobody signed.
+    dps = {d["dp_id"]: d for d in doc().decisions}
+    assert dps["DP-B01"]["question"] == "Provisioning access"
+    assert dps["DP-B01"]["options"] == ["No interim position available"]
+    assert dps["DP-C04"]["owner"] == "Steering committee"
+    assert all(d["dp_type"] == "DESIGN" for d in doc().decisions)
+
+
+def test_ordering_constraints_carry_why_and_what_stalls():
+    o = doc().ordering[0]
+    assert o["by"] == "Week 1" and "cleansing rules" in o["because"]
+    assert o["stalls"] == "The whole migration"
+
+
+def test_rules_and_principles_are_kept_apart_and_both_say_what_they_prevent():
+    rules = {r["rule_id"]: r for r in doc().rules}
+    assert rules["P1"]["kind"] == "principle" and rules["A1"]["kind"] == "rule"
+    assert "Checked at G2 and nightly" in rules["A1"]["why"]
+
+
+def test_the_document_carries_the_alignment_matrix_too():
+    assert doc().contracts["Employment and job information"]["owner"] == "EC"
+    assert doc().contracts["Employment and job information"]["consumers"] == ["All modules", "ECC"]
+
+
+def test_a_document_reports_what_it_did_not_read_including_the_prose():
+    notes = " ".join(doc().notes)
+    assert "table(s) were not read" in notes and "Document ID" in notes
+    assert "section(s) of prose were not read at all" in notes
+
+
+def test_the_same_decision_stated_two_ways_across_a_pack_is_named_not_reconciled():
+    pack = Absorbed()
+    merge(pack, absorb_document(DOC))
+    merge(pack, absorb_document(LIC))
+    found = duplicates(pack)
+    assert len(found) == 1 and "DP-C04" in found[0]
+    # It does not claim one is wrong. On the real pack most divergences are an editorial reword,
+    # and a reader who is told "one of these is out of date" goes looking for a defect that is not
+    # there — while the thing that is true, that they get whichever copy they open, goes unsaid.
+    assert "nothing here can tell" in found[0]
+    assert "answer the statement they were shown" in found[0]
+    # Both are kept. Choosing between them is the design authority's job, not a reader's.
+    assert len([d for d in pack.decisions if d["dp_id"] == "DP-C04"]) == 2
+
+
+def test_the_same_statement_wrapped_differently_is_not_a_divergence():
+    from jidoka_compiler.absorb import duplicates as dups
+    pack = Absorbed(decisions=[{"dp_id": "DP-1", "question": "Variable Pay in scope?"},
+                               {"dp_id": "DP-1", "question": "Variable   Pay\n in scope?"}])
+    assert dups(pack) == []
+
+
+def test_a_pack_that_restates_a_decision_identically_is_not_a_defect():
+    pack = Absorbed()
+    merge(pack, absorb_document(DOC))
+    merge(pack, absorb_document(DOC))
+    assert duplicates(pack) == []
+
+
+def test_merge_carries_every_register_including_the_one_way_doors():
+    # Written out field by field once, and it dropped the doors — the entries that need two
+    # approvers. The test is here so the next field added is not lost the same way.
+    pack, other = Absorbed(), plan()
+    merge(pack, other)
+    for name in ("records", "decisions", "conditions", "gates", "doors", "tasks", "requirements",
+                 "controls", "ordering", "rules", "interlocks", "scope", "notes"):
+        assert len(getattr(pack, name)) == len(getattr(other, name)), name
+
+
+def test_a_file_that_is_not_a_document_is_named_rather_than_raising():
+    out = absorb_document(FIX / "mobilisation_plan.xlsx")
+    assert out.requirements == [] and "not a readable .docx" in " ".join(out.notes)

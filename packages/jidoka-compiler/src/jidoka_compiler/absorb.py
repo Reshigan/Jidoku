@@ -22,6 +22,7 @@ Absorbing is not parsing. Three rules make the difference:
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from .docx import DocxError, headings, rows as docx_rows, unread
 from .profile import DecisionProfile, Profile, compile_decisions, compile_profiled, _header_row
 from openpyxl import load_workbook
 
@@ -79,7 +80,12 @@ def set_term(year: int, start_month: int) -> None:
 
 @dataclass
 class Absorbed:
-    """Everything a pack yielded, and everything it did not."""
+    """Everything a pack yielded, and everything it did not.
+
+    `records` is signed-intent-shaped and nothing else. Interlocks and scope items were once folded
+    in beside them, which made `records` a list nothing could load: a bundle whose records cannot be
+    posted to /ir is a bundle whose most important block is decoration.
+    """
     records: list = field(default_factory=list)
     contracts: dict = field(default_factory=dict)       # object key -> {owner, consumers}
     decisions: list = field(default_factory=list)
@@ -87,6 +93,19 @@ class Absorbed:
     gates: list = field(default_factory=list)
     #: One-way doors. Kept apart from gates because they need two approvers and gates need one.
     doors: list = field(default_factory=list)
+    #: The specification: what the client asked for, and the controls that assure it.
+    requirements: list = field(default_factory=list)
+    controls: list = field(default_factory=list)
+    #: "By end of week N, X must be complete, because I-19." The plan's own ordering, stated by the
+    #: design authority rather than derived from task dependencies.
+    ordering: list = field(default_factory=list)
+    #: The alignment rules and design principles. Prose, kept verbatim: each one states what it
+    #: prevents, and several state how they are checked.
+    rules: list = field(default_factory=list)
+    #: Cross-module interlocks, each with the failure mode the design authority stated.
+    interlocks: list = field(default_factory=list)
+    #: The scope catalogue — G01..G15 — that every register above is scoped to.
+    scope: list = field(default_factory=list)
     tasks: list = field(default_factory=list)
     notes: list = field(default_factory=list)
 
@@ -94,6 +113,9 @@ class Absorbed:
         return {"records": len(self.records), "contracts": len(self.contracts),
                 "decisions": len(self.decisions), "conditions": len(self.conditions),
                 "gates": len(self.gates), "doors": len(self.doors), "tasks": len(self.tasks),
+                "requirements": len(self.requirements), "controls": len(self.controls),
+                "ordering": len(self.ordering), "rules": len(self.rules),
+                "interlocks": len(self.interlocks), "scope": len(self.scope),
                 "notes": self.notes}
 
 
@@ -314,11 +336,11 @@ def absorb_alignment(path) -> Absorbed:
         f"{sum(len(v['consumers']) for v in out.contracts.values())} registered reader(s); "
         f"{len([i for i in interlocks if i.get('ID') not in ('', 'ID')])} interlock(s) with a "
         f"stated failure mode.")
-    out.records = [{"interlock": i.get("ID"), "source": i.get("Source"), "target": i.get("Target"),
-                    "flows": i.get("What flows / logic"),
-                    "failure_mode": i.get("Failure mode if not held"),
-                    "control": i.get("Ctrl"), "week": i.get("Week")}
-                   for i in interlocks if i.get("ID") not in ("", "ID")]
+    out.interlocks = [{"interlock": i.get("ID"), "source": i.get("Source"),
+                       "target": i.get("Target"), "flows": i.get("What flows / logic"),
+                       "failure_mode": i.get("Failure mode if not held"),
+                       "control": i.get("Ctrl"), "week": i.get("Week")}
+                      for i in interlocks if i.get("ID") not in ("", "ID")]
     return out
 
 
@@ -367,3 +389,202 @@ def map_contracts(records: list, contracts: dict) -> tuple[list, list, list]:
              f"undeclared readers because it was given none. One DESIGN decision has been raised "
              f"per unmatched domain."] if contracts else []
     return placed, decisions, notes
+
+
+#: The document tables this reads, by their own first-row headers. Declared, in one place, because
+#: the alternative is a reader that matches on shape and swallows the revision history the day
+#: somebody adds a column. Everything not listed here is named as unread rather than ignored.
+DOC_TABLES: dict[str, tuple[str, ...]] = {
+    "requirements": ("ID", "Requirement", "Rationale"),
+    "controls": ("ID", "Control objective", "Owner"),
+    "decisions": ("DP", "Decision required"),
+    "dependencies": ("DP", "Design dependency"),
+    "conditions": ("Condition", "Why the schedule needs it"),
+    "ordering": ("By end of", "Must be complete"),
+    "rules": ("#", "Rule"),
+    "principles": ("#", "Principle"),
+    "interlocks": ("ID", "Source", "Target"),
+    # The design document carries the alignment matrix too. Same register, two places — which is
+    # exactly why `duplicates` exists.
+    "contracts": ("Data domain", "Owner", "Consumers"),
+    "scope": ("Item", "Scope", "Module"),
+}
+
+
+def absorb_document(path) -> Absorbed:
+    """One design document's registers. What it states only in prose is not read, and it says so.
+
+    A Solution Design Document is thirty tables and a hundred and thirteen paragraphs, and the
+    paragraphs carry the reasoning. Nothing here pretends to have understood them — the note names
+    the document's own headings, so a person can see the shape of what was left behind.
+    """
+    out = Absorbed()
+    name = str(path).rsplit("/", 1)[-1]
+    try:
+        take = {kind: docx_rows(path, header) for kind, header in DOC_TABLES.items()}
+    except DocxError as ex:
+        out.notes.append(f"{name}: {ex}")
+        return out
+
+    for r in take["requirements"]:
+        if not r.get("ID") or r["ID"] == "ID":
+            continue
+        out.requirements.append({
+            "req_id": r["ID"], "requirement": r.get("Requirement", ""),
+            "rationale": r.get("Rationale", ""), "countries": r.get("Ctry", ""),
+            "wave": r.get("Wave/Wk", ""), "fit": r.get("Fit", ""),
+            # A specification writes one control per requirement; where it writes several, they are
+            # kept as written rather than split, because "C01; C02" is the author's statement.
+            "control": r.get("Ctrl", ""), "objects": ()})
+
+    for r in take["controls"]:
+        if not r.get("ID") or r["ID"] == "ID":
+            continue
+        out.controls.append({"control_id": r["ID"], "objective": r.get("Control objective", ""),
+                             "owner": r.get("Owner", ""), "frequency": r.get("Frequency", ""),
+                             "evidence": r.get("Evidence", "")})
+
+    for r in take["decisions"]:
+        if not r.get("DP") or r["DP"] == "DP":
+            continue
+        out.decisions.append({
+            "dp_id": r["DP"], "dp_type": "DESIGN", "question": r.get("Decision required", ""),
+            "owner": r.get("Owner", ""),
+            "options": [r["GONXT recommended position"]] if r.get("GONXT recommended position")
+                       else [],
+            "required_by": r.get("Required by", "")})
+
+    # A design dependency is a decision the design is *already running on* — the document states an
+    # interim position and the streams build against it. That is a decision with an answer nobody
+    # has signed, which is exactly what a decision point is for.
+    for r in take["dependencies"]:
+        if not r.get("DP") or r["DP"] == "DP":
+            continue
+        out.decisions.append({
+            "dp_id": r["DP"], "dp_type": "DESIGN", "question": r.get("Design dependency", ""),
+            "owner": "", "options": [r.get("Interim design position", "")]
+                                    if r.get("Interim design position") else [],
+            "required_by": ""})
+
+    for r in take["conditions"]:
+        what = r.get("Condition", "")
+        if not what or what == "Condition":
+            continue
+        out.conditions.append({"what": what, "by": r.get("Why the schedule needs it", ""),
+                               "consequence": r.get("Consequence if it fails", "")})
+
+    for r in take["ordering"]:
+        if not r.get("By end of"):
+            continue
+        out.ordering.append({"by": r["By end of"], "must_be_complete": r.get("Must be complete", ""),
+                             "because": r.get("Because", ""),
+                             "stalls": r.get("What stalls if late", "")})
+
+    for kind, label in (("rules", "Rule"), ("principles", "Principle")):
+        for r in take[kind]:
+            if not r.get("#") or r["#"] == "#":
+                continue
+            out.rules.append({
+                "rule_id": r["#"], "kind": kind[:-1], "rule": r.get(label, ""),
+                # The third column is the whole value of these tables: it says what the rule
+                # prevents and, for several, how and when it is checked.
+                "why": next((v for k, v in r.items() if k not in ("#", label) and v), "")})
+
+    for r in take["interlocks"]:
+        if not r.get("ID") or r["ID"] == "ID":
+            continue
+        out.interlocks.append({"interlock": r["ID"], "source": r.get("Source", ""),
+                               "target": r.get("Target", ""),
+                               "flows": r.get("What flows / logic", ""),
+                               "failure_mode": r.get("Failure mode", ""),
+                               "control": r.get("Ctrl", ""), "week": r.get("Stream", "")})
+
+    for r in take["contracts"]:
+        domain = r.get("Data domain", "")
+        if not domain or domain == "Data domain":
+            continue
+        out.contracts[domain] = {
+            "owner": r.get("Owner", ""),
+            "consumers": [c.strip() for c in r.get("Consumers", "").replace(";", ",").split(",")
+                          if c.strip()],
+            "note": r.get("Alignment note", "")}
+
+    # The scope catalogue is what every register above is scoped to.
+    for r in take["scope"]:
+        if not r.get("Item") or r["Item"] == "Item":
+            continue
+        out.scope.append({"scope_item": r["Item"], "scope": r.get("Scope", ""),
+                          "module": r.get("Module", ""), "stream": r.get("Stream", ""),
+                          "specification": r.get("BRS section / detailed specification", "")})
+
+    got = {k: len(v) for k, v in take.items() if v}
+    out.notes.append(f"{name}: " + (", ".join(f"{n} {k}" for k, n in got.items()) or "no declared "
+                                    "register matched any table in this document"))
+    if left := unread(path, list(DOC_TABLES.values())):
+        out.notes.append(
+            f"{name}: {len(left)} table(s) were not read — "
+            + "; ".join(f"{first!r} ({n} row(s))" for first, n in left[:8])
+            + ("…" if len(left) > 8 else "")
+            + ". Nothing here checked whether they matter.")
+    out.notes.append(
+        f"{name}: {len(headings(path))} section(s) of prose were not read at all. A design document "
+        f"states most of its reasoning in sentences, and none of that is in the platform.")
+    return out
+
+
+def merge(into: Absorbed, other: Absorbed) -> None:
+    """Fold one document's registers into the pack. Lists concatenate; contracts update."""
+    for field_name in ("records", "decisions", "conditions", "gates", "doors", "tasks",
+                       "requirements", "controls", "ordering", "rules", "interlocks", "scope",
+                       "notes"):
+        getattr(into, field_name).extend(getattr(other, field_name))
+    into.contracts.update(other.contracts)
+
+
+#: What each register loses when two copies of it disagree. Stated per register rather than in one
+#: sentence, because the consequence is different: a decision answered from the wrong statement is
+#: answered wrongly, and an interlock is read once, before a cutover, from whichever document
+#: somebody opened.
+DIVERGENCE = {
+    "decision": "whoever answers it will answer the statement they were shown",
+    "requirement": "the build satisfies whichever statement the consultant read",
+    "control": "the auditor is shown whichever one the evidence pack cites",
+    "boundary condition": "the consequence somebody acts on is whichever one they found",
+    "interlock": "this is read once, before a cutover, from whichever document was open",
+}
+
+
+def _same(text: str) -> str:
+    """Whitespace-insensitive, so a line wrapped differently in two files is not a disagreement."""
+    return " ".join(str(text).split()).casefold()
+
+
+def duplicates(pack: Absorbed) -> list[str]:
+    """Identifiers a pack states more than one way across its documents and workbooks.
+
+    A decision point in the plan of record and again in the BRS is normal and is not a defect. Two
+    *different* statements under one identifier is worth knowing about — and this deliberately does
+    not claim which one is right, or even that one of them is wrong. On the real pack, twenty-two of
+    twenty-three interlocks differ between the design document and the alignment matrix, and most of
+    those are an editorial reword rather than a contradiction. Nothing here can tell the difference,
+    so it says so: the finding is that a reader gets whichever copy they open.
+    """
+    out = []
+    for label, rows_, key, body in (
+            ("decision", pack.decisions, "dp_id", "question"),
+            ("requirement", pack.requirements, "req_id", "requirement"),
+            ("control", pack.controls, "control_id", "objective"),
+            ("boundary condition", pack.conditions, "what", "consequence"),
+            # The alignment matrix and the design document both carry the interlocks. Same register,
+            # two places, and the failure mode is the part that matters — if the two copies state it
+            # differently, one of them is what somebody will read before a cutover.
+            ("interlock", pack.interlocks, "interlock", "failure_mode")):
+        seen: dict[str, set] = {}
+        for row in rows_:
+            seen.setdefault(row[key], set()).add(_same(row.get(body, "")))
+        for ident, bodies in sorted(seen.items()):
+            if len(bodies) > 1:
+                out.append(f"{label} {ident} is stated {len(bodies)} different ways across this "
+                           f"pack. They may be one statement edited or two positions, and nothing "
+                           f"here can tell: {DIVERGENCE[label]}.")
+    return out

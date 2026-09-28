@@ -150,3 +150,35 @@ test("the programme shows the register's claim beside the chain's answer, and no
   await expect(page.locator("main")).toContainText("No percentage is published");
   await expect(page.locator("main .bar, main progress, main meter")).toHaveCount(0);
 });
+
+
+/* The specification screen's one job is the column that says the platform cannot answer. */
+test("an untraced requirement is shown first and is never counted as covered", async ({ page, request }) => {
+  const eid = await open(page, "spec.tester");
+  expect((await request.post(`/engagements/${eid}/specification`, {
+    data: {
+      requirements: [
+        { req_id: "BRS-EC-001", requirement: "Single instance", rationale: "r", fit: "STD",
+          control: "C01" },
+        { req_id: "BRS-TIM-001", requirement: "Leave accrual by country", rationale: "statute",
+          fit: "GAP", control: "C02" }],
+      controls: [{ control_id: "C01", objective: "Every change is attributable", owner: "GONXT",
+                   frequency: "per cycle", evidence: "the change log" }],
+    },
+  })).ok()).toBeTruthy();
+
+  await page.getByRole("tab", { name: /^Specification/ }).click();
+  const head = page.locator(".sec", { hasText: "Each requirement against the objects" });
+  await expect(head).toContainText("0 of 2 requirements are described by signed intent");
+  await expect(head).toContainText("name no configuration object at all");
+  await expect(head).toContainText("declared 1 of these a GAP");
+
+  const table = page.locator(".sec", { hasText: "Worst first" });
+  await expect(table.locator("tbody tr").first()).toContainText("cannot tell");
+
+  // C02 is cited and never defined, so the requirements it assures are unassured.
+  await expect(page.locator(".sec", { hasText: "What each control assures" }))
+    .toContainText("which this specification does not define");
+
+  await expect(page.locator("main")).not.toContainText("%");
+});

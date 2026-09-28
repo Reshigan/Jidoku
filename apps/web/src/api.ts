@@ -956,6 +956,13 @@ const api3 = {
   reportTaskDone: (eid: string, task: string, evidence: string) =>
     call<Programme>(`/engagements/${eid}/programme/tasks/${task}/done`,
       { method: "POST", body: JSON.stringify({ evidence }) }),
+  /** What the client asked for, against what has been signed. `read` on purpose. */
+  specification: (eid: string) => call<SpecificationView>(`/engagements/${eid}/specification`),
+  /** Which objects satisfy a requirement. A judgement about a client's design, so it takes a
+      person and goes on the chain under their name — the platform never infers it. */
+  traceRequirement: (eid: string, reqId: string, objects: string[], why: string) =>
+    call<SpecificationView>(`/engagements/${eid}/specification/requirements/${reqId}/trace`,
+      { method: "POST", body: JSON.stringify({ objects, why }) }),
 };
 
 /** The engagement plan, as the platform accounts for it. There is deliberately no percentage here:
@@ -979,6 +986,26 @@ export interface Programme {
   blocked: ProgrammeTask[];
   unspoken_conditions: number; breached_conditions: number; gates_passed: number;
   gates_late: string[]; tasks_the_platform_cannot_see: number;
+  says: string; method: string;
+}
+
+/** The specification against the configuration — the question a programme cannot otherwise
+    answer. NOT_TRACEABLE is its own state and is never counted as covered. */
+export interface RequirementRow {
+  req_id: string; requirement: string; rationale: string; countries: string; wave: string;
+  fit: string; fit_recognised: boolean; control: string; control_named_but_absent: boolean;
+  control_owner: string; control_evidence: string;
+  objects: string[]; configured: string[]; not_configured: string[];
+  state: "CONFIGURED" | "NOT_CONFIGURED" | "NOT_TRACEABLE"; says: string;
+}
+export interface ControlRow {
+  control_id: string; objective: string; owner: string; frequency: string; evidence: string;
+}
+export interface SpecificationView {
+  requirements: RequirementRow[]; controls: ControlRow[];
+  uncontrolled: { kind: string; id: string; says: string }[];
+  configured: number; not_configured: string[]; not_traceable: string[];
+  declared_gaps: string[]; unrecognised_fit: string[];
   says: string; method: string;
 }
 

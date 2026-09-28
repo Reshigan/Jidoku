@@ -150,6 +150,16 @@ of it.
     why: a number made partly of workshops nobody can see would be quoted as progress. Every
     programme tool we know of leads with that number. ADR-0046.
 
+18. **The specification, joined to the configuration, with the join kept honest.** A pack's
+    requirements are absorbed out of its Word documents with their rationale, country scope, wave,
+    fit assessment and control reference, alongside the J-SOX control objectives with each owner,
+    frequency and evidence. Which configuration objects satisfy a requirement is a person's
+    judgement recorded on the chain under their name — never inferred from the requirement's words —
+    and a requirement traced to nothing is NOT_TRACEABLE, its own state, never counted as covered.
+    A control cited but never defined and a control defined but never cited are both reported. Every
+    tool we know of either has the specification or has the configuration; the ones that claim to
+    trace between them infer it. ADR-0047.
+
 ## Claims we cannot yet make
 
 - **"Proven on real engagements."** Zero production engagements have run on this platform. The
@@ -190,15 +200,23 @@ of it.
   reconciliation. A system with no log, or one nobody has reconciled, is reported as unreconciled
   — which is honest and is not the same as covered. The SuccessFactors entity this reads has not
   been confirmed against a live tenant.
-- **"We absorb any pack."** The absorber matches workbooks against declared profiles by filename
-  and reads registers by their headers. A pack laid out differently needs a profile, and the tool
-  says which files it did not read rather than guessing. The plan-of-record documents — the SDD, the
-  BRS, the plan of record itself — are not read at all: only the workbooks are, so anything stated
-  in prose and nowhere in a register is not in the platform.
+- **"We absorb any pack."** The absorber matches workbooks and documents against declared profiles
+  by filename and header, and names every file, table and sheet it did not read. A pack laid out
+  differently needs a profile. The documents' **prose is not read at all** — a Solution Design
+  Document is 30 tables and 113 paragraphs and the paragraphs carry the reasoning — so anything
+  stated in sentences and nowhere in a register is not in the platform, and the absorber reports how
+  many sections it skipped rather than summarising them.
+- **"The design rules are enforced."** Twenty-one design rules and eleven ordering constraints are
+  absorbed and reported, and nothing checks any of them. Several state their own check — "checked at
+  G2 and nightly" — and binding a prose rule to a mechanism is a judgement per rule. They are in the
+  bundle so nothing is lost; the platform does not enforce them.
+- **"We know which requirements are met."** We know which are described by signed intent, for the
+  ones somebody traced. On a freshly absorbed pack that is zero of sixty-two, and the platform says
+  so rather than implying the traceability work is done.
 - **"The programme's tasks are tracked."** Most of them are not visible to the platform at all, and
   the screen says so per row. What is tracked is what the chain can answer plus what a named person
   has accounted for.
-- **"World first" as a totality.** The seventeen claims above are shapes we believe are new. The only
+- **"World first" as a totality.** The eighteen claims above are shapes we believe are new. The only
   honest form of the headline is: *the first SAP configuration platform we know of where drift,
   documents, tests and number ranges are all projections of one signed, hash-chained record — and
   where the machine can never approve its own work.*

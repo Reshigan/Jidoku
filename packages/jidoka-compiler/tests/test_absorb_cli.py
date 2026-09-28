@@ -88,3 +88,42 @@ def test_an_unmatched_data_domain_becomes_a_decision_rather_than_a_silent_zero(t
     assert len(mapping) == len(bundle["contracts"])
     assert "cannot tell who a change to them breaks" in mapping[0]["question"]
     assert "will report no undeclared readers because it was given none" in " ".join(bundle["notes"])
+
+
+def pack_with_documents(tmp_path):
+    folder = pack(tmp_path)
+    (folder / "03_Design_Authority" / "Solution Design Document v1.0.docx").write_bytes(
+        (FIX / "design_document.docx").read_bytes())
+    (folder / "03_Design_Authority" / "Licensing Position v1.0.docx").write_bytes(
+        (FIX / "licensing_position.docx").read_bytes())
+    return folder
+
+
+def test_the_documents_are_read_as_well_as_the_workbooks(tmp_path):
+    code, bundle = run(tmp_path, pack_with_documents(tmp_path))
+    assert code == 0
+    spec = bundle["specification"]
+    assert [r["req_id"] for r in spec["requirements"]] == \
+        ["BRS-EC-001", "BRS-EC-002", "BRS-TIM-001"]
+    assert [c["control_id"] for c in spec["controls"]] == ["C01"]
+    assert bundle["ordering"][0]["by"] == "Week 1"
+    assert {r["rule_id"] for r in bundle["rules"]} == {"P1", "A1"}
+
+
+def test_a_decision_stated_two_ways_across_the_pack_reaches_the_bundles_notes(tmp_path):
+    _, bundle = run(tmp_path, pack_with_documents(tmp_path))
+    notes = " ".join(bundle["notes"])
+    assert "DP-C04 is stated 2 different ways" in notes
+    assert len([d for d in bundle["decision_points"] if d["dp_id"] == "DP-C04"]) == 2
+
+
+def test_a_document_no_workbook_duplicates_still_reports_its_unread_prose(tmp_path):
+    _, bundle = run(tmp_path, pack_with_documents(tmp_path))
+    assert "section(s) of prose were not read at all" in " ".join(bundle["notes"])
+
+
+def test_the_one_way_doors_survive_the_merge_into_the_bundle(tmp_path):
+    # They were dropped once, by a field-by-field copy that forgot them.
+    _, bundle = run(tmp_path, pack_with_documents(tmp_path))
+    doors = [d for d in bundle["decision_points"] if d["dp_type"] == "ONE_WAY"]
+    assert {d["dp_id"] for d in doors} == {"DOOR-D1", "DOOR-D2"}

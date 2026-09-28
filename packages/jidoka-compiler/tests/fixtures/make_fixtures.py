@@ -90,3 +90,131 @@ sheet(wb, "Interlocks",
         "Fields reject values that look valid in the workbook", "G2", "B2"]])
 wb.save("packages/jidoka-compiler/tests/fixtures/alignment_matrix.xlsx")
 print("written")
+
+
+# ---------------------------------------------------------------------------------------------
+# A design document, written by hand with zipfile. python-docx is not a dependency of this repo
+# and a fixture generator is a poor reason to acquire one: a .docx is a zip with an XML document
+# inside it, and what the reader needs is a document with tables in it.
+import zipfile
+
+W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+
+CONTENT_TYPES = """<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>"""
+
+RELS = """<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>"""
+
+
+def esc(text):
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def heading(text):
+    return (f'<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr>'
+            f'<w:r><w:t>{esc(text)}</w:t></w:r></w:p>')
+
+
+def para(text):
+    return f'<w:p><w:r><w:t>{esc(text)}</w:t></w:r></w:p>'
+
+
+def table(rows):
+    # Each cell's text is split across two runs, as Word does whenever formatting changes mid
+    # sentence — a reader that takes only the first `w:t` gets half a requirement.
+    def cell(text):
+        head, _, tail = text.partition(" ")
+        runs = f"<w:r><w:t>{esc(head)}</w:t></w:r>" + (
+            f'<w:r><w:t xml:space="preserve"> {esc(tail)}</w:t></w:r>' if tail else "")
+        return f"<w:tc><w:p>{runs}</w:p></w:tc>"
+    body = "".join("<w:tr>" + "".join(cell(c) for c in row) + "</w:tr>" for row in rows)
+    return f"<w:tbl>{body}</w:tbl>"
+
+
+def document(path, parts):
+    body = "".join(parts)
+    xml = f'<?xml version="1.0" encoding="UTF-8"?><w:document {W}><w:body>{body}</w:body></w:document>'
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("[Content_Types].xml", CONTENT_TYPES)
+        z.writestr("_rels/.rels", RELS)
+        z.writestr("word/document.xml", xml)
+
+
+document("packages/jidoka-compiler/tests/fixtures/design_document.docx", [
+    heading("What This Document Governs"),
+    para("The design authority owns this document. Most of its reasoning is in sentences like "
+         "this one, and none of that reaches the platform."),
+    # A metadata table no profile matches, so the reader has something to report as unread.
+    table([["Document ID", "FIXTURE-SDD-001"], ["Version", "1.0"]]),
+
+    heading("Scope Catalogue"),
+    table([["Item", "Scope", "Module", "Stream", "BRS section / detailed specification"],
+           ["G01", "Model company activation", "Platform", "S1 Platform", "§5.1"],
+           ["G02", "Time Off", "Time", "S2 Time", "§5.2"]]),
+
+    heading("Requirements"),
+    table([["ID", "Requirement", "Rationale", "Ctry", "Wave/Wk", "Fit", "Ctrl"],
+           ["BRS-EC-001", "Single instance, four country layers", "The baseline extract "
+            "establishes what standard content delivered", "All", "W1", "STD", "C01"],
+           ["BRS-EC-002", "One picklist source", "Interface mappings break silently otherwise",
+            "All", "W2", "CFG", "C01"]]),
+    # A second requirements table: a real BRS writes seventeen of them, one per module.
+    table([["ID", "Requirement", "Rationale", "Ctry", "Wave/Wk", "Fit", "Ctrl"],
+           ["BRS-TIM-001", "Leave accrual by country", "Statutory minima differ", "ZA", "W3",
+            "GAP", "C02"]]),
+
+    heading("Control Objectives"),
+    table([["ID", "Control objective", "Owner", "Frequency", "Evidence"],
+           ["C01", "Every change is attributable to a signed source", "GONXT (execution)",
+            "Per load cycle", "Evidence bundle per cycle"]]),
+
+    heading("Data Ownership"),
+    table([["Data domain", "Owner", "Consumers", "Alignment note"],
+           ["Employment and job information", "EC", "All modules, ECC", "One writer"]]),
+
+    heading("Interlocks"),
+    table([["ID", "Source", "Target", "What flows / logic", "Failure mode", "Stream", "Ctrl"],
+           ["I-01", "EC", "ECP", "Employee master replication", "Payroll runs against stale "
+            "master data", "S2", "C03"]]),
+
+    heading("Ordering Constraints"),
+    table([["By end of", "Must be complete", "Because", "What stalls if late"],
+           ["Week 1", "Legacy extracts profiled", "I-19 — cleansing rules are designed against "
+            "actual data", "The whole migration"]]),
+
+    heading("The Rules the Design Obeys"),
+    table([["#", "Principle", "Rationale, and what the alternative costs"],
+           ["P1", "Fit to standard; deviations are a bounded pool", "Model-company content "
+            "supplies most of it"]]),
+    table([["#", "Rule", "What it prevents, and how it is checked"],
+           ["A1", "One picklist source", "Interface mappings break silently when an external "
+            "code moves. Checked at G2 and nightly"]]),
+
+    heading("Decisions"),
+    table([["DP", "Decision required", "GONXT recommended position", "Owner", "Required by"],
+           ["DP-C04", "Variable Pay in scope, or next financial year",
+            "Defer to FY2027/28", "Steering committee", "31 Aug 2026"]]),
+    table([["DP", "Design dependency", "Interim design position"],
+           ["DP-B01", "Provisioning access", "No interim position available"]]),
+
+    heading("Boundary Conditions"),
+    table([["Condition", "Why the schedule needs it", "Consequence if it fails"],
+           ["Delta pool consumption near zero", "The pool exists for the whole programme",
+            "Each deviation consumes days from a stream with no float"]]),
+])
+
+# A second document restating one decision differently, which is the defect `duplicates` finds.
+document("packages/jidoka-compiler/tests/fixtures/licensing_position.docx", [
+    heading("Decisions"),
+    table([["DP", "Decision required", "GONXT recommended position", "Owner", "Required by"],
+           ["DP-C04", "Variable Pay licence purchase", "Do not purchase for Wave 1",
+            "Steering committee", "31 Aug 2026"]]),
+])
+print("documents written")
