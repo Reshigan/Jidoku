@@ -7,6 +7,7 @@ import hashlib
 import json
 import re
 from ..base import AdapterError
+from .tiers import KEY_FIELDS
 
 BOUNDARY = "batch_jidoka"
 CHANGESET = "changeset_jidoka"
@@ -15,12 +16,43 @@ CHANGESET = "changeset_jidoka"
 class BatchError(AdapterError): ...
 
 
+#: Fields that, next to an entity's key field, say *which record* a payload is. `EmpJob` is one row per
+#: (userId, startDate); `EmpPayCompRecurring` one per (userId, startDate, payComponent); the FO objects
+#: are effective-dated too. This list errs toward including a field: an over-included one makes a
+#: revised record look new, which costs one redundant upsert; an under-included one makes two records
+#: share a slot, which is the defect this exists to fix. The two mistakes are not symmetric.
+IDENTITY_PARTS = ("startDate", "effectiveStartDate", "seqNumber", "payComponent", "payDate",
+                  "emailType", "phoneType", "addressType", "country", "cardType",
+                  "relationshipType")
+
+
+def op_label(op: dict) -> str:
+    """The business key of the record an operation writes: `CC1`, or `u1|startDate=2026-01-01`.
+
+    What `applied` and `errors` report, so a failure can be reconciled against the record it was
+    about. Refuses an operation it cannot name — the loader used to file those under `''`, which put
+    every employee record in one slot and reported every failure as `externalCode: ""`.
+    """
+    entity, payload = op.get("entity", "?"), op["payload"]
+    key = KEY_FIELDS.get(entity, "externalCode")
+    value = payload.get(key, op.get("externalCode") if key == "externalCode" else None)
+    if value in (None, ""):
+        raise BatchError(
+            f"{entity} operation has no {key}, so there is no record to journal it against. "
+            f"Refusing rather than filing it under nothing: an unnamed write cannot be replayed, "
+            f"confirmed or reconciled.")
+    parts = [f"{f}={payload[f]}" for f in IDENTITY_PARTS if payload.get(f) not in (None, "")]
+    return "|".join([str(value), *parts])
+
+
 def op_key(op: dict) -> tuple[str, str]:
-    """(externalCode, payload hash) — identity of an upsert for replay purposes."""
-    payload = op["payload"]
-    code = str(payload.get("externalCode", op.get("externalCode", "")))
-    h = hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()
-    return code, h
+    """(journal slot, payload hash) — identity of an upsert for replay purposes.
+
+    The slot is entity-qualified: `FOCostCenter/CC1` and `FODepartment/CC1` are different records
+    that happen to share a code. The hash is what makes a *revision* of a record pending again.
+    """
+    h = hashlib.sha256(json.dumps(op["payload"], sort_keys=True, default=str).encode()).hexdigest()
+    return f"{op.get('entity', '?')}/{op_label(op)}", h
 
 
 def build_batch(operations: list[dict], base_url: str = "") -> str:
@@ -95,16 +127,16 @@ class BatchLoader:
         results = parse_batch_response(raw)
         applied, errors = [], []
         for op, res in zip(pending, results):
-            code, h = op_key(op)
+            slot, h = op_key(op)
             if 200 <= res["status"] < 300:
-                self.journal[code] = h
-                applied.append(code)
+                self.journal[slot] = h
+                applied.append(op_label(op))
             else:
-                errors.append({"externalCode": code, "entity": op["entity"],
+                errors.append({"externalCode": op_label(op), "entity": op["entity"],
                                "status": res["status"], "error": res["body"]})
         if len(results) < len(pending):  # truncated reply: the tail is unconfirmed, not applied
             for op in pending[len(results):]:
-                errors.append({"externalCode": op_key(op)[0], "entity": op["entity"],
+                errors.append({"externalCode": op_label(op), "entity": op["entity"],
                                "status": None, "error": "no response part — unconfirmed, will replay"})
         self.errors.extend(errors)
         return {"dry_run": False, "skipped": skipped, "applied": applied, "errors": errors,

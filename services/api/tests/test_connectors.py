@@ -81,10 +81,13 @@ def _half_rejected_batch(n_ok: int, n_bad: int) -> bytes:
 
 
 def _sf_payload(entity="Position"):
+    # Position is keyed by `code`, which is what SFAdapter.build_apply emits for it. This fixture used
+    # to say `externalCode`, contradicting the adapter — and the loader could not tell, because it
+    # filed every operation it could not name under one slot. It can tell now, and refuses.
     return {"kind": "odata_batch", "system": "KOM-SF-DEV", "entity_set": entity,
-            "key_field": "externalCode",
+            "key_field": "code",
             "operations": [{"method": "UPSERT", "entity": entity,
-                            "payload": {"externalCode": f"P-{i}", "name": f"Role {i}"}}
+                            "payload": {"code": f"P-{i}", "name": f"Role {i}"}}
                            for i in (1, 2)]}
 
 

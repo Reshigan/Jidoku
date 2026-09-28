@@ -3,7 +3,7 @@ cannot happen by accident (invariant 6) and that a retry cannot double-apply."""
 import unittest
 
 from jidoka_adapters.successfactors.loader import (
-    BatchLoader, BatchError, build_batch, parse_batch_response, op_key, BOUNDARY)
+    BatchLoader, BatchError, build_batch, parse_batch_response, op_key, op_label, BOUNDARY)
 
 OPS = [{"entity": "FOCostCenter", "payload": {"externalCode": "CC1", "name": "Finance"}},
        {"entity": "FOCostCenter", "payload": {"externalCode": "CC2", "name": "Ops"}}]
@@ -134,3 +134,60 @@ class TestApply(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestRecordIdentity(unittest.TestCase):
+    """The journal answers "was exactly this operation confirmed?", and it can only answer that if
+    two different records never share a slot. `op_key` read `externalCode` and nothing else, so every
+    entity keyed by userId or personIdExternal — the whole employee-data family — landed in the same
+    slot (''), a clean two-employee apply left one still pending, and every failure was reported as
+    `externalCode: ""`, which nothing downstream can reconcile against."""
+
+    EMP = [{"entity": "EmpJob", "payload": {"userId": "u1", "startDate": "2026-01-01", "jobCode": "A"}},
+           {"entity": "EmpJob", "payload": {"userId": "u2", "startDate": "2026-01-01", "jobCode": "B"}}]
+
+    def test_two_employees_never_share_a_journal_slot(self):
+        self.assertNotEqual(op_key(self.EMP[0])[0], op_key(self.EMP[1])[0])
+
+    def test_a_clean_apply_leaves_nothing_pending(self):
+        ld = BatchLoader(FakeClient((200, {}, multipart((200, "{}"), (200, "{}")))))
+        ld.apply(self.EMP, dry_run=False)
+        self.assertEqual(ld.pending(self.EMP), [])
+
+    def test_the_same_employee_on_a_different_effective_date_is_a_different_record(self):
+        # A new startDate is a new slice in SF, so it must be a new slot here — and the earlier
+        # slice's confirmation must not be overwritten by it.
+        later = {"entity": "EmpJob", "payload": {**self.EMP[0]["payload"], "startDate": "2026-07-01"}}
+        self.assertNotEqual(op_key(self.EMP[0])[0], op_key(later)[0])
+
+    def test_the_same_employee_and_date_with_a_corrected_value_is_the_same_record_revised(self):
+        fixed = {"entity": "EmpJob", "payload": {**self.EMP[0]["payload"], "jobCode": "A2"}}
+        self.assertEqual(op_key(self.EMP[0])[0], op_key(fixed)[0])
+        self.assertNotEqual(op_key(self.EMP[0])[1], op_key(fixed)[1])
+
+    def test_two_pay_components_for_one_employee_on_one_date_are_two_records(self):
+        a = {"entity": "EmpPayCompRecurring",
+             "payload": {"userId": "u1", "startDate": "2026-01-01", "payComponent": "BASIC", "paycompvalue": 1}}
+        b = {"entity": "EmpPayCompRecurring",
+             "payload": {"userId": "u1", "startDate": "2026-01-01", "payComponent": "HOUSING", "paycompvalue": 2}}
+        self.assertNotEqual(op_key(a)[0], op_key(b)[0])
+
+    def test_an_operation_with_no_identifiable_key_is_refused_not_filed_under_nothing(self):
+        with self.assertRaises(BatchError) as ex:
+            op_key({"entity": "EmpJob", "payload": {"jobCode": "A"}})
+        self.assertIn("EmpJob", str(ex.exception))
+        self.assertIn("userId", str(ex.exception))
+
+    def test_a_failure_names_the_record_that_failed(self):
+        ld = BatchLoader(FakeClient((200, {}, multipart((200, "{}"), (400, '{"error":"x"}')))))
+        out = ld.apply(self.EMP, dry_run=False)
+        self.assertEqual(out["errors"][0]["externalCode"], "u2|startDate=2026-01-01")
+        self.assertNotEqual(out["errors"][0]["externalCode"], "")
+
+    def test_an_externalcode_entity_reports_its_plain_business_key(self):
+        self.assertEqual(op_label(OPS[0]), "CC1")
+
+    def test_two_entities_sharing_a_code_are_two_records(self):
+        # FOCostCenter CC1 and FODepartment CC1 shared a slot too: the slot never named the entity.
+        dept = {"entity": "FODepartment", "payload": {"externalCode": "CC1", "name": "Finance"}}
+        self.assertNotEqual(op_key(OPS[0])[0], op_key(dept)[0])
