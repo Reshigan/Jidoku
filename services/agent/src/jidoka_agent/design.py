@@ -34,6 +34,8 @@ import os
 from dataclasses import dataclass, field
 
 from jidoka_core import proposals
+from jidoka_core.ir import record_key
+from jidoka_core.planner import alias_of, dependency_problems
 from jidoka_core.requirements import Requirement
 from jidoka_core.schema import IR_SCHEMA
 from jidoka_core.twin import SchemaTwin
@@ -86,6 +88,10 @@ class Outcome:
     turns: int = 0
     stopped: str = ""
     transcript: list = field(default_factory=list)
+    #: Dangling and cyclic references in what this pass authored, computed when it stopped. A design
+    #: the planner would refuse is not a finished design, and the outcome says so whether or not the
+    #: model remembered to ask.
+    integrity: dict = field(default_factory=dict)
 
     def summary(self) -> dict:
         return {"accepted": len(self.accepted), "refused": len(self.refused),
@@ -93,7 +99,7 @@ class Outcome:
                 "turns": self.turns, "stopped": self.stopped,
                 # What the pass actually did, turn by turn. The only record of it, so it is reported
                 # rather than kept: a receipt nobody reads is not a receipt.
-                "transcript": self.transcript,
+                "transcript": self.transcript, "integrity": self.integrity,
                 "says": self._says()}
 
     def _says(self) -> str:
@@ -105,6 +111,10 @@ class Outcome:
         if not self.accepted and not self.decisions:
             return ("Nothing was authored and nothing was asked. A design pass that produces "
                     "neither is a pass that did not read its inputs.")
+        broken = len(self.integrity.get("dangling", [])) + len(self.integrity.get("cycles", []))
+        if broken:
+            parts.append(f"{broken} dependency problem(s) the planner would refuse — this is not a "
+                         f"finished design")
         return ". ".join(parts) + f". Stopped: {self.stopped}."
 
 
@@ -181,6 +191,21 @@ def tools(schema: dict | None = None) -> list[dict]:
              "sources": {"type": "array", "items": {"type": "string"},
                          "description": "where each value came from: document section, or DP id"}},
              "required": ["record", "sources"], "additionalProperties": False}},
+        {"name": "read_gaps",
+         "description": "Which object types this product's adapter catalogues that nothing in the "
+                        "design describes yet, by tier. A catalogued object with no intent is either "
+                        "out of this engagement's scope or a gap; deciding which is the design "
+                        "authority's job, so this lists them and does not assume.",
+         "strict": True,
+         "input_schema": {"type": "object", "properties": {}, "required": [],
+                          "additionalProperties": False}},
+        {"name": "check_design",
+         "description": "Whether what you have authored so far would survive planning: references to "
+                        "records nobody has authored, and dependency cycles. Call it before you stop. "
+                        "The planner refuses both, after a person has signed.",
+         "strict": True,
+         "input_schema": {"type": "object", "properties": {}, "required": [],
+                          "additionalProperties": False}},
         {"name": "propose_trace",
          "description": "Say which configuration objects satisfy a requirement. A judgement about "
                         "the client's design: proposed here, signed by a person.",
@@ -225,7 +250,11 @@ and propose again. Do not work around a gate.
 and you cannot sign: never write source.signed_by or source.date — cite where each value came from in \
 `sources` and the platform records it. A record carrying a name you wrote is refused. Write the \
 rationale a reviewer needs, not just the conclusion.
-7. Say what you could not do. A design pass that silently skipped a scope item is worse than one \
+7. Before you stop, call check_design: the planner refuses references to records nobody authored and \
+dependency cycles, after a person has already signed. Call read_gaps to see what the catalogue lists \
+that the design does not describe — it is a list to reason about, not a number to drive to zero, and \
+most engagements do not configure every object.
+8. Say what you could not do. A design pass that silently skipped a scope item is worse than one \
 that raised a decision about it."""
 
 
@@ -238,13 +267,17 @@ class DesignSession:
     """
 
     def __init__(self, pack: dict, adapter, metadata: dict | None = None,
-                 documents: dict | None = None, picklists: dict | None = None):
+                 documents: dict | None = None, picklists: dict | None = None,
+                 existing: list | None = None):
         self.pack = pack
         self.adapter = adapter
         self.twin = SchemaTwin(metadata or {})
         self.metadata = metadata or {}
         self.documents = documents or {}
         self.picklists = picklists
+        #: Records already in the design (signed, or from an earlier pass) that this pass may depend
+        #: on. Without them every reference to something that already exists would read as dangling.
+        self.existing = list(existing or [])
         self.out = Outcome()
 
     # --- reads -------------------------------------------------------------------------------
@@ -382,10 +415,52 @@ class DesignSession:
                 "note": "Raised. This blocks planning for anything that depends on it, which is the "
                         "point — it does not block you from authoring the rest."}
 
+    def integrity(self) -> dict:
+        """Would this design survive planning? Reads existing records plus what this pass authored,
+        the latter winning on a key it re-authored. Dependencies only: the planner's other refusals
+        (open decisions, type-checks) need signed intent and are not this pass's to predict."""
+        nodes: dict[str, dict] = {}
+        for rec in [*self.existing, *(p.record for p in self.out.accepted)]:
+            nodes[record_key(rec)] = rec
+        deps = {k: list(r.get("depends_on") or []) for k, r in nodes.items()}
+        aliases = {alias_of(r.get("object", ""), r.get("external_code"), r.get("intent")): k
+                   for k, r in nodes.items()}
+        found = dependency_problems(deps, aliases)
+        dangling = [{"record": k, "references": ref} for k, ref in found["dangling"]]
+        says = ("Every dependency resolves and nothing is cyclic." if not dangling
+                and not found["cyclic"] else
+                f"{len(dangling)} reference(s) to records nobody has authored"
+                + (f", and a cycle through {', '.join(found['cyclic'])}" if found["cyclic"] else "")
+                + ". Author what is missing or remove the reference; do not stop with these open.")
+        return {"dangling": dangling, "cycles": found["cyclic"], "says": says}
+
+    def check_design(self) -> dict:
+        return self.integrity()
+
+    def read_gaps(self) -> dict:
+        """Catalogued object types with no intent in the design, by tier.
+
+        Not a coverage percentage and deliberately not a to-do list: an engagement is not obliged to
+        configure all 87 object types, and a model told "you have covered 1 of 87" would try to close
+        the number. So it is reported as what it is — the catalogue less what the design describes —
+        and whether an entry is a gap or out of scope is left where it belongs.
+        """
+        have = {r.get("object") for r in [*self.existing, *(p.record for p in self.out.accepted)]}
+        tiers = self.adapter.tier_map()
+        missing: dict[str, list[str]] = {"A": [], "B": [], "C": []}
+        for obj, tier in sorted(tiers.items()):
+            if obj not in have:
+                missing[tier].append(obj)
+        return {"described": sorted(o for o in have if o in tiers),
+                "not_described": missing,
+                "outside_the_catalogue": sorted(o for o in have if o and o not in tiers),
+                "note": "Not every catalogued object belongs in every engagement. Read the pack's "
+                        "scope items and requirements to decide which of these are gaps."}
+
     # --- dispatch ----------------------------------------------------------------------------
 
     HANDLERS = ("read_pack", "read_document", "read_metadata", "read_tier", "propose_ir",
-                "propose_trace", "raise_dp")
+                "read_gaps", "check_design", "propose_trace", "raise_dp")
 
     def dispatch(self, name: str, args: dict) -> dict:
         if name not in self.HANDLERS:
@@ -469,10 +544,10 @@ def run(session: DesignSession, brief: str, schema: dict | None = None, client=N
 
         if message.stop_reason == "refusal":
             out.stopped = "the model declined the request"
-            return out
+            break
         if not blocks:
             out.stopped = "the model stopped calling tools"
-            return out
+            break
 
         # Every result in one user message. Split across several, and the model learns not to make
         # parallel calls — which on a per-object design pass is most of the throughput.
@@ -484,8 +559,10 @@ def run(session: DesignSession, brief: str, schema: dict | None = None, client=N
                             **({"is_error": True} if "error" in got else {})})
         messages.append({"role": "user", "content": results})
 
-    out.stopped = (f"the runaway guard stopped this pass at {max_turns} turns. Whatever it had "
-                   f"authored is above; it is not a complete design and is not claimed as one")
+    else:
+        out.stopped = (f"the runaway guard stopped this pass at {max_turns} turns. Whatever it had "
+                       f"authored is above; it is not a complete design and is not claimed as one")
+    out.integrity = session.integrity()
     return out
 
 

@@ -112,7 +112,8 @@ def test_the_request_caches_the_stable_prefix_and_paces_itself_on_a_budget():
 
 def test_every_closed_shape_tool_is_strict_so_a_malformed_call_never_costs_a_turn():
     for tool in tools(SCHEMA):
-        assert tool["input_schema"]["required"], tool["name"]
+        # `check_design` takes no arguments; every other tool names what it needs.
+        assert tool["input_schema"]["required"] or not tool["input_schema"]["properties"], tool["name"]
         if tool["name"] == "propose_ir":
             # Deliberately not strict: `intent` is the product's free-form shape, and strict needs a
             # closed schema at every level. The four gates validate it properly.
@@ -140,6 +141,7 @@ def test_the_system_prompt_states_the_invariants_it_has_to_state():
     assert "The product decides the tier" in SYSTEM
     assert "builder, never the approver" in SYSTEM
     assert "never write source.signed_by" in SYSTEM
+    assert "call check_design" in SYSTEM and "not a number to drive to zero" in SYSTEM
 
 
 # --- the reads -------------------------------------------------------------------------------
@@ -400,3 +402,106 @@ def test_a_turn_is_streamed_so_a_long_pass_does_not_time_out_halfway_through():
     run(session(), "design", SCHEMA, client=client)
     assert client.sent[0]["max_tokens"] == 64000
     assert not hasattr(client.beta.messages, "create")     # the loop never calls the buffered path
+
+
+# --- integrity: would this design survive planning? -------------------------------------------------
+
+def dep(code, *deps, obj="FOPayComponent"):
+    return {**GOOD, "object": obj, "external_code": code,
+            "intent": {"externalCode": code, "name": code}, "depends_on": list(deps)}
+
+
+def test_a_dependency_on_something_nobody_authored_is_dangling_and_named():
+    s = session()
+    s.propose_ir(dep("A", "FOPayComponent:NOPE"), ["SDD"])
+    got = s.check_design()
+    assert got["dangling"] == [{"record": "SuccessFactors:FOPayComponent:A",
+                                "references": "FOPayComponent:NOPE"}]
+    assert "do not stop with these open" in got["says"]
+
+
+def test_authoring_the_missing_record_later_in_the_pass_resolves_it():
+    # Order of authoring is not order of dependency: a record may cite one the model writes next.
+    s = session()
+    s.propose_ir(dep("A", "FOPayComponent:B"), ["SDD"])
+    assert s.check_design()["dangling"]
+    s.propose_ir(dep("B"), ["SDD"])
+    assert s.check_design() == {"dangling": [], "cycles": [],
+                                "says": "Every dependency resolves and nothing is cyclic."}
+
+
+def test_a_dependency_on_a_record_already_in_the_design_is_not_dangling():
+    s = DesignSession(PACK, SFAdapter(), metadata=META, documents=PACK["documents"],
+                      existing=[dep("OLD")])
+    s.propose_ir(dep("NEW", "FOPayComponent:OLD"), ["SDD"])
+    assert s.check_design()["dangling"] == []
+
+
+def test_a_cycle_the_pass_authored_is_reported():
+    s = session()
+    s.propose_ir(dep("A", "FOPayComponent:B"), ["SDD"])
+    s.propose_ir(dep("B", "FOPayComponent:A"), ["SDD"])
+    assert s.check_design()["cycles"] == ["SuccessFactors:FOPayComponent:A",
+                                          "SuccessFactors:FOPayComponent:B"]
+
+
+def test_a_refused_proposal_does_not_count_towards_the_design():
+    s = session()
+    s.propose_ir({**dep("A"), "tier": "C"}, ["SDD"])          # refused: the adapter says A
+    s.propose_ir(dep("B", "FOPayComponent:A"), ["SDD"])
+    assert s.check_design()["dangling"][0]["references"] == "FOPayComponent:A"
+
+
+def test_the_outcome_reports_integrity_whether_or_not_the_model_asked():
+    client = Scripted([("tool_use", [("propose_ir", {"record": dep("A", "FOPayComponent:NOPE"),
+                                                     "sources": ["SDD"]})]),
+                       ("end_turn", [])])
+    out = run(session(), "design", SCHEMA, client=client)
+    assert out.summary()["integrity"]["dangling"]
+    assert "not a finished design" in out.summary()["says"]
+
+
+def test_a_clean_pass_says_nothing_about_dependencies():
+    client = Scripted([("tool_use", [("propose_ir", {"record": dep("A"), "sources": ["SDD"]})]),
+                       ("end_turn", [])])
+    out = run(session(), "design", SCHEMA, client=client)
+    assert "not a finished design" not in out.summary()["says"]
+
+
+def test_the_runaway_guard_still_computes_integrity():
+    client = Scripted([("tool_use", [("propose_ir", {"record": dep("A", "FOPayComponent:NOPE"),
+                                                     "sources": ["SDD"]})])])
+    out = run(session(), "design", SCHEMA, client=client, max_turns=2)
+    assert "runaway guard" in out.stopped and out.integrity["dangling"]
+
+
+# --- gaps: what the catalogue lists that the design does not describe ------------------------------
+
+def test_the_gaps_list_catalogued_objects_nothing_describes_by_tier():
+    s = session()
+    before = s.read_gaps()
+    assert "FOPayComponent" in before["not_described"]["A"]
+    assert "PicklistOption" in before["not_described"]["B"]
+    assert "BUSINESS_RULE" in before["not_described"]["C"]
+    s.propose_ir(dep("A"), ["SDD"])
+    after = s.read_gaps()
+    assert "FOPayComponent" not in after["not_described"]["A"]
+    assert after["described"] == ["FOPayComponent"]
+
+
+def test_objects_already_in_the_design_are_not_gaps():
+    s = DesignSession(PACK, SFAdapter(), metadata=META, documents=PACK["documents"],
+                      existing=[dep("OLD")])
+    assert "FOPayComponent" not in s.read_gaps()["not_described"]["A"]
+
+
+def test_an_object_the_catalogue_does_not_know_is_reported_apart_not_hidden():
+    s = DesignSession(PACK, SFAdapter(), metadata=META, documents=PACK["documents"],
+                      existing=[{**dep("X"), "object": "cust_Grievance"}])
+    assert s.read_gaps()["outside_the_catalogue"] == ["cust_Grievance"]
+
+
+def test_the_gaps_are_not_a_coverage_percentage_because_the_model_would_try_to_close_it():
+    got = session().read_gaps()
+    assert not any("percent" in k or "coverage" in k or "score" in k for k in got)
+    assert "Not every catalogued object belongs in every engagement" in got["note"]

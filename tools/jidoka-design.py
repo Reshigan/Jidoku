@@ -114,8 +114,17 @@ def main(argv=None) -> int:
     if not metadata:
         print("  * No tenant $metadata: the gate that decides whether these records will actually "
               "load did not run.", file=sys.stderr)
-    # A pass that refused everything, or asked nothing and wrote nothing, is not a success.
-    return 0 if out.accepted or out.decisions else 1
+    broken = out.integrity.get("dangling") or out.integrity.get("cycles")
+    for d in out.integrity.get("dangling", []):
+        print(f"  ~ {d['record']} depends on {d['references']!r}, which nobody authored",
+              file=sys.stderr)
+    if out.integrity.get("cycles"):
+        print(f"  ~ dependency cycle through {', '.join(out.integrity['cycles'])}", file=sys.stderr)
+    if broken:
+        print("  The planner would refuse this design. It is not finished.", file=sys.stderr)
+    # A pass that refused everything, asked nothing and wrote nothing, or left a design the planner
+    # would refuse, is not a success.
+    return 0 if (out.accepted or out.decisions) and not broken else 1
 
 
 if __name__ == "__main__":
